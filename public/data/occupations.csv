@@ -1,0 +1,131 @@
+Category,Occupation,Theme Code
+Realistic — Building, Repairing, Working Outdoors,Engineering Technician,RIC
+Realistic — Building, Repairing, Working Outdoors,Landscape/Grounds Manager,RC
+Realistic — Building, Repairing, Working Outdoors,Forester,RI
+Realistic — Building, Repairing, Working Outdoors,Carpenter,RIA
+Realistic — Building, Repairing, Working Outdoors,Automobile Mechanic,R
+Realistic — Building, Repairing, Working Outdoors,Radiologic Technologist,RIS
+Realistic — Building, Repairing, Working Outdoors,Electrician,RIA
+Realistic — Building, Repairing, Working Outdoors,Firefighter,RIS
+Realistic — Building, Repairing, Working Outdoors,Horticulturist,REI
+Realistic — Building, Repairing, Working Outdoors,Military Officer,REI
+Realistic — Building, Repairing, Working Outdoors,Law Enforcement Officer,RE
+Realistic — Building, Repairing, Working Outdoors,Emergency Medical Technician,RCI
+Realistic — Building, Repairing, Working Outdoors,Vocational Agriculture Teacher,RSI
+Realistic — Building, Repairing, Working Outdoors,Athletic Trainer,RIS
+Investigative — Research & Analysis,Chemist,IR
+Investigative — Research & Analysis,Computer Scientist,IRC
+Investigative — Research & Analysis,Engineer,I
+Investigative — Research & Analysis,Physicist,IRA
+Investigative — Research & Analysis,Mathematician,IRC
+Investigative — Research & Analysis,Geologist,IRA
+Investigative — Research & Analysis,Medical Technologist,IRC
+Investigative — Research & Analysis,R&D Manager,IR
+Investigative — Research & Analysis,Physician,IAR
+Investigative — Research & Analysis,Biologist,IRA
+Investigative — Research & Analysis,Veterinarian,IRA
+Investigative — Research & Analysis,Chiropractor,IRA
+Investigative — Research & Analysis,Optometrist,IR
+Investigative — Research & Analysis,Pharmacist,ICR
+Investigative — Research & Analysis,Geographer,IA
+Investigative — Research & Analysis,Dentist,IRA
+Investigative — Research & Analysis,Science Teacher,IRS
+Investigative — Research & Analysis,Medical Technician,IRC
+Investigative — Research & Analysis,Sociologist,IAR
+Investigative — Research & Analysis,Dietitian,IES
+Investigative — Research & Analysis,Psychologist,IAS
+Investigative — Research & Analysis,Respiratory Therapist,IRA
+Artistic — Creativity & Expression,Computer Programmer,CI
+Artistic — Creativity & Expression,Network Administrator,CIR
+Artistic — Creativity & Expression,Software Developer,CI
+Artistic — Creativity & Expression,Actuary,CI
+Artistic — Creativity & Expression,Technical Support Specialist,C
+Artistic — Creativity & Expression,Accountant,C
+Artistic — Creativity & Expression,Computer Systems Analyst,C
+Artistic — Creativity & Expression,Financial Manager,CSE
+Artistic — Creativity & Expression,Auditor,CS
+Artistic — Creativity & Expression,Military Enlisted,CRE
+Artistic — Creativity & Expression,Computer & IS Manager,C
+Artistic — Creativity & Expression,Administrative Assistant,CS
+Artistic — Creativity & Expression,Financial Analyst,CE
+Artistic — Creativity & Expression,Credit Manager,CE
+Artistic — Creativity & Expression,Health Info Specialist,C
+Artistic — Creativity & Expression,Food Service Manager,CES
+Artistic — Creativity & Expression,Mathematics Teacher,CIR
+Artistic — Creativity & Expression,Business/Finance Supervisor,CSE
+Artistic — Creativity & Expression,Paralegal,CE
+Social — Helping & Teaching,Production Worker,CES
+Social — Helping & Teaching,Farmer/Rancher,CSE
+Social — Helping & Teaching,Nursing Home Administrator,CES
+Social — Helping & Teaching,Business Education Teacher,CES
+Social — Helping & Teaching,Computer/Math Manager,ACI
+Social — Helping & Teaching,Architect,ARI
+Social — Helping & Teaching,Urban & Regional Planner,AI
+Social — Helping & Teaching,Arts/Entertainment Manager,A
+Social — Helping & Teaching,ESL Instructor,ASI
+Social — Helping & Teaching,Graphic Designer,A
+Social — Helping & Teaching,Artist,AR
+Social — Helping & Teaching,Editor,A
+Social — Helping & Teaching,Medical Illustrator,AIR
+Social — Helping & Teaching,Photographer,ARE
+Social — Helping & Teaching,Musician,A
+Social — Helping & Teaching,Technical Writer,AIR
+Social — Helping & Teaching,Librarian,A
+Social — Helping & Teaching,Translator,A
+Social — Helping & Teaching,Public Administrator,AER
+Social — Helping & Teaching,Attorney,ASE
+Social — Helping & Teaching,Reporter,A
+Social — Helping & Teaching,Advertising Manager,AE
+Social — Helping & Teaching,English Teacher,ASE
+Social — Helping & Teaching,Broadcast Journalist,AE
+Social — Helping & Teaching,Public Relations Director,AE
+Social — Helping & Teaching,Art Teacher,ASE
+Enterprising — Leadership & Influence,Management Analyst,SAC
+Enterprising — Leadership & Influence,Instructional Coordinator,S
+Enterprising — Leadership & Influence,Physical Therapist,SIR
+Enterprising — Leadership & Influence,Recreation Therapist,SA
+Enterprising — Leadership & Influence,University Faculty,SAI
+Enterprising — Leadership & Influence,Loan Officer/Counselor,SCE
+Enterprising — Leadership & Influence,Customer Service Rep,SC
+Enterprising — Leadership & Influence,Registered Nurse,SI
+Enterprising — Leadership & Influence,Human Resources Specialist,SAE
+Enterprising — Leadership & Influence,Parks & Recreation Manager,SE
+Enterprising — Leadership & Influence,Training & Development Specialist,SAE
+Enterprising — Leadership & Influence,Personal Financial Advisor,SE
+Enterprising — Leadership & Influence,Elementary School Teacher,S
+Enterprising — Leadership & Influence,Occupational Therapist,SAR
+Enterprising — Leadership & Influence,Bartender,SEA
+Enterprising — Leadership & Influence,Middle School Teacher,S
+Enterprising — Leadership & Influence,Secondary School Teacher,S
+Enterprising — Leadership & Influence,University Administrator,SA
+Enterprising — Leadership & Influence,School Administrator,SEA
+Enterprising — Leadership & Influence,Community Service Director,SE
+Enterprising — Leadership & Influence,Speech Pathologist,SA
+Enterprising — Leadership & Influence,Rehabilitation Counselor,SA
+Enterprising — Leadership & Influence,Human Resources Manager,SEA
+Enterprising — Leadership & Influence,Social Worker,SA
+Enterprising — Leadership & Influence,Special Education Teacher,S
+Enterprising — Leadership & Influence,School Counselor,SE
+Enterprising — Leadership & Influence,Religious Leader,S
+Enterprising — Leadership & Influence,Career Counselor,S
+Enterprising — Leadership & Influence,Mental Health Counselor,S
+Conventional — Organization & Detail,Facilities Manager,ECS
+Conventional — Organization & Detail,Operations Manager,ESA
+Conventional — Organization & Detail,Technical Sales Rep,E
+Conventional — Organization & Detail,Top Executive (Business/Finance),E
+Conventional — Organization & Detail,Securities Sales Agent,E
+Conventional — Organization & Detail,Wholesale Sales Rep,E
+Conventional — Organization & Detail,Realtor,E
+Conventional — Organization & Detail,Flight Attendant,EAS
+Conventional — Organization & Detail,Sales Manager,E
+Conventional — Organization & Detail,Optician,ECR
+Conventional — Organization & Detail,Cosmetologist,EC
+Conventional — Organization & Detail,Elected Public Official,EAS
+Conventional — Organization & Detail,Chef,ERA
+Conventional — Organization & Detail,Marketing Manager,EAS
+Conventional — Organization & Detail,Purchasing Agent,ECR
+Conventional — Organization & Detail,Life Insurance Agent,E
+Conventional — Organization & Detail,Interior Designer,EA
+Conventional — Organization & Detail,Florist,EAC
+Conventional — Organization & Detail,Restaurant Manager,ECR
+Conventional — Organization & Detail,Buyer,EC
