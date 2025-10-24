@@ -1,11 +1,12 @@
+// vite.config.js
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
+  base: process.env.NODE_ENV === 'production' ? "/EEC-2025/" : "/",          // <-- repo name
+  server: {               // (optional) local dev settings
     port: 5173,
-    open: true
-  }
+    open: true,
+  },
 });
