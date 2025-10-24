@@ -1,5 +1,6 @@
 // src/App.jsx
 import React, { useState, useMemo, useEffect } from "react";
+import PropTypes from "prop-types";
 import Home from "./pages/Home.jsx";
 import Career from "./pages/Career.jsx";
 import Test from "./pages/Test.jsx";
@@ -11,6 +12,11 @@ import Btn from "./components/Btn.jsx";
 // import { testSupabaseConnection } from "./lib/supabase.js";
 
 function SatPlaceholder({ onNavigate, lang, setLang }) {
+  SatPlaceholder.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
   return (
     <PageWrap>
       <HeaderBar title="SAT Practice" right={null} />

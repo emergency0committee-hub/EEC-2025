@@ -1,5 +1,6 @@
 // src/pages/Home.jsx
 import React from "react";
+import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
@@ -7,6 +8,11 @@ import { LANGS, STR } from "../i18n/strings.js";
 import logoUrl from "../assets/logo.png"; // optional
 
 export default function Home({ onNavigate, lang = "EN", setLang }) {
+  Home.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
   const t = STR[lang] || STR.EN;
 
   const HeaderActions = (

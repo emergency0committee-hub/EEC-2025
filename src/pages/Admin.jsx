@@ -1,8 +1,14 @@
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 
 export default function Admin({ onNavigate, lang, setLang }) {
+  Admin.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 

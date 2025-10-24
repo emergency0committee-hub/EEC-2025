@@ -1,10 +1,16 @@
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { LANGS, STR } from "../i18n/strings.js";
 
 export default function Login({ onNavigate, lang = "EN", setLang }) {
+  Login.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
   const t = STR[lang] || STR.EN;
 
   const [isSignUp, setIsSignUp] = useState(false);

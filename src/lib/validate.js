@@ -16,7 +16,7 @@ export function validateArray(name, arr, checks) {
     const ok = checks.every((fn) => {
       try {
         return fn(item);
-      } catch (e) {
+      } catch (_e) {
         return false;
       }
     });

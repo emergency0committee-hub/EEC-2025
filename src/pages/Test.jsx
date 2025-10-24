@@ -1,5 +1,6 @@
 // src/pages/Test.jsx
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import PropTypes from "prop-types";
 import { createPortal } from "react-dom";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
@@ -174,6 +175,12 @@ function QuestionPalette({
 
 /* ---------- MAIN COMPONENT ---------- */
 export default function Test({ onNavigate, lang = "EN", setLang }) {
+  Test.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
+
   const lenR = Q_RIASEC.length;
   const INTRO = 0;
   const R_START = 1;
@@ -196,15 +203,17 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   });
   useEffect(() => { localStorage.setItem("cg_timer_min", String(timerMin)); }, [timerMin]);
   const cd = useCountdown(timerMin * 60);
-  const [startTs, setStartTs] = useState(null);
+  const [startTs, setStartTs] = useState(null); // eslint-disable-line no-unused-vars
 
   const shuffledRIASEC = useMemo(() => shuffleArray(Q_RIASEC), []);
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-      if (saved && (saved.name || saved.email || saved.school)) setProfile(saved);
-    } catch {}
+      if (saved && (saved.name || saved.email || saved.school)) {
+        setProfile(saved);
+      }
+    } catch {} // eslint-disable-line no-empty
   }, []);
   useEffect(() => { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }, [profile]);
 
@@ -272,7 +281,8 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const startTest = () => {
     if (!isValidProfile()) return setShowProfileError(true);
     setShowProfileError(false);
-    cd.reset(); cd.start();
+    cd.reset();
+    cd.start();
     setStartTs(Date.now());
     setPage(R_START);
   };

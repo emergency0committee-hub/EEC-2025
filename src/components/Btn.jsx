@@ -1,6 +1,14 @@
 import React from "react";
+import PropTypes from "prop-types";
 
 export default function Btn({ children, onClick, variant = "primary", style = {}, ...props }) {
+  Btn.propTypes = {
+    children: PropTypes.node.isRequired,
+    onClick: PropTypes.func,
+    variant: PropTypes.oneOf(["primary", "secondary", "back"]),
+    style: PropTypes.object,
+  };
+
   const baseStyle = {
     padding: "8px 16px",
     border: "none",

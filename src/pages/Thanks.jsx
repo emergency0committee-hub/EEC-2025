@@ -1,8 +1,14 @@
 import React from "react";
+import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 
 export default function Thanks({ onNavigate, lang, setLang }) {
+  Thanks.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
   return (
     <PageWrap>
       <HeaderBar title="Thank You" right={null} />

@@ -1,8 +1,12 @@
 import React from "react";
+import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 
 export default function Results({ onNavigate, ...results }) {
+  Results.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+  };
   return (
     <PageWrap>
       <HeaderBar title="Test Results" right={null} />

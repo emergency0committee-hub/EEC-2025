@@ -1,11 +1,17 @@
 // src/pages/Career.jsx
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { STR, LANGS } from "../i18n/strings.js";
 
 export default function Career({ onNavigate, lang = "EN", setLang }) {
+  Career.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string.isRequired,
+    setLang: PropTypes.func.isRequired,
+  };
   const t = STR[lang] || STR.EN;
   const [showRules, setShowRules] = useState(false);
   const [agree, setAgree] = useState(false);
