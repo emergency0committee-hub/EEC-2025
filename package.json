@@ -20,15 +20,12 @@
   "devDependencies": {
     "@eslint/js": "^9.38.0",
     "@vitejs/plugin-react": "^4.3.1",
-<<<<<<< HEAD
     "eslint": "^9.38.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.4.0",
-=======
     "gh-pages": "^6.1.1",
->>>>>>> 2c4a15effa91778e9e2f7c12bad199313e5e806a
     "vite": "^5.4.8"
   }
 }

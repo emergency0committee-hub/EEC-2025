@@ -8,7 +8,7 @@ import Admin from "./pages/Admin.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
-import { testSupabaseConnection } from "./lib/supabase.js";
+// import { testSupabaseConnection } from "./lib/supabase.js";
 
 function SatPlaceholder({ onNavigate, lang, setLang }) {
   return (
@@ -75,9 +75,9 @@ export default function App() {
     }
   }, [route]);
 
-  useEffect(() => {
-    testSupabaseConnection();
-  }, []);
+  // useEffect(() => {
+  //   testSupabaseConnection();
+  // }, []);
 
   const onNavigate = (to, data = null) => {
     if (to === "results" && data) setResultsPayload(data);
