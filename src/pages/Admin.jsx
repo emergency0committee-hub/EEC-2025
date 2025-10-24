@@ -1,285 +1,544 @@
-// src/pages/Admin.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
-import Btn from "../components/Btn.jsx";
+// src/pages/Results.jsx
+import React, { useMemo, useState, useEffect } from "react";
+import { PageWrap, HeaderBar } from "../components/Layout.jsx";
+import { RadarBlock, ThemeBarsBlock, THEME_COLORS } from "../components/Chart.jsx";
+import OccupationScales from "../components/OccupationScales.jsx";
+import { Q_UNIFIED as Q, RIASEC_SCALE_MAX } from "../questionBank.js";
+import { supabase } from "../lib/db.js";
 
-export default function Admin({ onNavigate }) {
-  // =======================
-  // === Admin Auth (password) ========
-  // =======================
-  const ADMIN_PASSWORD = "careeradmin123"; // change this
-  const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState("");
+const THEME_NAME = {
+  E: "ENTERPRISING",
+  A: "ARTISTIC",
+  R: "REALISTIC",
+  I: "INVESTIGATIVE",
+  S: "SOCIAL",
+  C: "CONVENTIONAL",
+};
 
-  const isAdmin = useMemo(() => {
-    try {
-      return localStorage.getItem("cg_admin_ok_v1") === "1";
-    } catch {
-      return false;
-    }
-  }, []);
+function levelFromPct(p) {
+  if (p >= 75) return "Very High";
+  if (p >= 55) return "High";
+  if (p >= 40) return "Moderate";
+  return "Little";
+}
 
-  const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
-      try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
-      location.reload();
-    } else {
-      setAuthError("❌ Incorrect password. Please try again.");
-    }
-  };
+function BarRow({ label, percent, color = "#2563eb" }) {
+  return (
+    <div className="avoid-break" style={{ marginBottom: 10 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          fontSize: 13,
+          color: "#374151",
+          marginBottom: 4,
+        }}
+      >
+        <span>{label}</span>
+        <span>{Math.round(percent)}%</span>
+      </div>
+      <div
+        style={{
+          height: 10,
+          background: "#f3f4f6",
+          borderRadius: 6,
+          overflow: "hidden",
+          border: "1px solid #e5e7eb",
+        }}
+      >
+        <div
+          style={{
+            width: `${Math.max(0, Math.min(100, percent))}%`,
+            height: "100%",
+            background: color,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
-  const handleLogout = () => {
-    try { localStorage.removeItem("cg_admin_ok_v1"); } catch {}
-    location.reload();
-  };
+function ListBox({ title, items }) {
+  return (
+    <div className="card avoid-break" style={{ padding: 16 }}>
+      <h4 style={{ margin: 0, color: "#111827" }}>{title}</h4>
+      <ol style={{ margin: "8px 0 0", paddingLeft: 18, color: "#374151" }}>
+        {items.map((it, i) => (
+          <li key={i} style={{ margin: "4px 0" }}>
+            <span style={{ fontWeight: 600 }}>{it.area}</span>{" "}
+            <span style={{ color: "#6b7280" }}>({Math.round(it.percent)}%)</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
 
-  // =======================
-  // === Timer Settings ====
-  // =======================
-  const [timerMin, setTimerMin] = useState(() => {
-    const saved = Number(localStorage.getItem("cg_timer_min") || 30);
-    return Number.isFinite(saved) && saved > 0 ? saved : 30;
+/* ---------------------- Pillar helpers (percentages) ---------------------- */
+function buildBankDenominators() {
+  const discCount = { D: 0, I: 0, S: 0, C: 0 };
+  const bloomCount = {};
+  const sdgCount = {};
+  for (const q of Q || []) {
+    if (q?.DISC && discCount[q.DISC] != null) discCount[q.DISC] += 1;
+    if (q?.BLOOM) bloomCount[q.BLOOM] = (bloomCount[q.BLOOM] || 0) + 1;
+    if (q?.UN_Goal) sdgCount[q.UN_Goal] = (sdgCount[q.UN_Goal] || 0) + 1;
+  }
+  return { discCount, bloomCount, sdgCount };
+}
+
+function pctRowsFromTotals(totals, counts) {
+  const out = [];
+  for (const [label, sum] of Object.entries(totals || {})) {
+    const count = counts?.[label] || 0;
+    const max = count * RIASEC_SCALE_MAX;
+    const pct = max > 0 ? Math.round((Number(sum || 0) / max) * 100) : 0;
+    out.push([label, pct]);
+  }
+  out.sort((a, b) => b[1] - a[1]);
+  return out;
+}
+
+/* ---------------------- Heuristics to build chart data from results.riasec ---------------------- */
+function radarFromRiasecObject(riasecObj) {
+  if (!riasecObj || typeof riasecObj !== "object") return [];
+  // If values look like 0..1, scale to percent; if already >1, assume they’re 0..100-ish
+  const entries = Object.entries(riasecObj).map(([code, val]) => {
+    const num = Number(val) || 0;
+    const score = num <= 1 ? Math.round(num * 100) : Math.round(num);
+    return { code, score: Math.max(0, Math.min(100, score)) };
   });
-  const [dirty, setDirty] = useState(false);
+  // Keep standard RIASEC order if present
+  const order = ["R", "I", "A", "S", "E", "C"];
+  entries.sort((a, b) => {
+    const ia = order.indexOf(a.code);
+    const ib = order.indexOf(b.code);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    return a.code.localeCompare(b.code);
+  });
+  return entries;
+}
 
-  const applyTimer = () => {
-    const safe = Math.max(1, Math.min(180, Number(timerMin) || 30));
-    setTimerMin(safe);
-    try { localStorage.setItem("cg_timer_min", String(safe)); } catch {}
-    setDirty(false);
-  };
-  const resetTimer = () => {
-    setTimerMin(30);
-    try { localStorage.setItem("cg_timer_min", "30"); } catch {}
-    setDirty(false);
-  };
-  const setPreset = (m) => {
-    setTimerMin(m);
-    setDirty(true);
-  };
+export default function Results({
+  radarData: propRadarData = [],          // [{ code, score }]
+  areaPercents: propAreaPercents = [],    // [{ area, code, percent }]
+  interestPercents: propInterestPercents = [], // optional
+  onNavigate,
+  participant: propParticipant,
+  showParticipantHeader = true,           // default to true now
+  fromAdmin = false,
 
-  // =======================
-  // === Submissions =======
-  // =======================
-  const STORAGE_KEY = "cg_submissions_v1";
-  const LEGACY_KEYS = ["cg_submissions"]; // add more legacy keys here if you had any
-
-  const [subs, setSubs] = useState([]);
-  const [subCount, setSubCount] = useState(0);
-
-  // migration + load
-  const loadSubs = () => {
-    let rows = [];
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        rows = JSON.parse(raw) || [];
-      } else {
-        // try legacy keys (migrate first one we find)
-        for (const k of LEGACY_KEYS) {
-          const legacy = localStorage.getItem(k);
-          if (legacy) {
-            try {
-              const parsed = JSON.parse(legacy);
-              if (Array.isArray(parsed)) {
-                rows = parsed;
-                // migrate to v1
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-                break;
-              }
-            } catch {}
-          }
-        }
-      }
-    } catch {}
-
-    if (!Array.isArray(rows)) rows = [];
-    // sort newest first
-    rows.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
-    setSubs(rows);
-    setSubCount(rows.length);
-  };
+  // optional props carried from Test.jsx (preferred)
+  pillarAgg: propPillarAgg,
+  pillarCounts: propPillarCounts,
+}) {
+  /* ==================== When opened directly: try to hydrate from Supabase ==================== */
+  const [loaded, setLoaded] = useState(false);
+  const [radarData, setRadarData] = useState(propRadarData);
+  const [areaPercents, setAreaPercents] = useState(propAreaPercents);
+  const [interestPercents, setInterestPercents] = useState(propInterestPercents);
+  const [participant, setParticipant] = useState(propParticipant);
+  const [pillarAgg, setPillarAgg] = useState(propPillarAgg);
+  const [pillarCounts, setPillarCounts] = useState(propPillarCounts);
 
   useEffect(() => {
-    loadSubs();
+    (async () => {
+      // If we already have everything from props, just render
+      const hasCharts = (radarData && radarData.length) || (areaPercents && areaPercents.length);
+      if (hasCharts) { setLoaded(true); return; }
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setLoaded(true); return; }
+
+        // Find latest attempt for this user
+        const { data: attempts, error: aErr } = await supabase
+          .from("attempts")
+          .select("id, started_at, completed_at")
+          .eq("user_id", user.id)
+          .order("started_at", { ascending: false })
+          .limit(1);
+        if (aErr) throw aErr;
+        const attempt = attempts?.[0];
+        if (!attempt) { setLoaded(true); return; }
+
+        // Load results row (what Test.jsx wrote)
+        const { data: results, error: rErr } = await supabase
+          .from("results")
+          .select("riasec, top_codes, overall, created_at")
+          .eq("attempt_id", attempt.id)
+          .single();
+        if (rErr) throw rErr;
+
+        // Build minimal radarData from results.riasec (heuristic)
+        if (!radarData?.length && results?.riasec) {
+          setRadarData(radarFromRiasecObject(results.riasec));
+        }
+
+        // If you also persisted pillarAgg/pillarCounts in results (optional), set them here.
+        // (The current Test.jsx passes these via navigation props only.)
+        // setPillarAgg(results.pillarAgg ?? propPillarAgg);
+        // setPillarCounts(results.pillarCounts ?? propPillarCounts);
+
+        // Participant fallback (email only if no props)
+        if (!propParticipant) {
+          setParticipant({
+            name: "",
+            email: user.email || "",
+            school: "",
+            ts: results?.created_at ? Date.parse(results.created_at) : undefined,
+          });
+        }
+      } catch (e) {
+        console.error("[Results] hydrate error:", e);
+      } finally {
+        setLoaded(true);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const clearSubs = () => {
-    if (!confirm("Delete all saved submissions on this browser?")) return;
-    try { localStorage.setItem(STORAGE_KEY, "[]"); } catch {}
-    setSubs([]);
-    setSubCount(0);
-  };
+  /* ==================== Rest of the component (unchanged logic) ==================== */
 
-  const viewSubmission = (row) => {
-    // Results page expects the same payload shape used by Test.jsx on navigate
-    onNavigate("results", {
-      code: row.top3,
-      radar: row.radarData,
-      areaPercents: row.areaPercents,
-      interestPercents: row.interestPercents,
+  // Map of theme → score
+  const radarByCode = useMemo(() => {
+    const m = {};
+    (radarData || []).forEach((d) => (m[d.code] = d.score ?? 0));
+    return m;
+  }, [radarData]);
+
+  const themeOrder = useMemo(
+    () => [...(radarData || [])].sort((a, b) => b.score - a.score).map((d) => d.code),
+    [radarData]
+  );
+
+  const groupedAreas = useMemo(() => {
+    const g = {};
+    (areaPercents || []).forEach((a) => {
+      if (!g[a.code]) g[a.code] = [];
+      g[a.code].push(a);
     });
+    Object.keys(g).forEach((k) => g[k].sort((x, y) => y.percent - x.percent));
+    return g;
+  }, [areaPercents]);
+
+  const sortedAllAreas = useMemo(
+    () => [...(areaPercents || [])].sort((a, b) => b.percent - a.percent),
+    [areaPercents]
+  );
+  const topFive = sortedAllAreas.slice(0, 5);
+  const leastThree = sortedAllAreas.slice(-3).reverse();
+
+  /* ---------------------- Load pillars & counts (partial-safe) ---------------------- */
+  const { totals, counts } = useMemo(() => {
+    if (pillarAgg || pillarCounts) {
+      return {
+        totals: pillarAgg || { disc: {}, bloom: {}, sdg: {} },
+        counts: pillarCounts || { discCount: {}, bloomCount: {}, sdgCount: {} },
+      };
+    }
+    try {
+      const rows = JSON.parse(localStorage.getItem("cg_submissions_v1") || "[]");
+      const last = Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null;
+      if (last) {
+        return {
+          totals: last.pillarAgg || { disc: {}, bloom: {}, sdg: {} },
+          counts: last.pillarCounts || { discCount: {}, bloomCount: {}, sdgCount: {} },
+        };
+      }
+    } catch {}
+    return { totals: { disc: {}, bloom: {}, sdg: {} }, counts: { discCount: {}, bloomCount: {}, sdgCount: {} } };
+  }, [pillarAgg, pillarCounts]);
+
+  const bankDenoms = useMemo(() => buildBankDenominators(), []);
+  const effectiveCounts = useMemo(() => {
+    const useAnswered = (obj) => obj && Object.keys(obj).length > 0;
+    return {
+      disc: useAnswered(counts.discCount) ? counts.discCount : bankDenoms.discCount,
+      bloom: useAnswered(counts.bloomCount) ? counts.bloomCount : bankDenoms.bloomCount,
+      sdg: useAnswered(counts.sdgCount) ? counts.sdgCount : bankDenoms.sdgCount,
+    };
+  }, [counts, bankDenoms]);
+
+  const discPct  = useMemo(() => pctRowsFromTotals(totals.disc,  effectiveCounts.disc),  [totals, effectiveCounts]);
+  const bloomPct = useMemo(() => pctRowsFromTotals(totals.bloom, effectiveCounts.bloom), [totals, effectiveCounts]);
+  const sdgPct   = useMemo(() => pctRowsFromTotals(totals.sdg,   effectiveCounts.sdg),   [totals, effectiveCounts]);
+
+  /* ---------------------- Print helpers ---------------------- */
+  const handlePrint = () => {
+    setTimeout(() => window.print(), 150);
   };
 
-  const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(subs, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `submissions_${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  if (!loaded) {
+    // very light skeleton instead of flashing
+    return (
+      <PageWrap>
+        <HeaderBar title="Results" />
+        <div style={{ padding: 16, color: "#6b7280" }}>Loading…</div>
+      </PageWrap>
+    );
+  }
 
-  // =======================
-  // === Render ============
-  // =======================
   return (
     <PageWrap>
-      <HeaderBar
-        title="Admin Panel"
-        right={<Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>}
+      {/* Print styles — elegant PDF distribution */}
+      <style>{`
+        /* Base card style used across sections */
+        .card {
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          background: #fff;
+        }
+        .avoid-break {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .section {
+          margin-bottom: 16px;
+        }
+
+        @media print {
+          @page { size: A4 portrait; margin: 12mm; }
+          html, body { background: #fff !important; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .no-print { display: none !important; }
+          .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+          .section { break-inside: avoid; page-break-inside: avoid; }
+          h3, h4 { break-after: avoid; }
+
+          /* Tighten spacing and make a single-column PDF layout */
+          .print-stack {
+            display: block !important;
+          }
+          .print-stack > * {
+            margin-bottom: 10px !important;
+          }
+
+          /* Reduce paddings for cards in print to fit more per page */
+          .card { padding: 12px !important; }
+
+          /* Ensure canvases and svgs don't split and keep quality */
+          canvas, svg {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            max-width: 100% !important;
+            height: auto !important;
+          }
+        }
+      `}</style>
+
+      <HeaderBar title="Results" />
+
+      {/* Actions (hidden on print) */}
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
+        <button
+          onClick={() => onNavigate?.(fromAdmin ? "admin" : "home")}
+          style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
+        >
+          {fromAdmin ? "Back to Submissions" : "Back Home"}
+        </button>
+        <button
+          onClick={handlePrint}
+          style={{ border: "1px solid #2563eb", background: "#2563eb", color: "#fff", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
+          title="Export to PDF"
+        >
+          Export PDF
+        </button>
+      </div>
+
+      {/* Participant header */}
+      {showParticipantHeader && participant && (
+        <div className="card avoid-break section" style={{ padding: 16 }}>
+          <h3 style={{ margin: 0, color: "#111827" }}>Participant</h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, minmax(180px, 1fr))",
+              gap: 12,
+              marginTop: 8,
+            }}
+            className="avoid-break"
+          >
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Name</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>{participant?.name || "—"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Email</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>{participant?.email || "—"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>School</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>{participant?.school || "—"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Submitted</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>
+                {participant?.ts ? new Date(participant.ts).toLocaleString() : "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GROUP 1: Radar + Theme Bars (kept together) */}
+      <div className="section avoid-break">
+        <div className="card avoid-break" style={{ padding: 16 }}>
+          <div className="avoid-break">
+            <RadarBlock data={radarData} />
+          </div>
+          <div className="avoid-break" style={{ marginTop: 12 }}>
+            <ThemeBarsBlock data={radarData} />
+          </div>
+        </div>
+      </div>
+
+      {/* GROUP 2: Top & Least Areas (kept together) */}
+      <div className="section avoid-break">
+        <div
+          className="print-stack"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1.3fr 1fr",
+            gap: 16,
+          }}
+        >
+          <ListBox title="Your Top Five Interest Areas" items={topFive} />
+          <ListBox title="Areas of Least Interest" items={leastThree} />
+        </div>
+      </div>
+
+      {/* GROUP 3: Basic Interest Scales (theme cards) */}
+      <div className="card section" style={{ padding: 16 }}>
+        <h3 style={{ margin: 0, color: "#111827" }}>BASIC INTEREST SCALES</h3>
+        <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
+          Percentages across specific interest areas within each RIASEC theme.
+        </p>
+
+        <div
+          className="print-stack"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 16,
+            marginTop: 8,
+          }}
+        >
+          {themeOrder.map((code) => {
+            const themeScore = radarByCode[code] ?? 0;
+            const level = levelFromPct(themeScore);
+            const areas = groupedAreas[code] || [];
+            const color = THEME_COLORS[code] || "#2563eb";
+            return (
+              <div
+                key={code}
+                className="card avoid-break"
+                style={{ padding: 12, background: "#ffffff" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    gap: 12,
+                  }}
+                  className="avoid-break"
+                >
+                  <h4 style={{ margin: 0, color: "#111827" }}>
+                    {THEME_NAME[code]}{" "}
+                    <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
+                      — {level}
+                    </span>
+                  </h4>
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 3,
+                      background: color,
+                      display: "inline-block",
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginTop: 10 }}>
+                  {areas.length ? (
+                    areas.map((a) => (
+                      <BarRow
+                        key={`${code}-${a.area}`}
+                        label={a.area}
+                        percent={a.percent}
+                        color={color}
+                      />
+                    ))
+                  ) : (
+                    <div style={{ color: "#6b7280", fontSize: 13 }}>
+                      No answers recorded for this theme.
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* GROUP 4: Occupational Scales (kept together) */}
+      <div className="card section avoid-break" style={{ padding: 16 }}>
+        <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
+      </div>
+
+      {/* PAGE BREAK before pillars, for a clean pillar page */}
+      <div className="no-print" style={{ height: 1 }} />
+      <div
+        style={{
+          pageBreakBefore: "always",
+          breakBefore: "page",
+          height: 0,
+          overflow: "hidden",
+        }}
       />
 
-      {/* LOGIN (if not admin) */}
-      {!isAdmin && (
-        <Card>
-          <h3 style={{ marginTop: 0 }}>🔐 Admin Login</h3>
-          <Field
-            label="Enter Admin Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-          />
-          {authError && <div style={{ color: "#b91c1c", marginTop: 6 }}>{authError}</div>}
-          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <Btn variant="primary" onClick={handleLogin}>Sign In</Btn>
-            <Btn variant="back" onClick={() => onNavigate("home")}>Cancel</Btn>
-          </div>
-          <p style={{ color: "#6b7280", marginTop: 10 }}>
-            Admin mode is client-side (stored in your browser only).
+      {/* GROUP 5: Pillars — three elegant cards */}
+      {[
+        { title: "DISC", data: useMemo(() => pctRowsFromTotals(totals.disc, effectiveCounts.disc), [totals, effectiveCounts]), color: "#6366f1" },
+        { title: "Bloom’s Taxonomy", data: useMemo(() => pctRowsFromTotals(totals.bloom, effectiveCounts.bloom), [totals, effectiveCounts]), color: "#06b6d4" },
+        { title: "UN Sustainable Development Goals", data: useMemo(() => pctRowsFromTotals(totals.sdg, effectiveCounts.sdg), [totals, effectiveCounts]), color: "#f59e0b" },
+      ].map((section) => (
+        <div key={section.title} className="card section avoid-break" style={{ padding: 16 }}>
+          <h3 style={{ margin: 0, color: "#111827" }}>
+            {section.title} (Percent of Max)
+          </h3>
+          <p style={{ margin: "6px 0 12px", color: "#6b7280", fontSize: 13 }}>
+            % = (your total ÷ (answered × {RIASEC_SCALE_MAX})) × 100
           </p>
-        </Card>
-      )}
+          {section.data.length === 0 ? (
+            <div style={{ color: "#6b7280" }}>No data.</div>
+          ) : (
+            section.data.map(([label, pct]) => (
+              <BarRow key={label} label={label} percent={pct} color={section.color} />
+            ))
+          )}
+        </div>
+      ))}
 
-      {/* ADMIN DASHBOARD */}
-      {isAdmin && (
-        <>
-          {/* Access */}
-          <Card>
-            <h3 style={{ marginTop: 0 }}>✅ Admin Access</h3>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ color: "#16a34a", fontWeight: 600 }}>
-                Status: Admin Enabled
-              </div>
-              <Btn variant="secondary" onClick={handleLogout}>Log Out</Btn>
-            </div>
-            <p style={{ color: "#6b7280", marginTop: 10 }}>
-              You can manage timer and view past submissions below.
-            </p>
-          </Card>
-
-          {/* Timer Settings */}
-          <Card>
-            <h3 style={{ marginTop: 0 }}>⏱ Timer Settings</h3>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "220px 1fr",
-                gap: 12,
-                alignItems: "center",
-                maxWidth: 700,
-              }}
-            >
-              <div>
-                <Field
-                  label="Countdown (minutes)"
-                  type="number"
-                  min={1}
-                  max={180}
-                  value={timerMin}
-                  placeholder="Minutes"
-                  onChange={(e) => {
-                    setTimerMin(e.target.value);
-                    setDirty(true);
-                  }}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                {[15, 20, 25, 30, 45, 60].map((m) => (
-                  <Btn key={m} variant="secondary" onClick={() => setPreset(m)}>
-                    {m}m
-                  </Btn>
-                ))}
-                <Btn variant="primary" disabled={!dirty} onClick={applyTimer}>
-                  Save
-                </Btn>
-                <Btn variant="back" onClick={resetTimer}>
-                  Reset to 30m
-                </Btn>
-                {dirty && <span style={{ color: "#ca8a04", fontWeight: 600 }}>Unsaved changes</span>}
-              </div>
-            </div>
-            <p style={{ color: "#6b7280", marginTop: 10 }}>
-              Value is stored in <code>localStorage("cg_timer_min")</code> and used by the test on start.
-            </p>
-          </Card>
-
-          {/* Submissions List */}
-          <Card>
-            <h3 style={{ marginTop: 0 }}>📄 Past Submissions ({subCount})</h3>
-
-            {subs.length === 0 ? (
-              <div style={{ color: "#6b7280" }}>No submissions found in this browser.</div>
-            ) : (
-              <div style={{ display: "grid", gap: 8 }}>
-                {subs.map((row, i) => {
-                  const title = row.name ? `${row.name} — ${row.email || ""}`.trim() : (row.email || "(no name)");
-                  const when = row.ts ? new Date(row.ts).toLocaleString() : "(no timestamp)";
-                  const code = Array.isArray(row.top3) ? row.top3.join("") : "(no code)";
-                  return (
-                    <div key={i} style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 10,
-                      padding: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}>
-                      <div style={{ minWidth: 220 }}>
-                        <div style={{ fontWeight: 600 }}>{title}</div>
-                        <div style={{ color: "#6b7280", fontSize: 13 }}>{when}</div>
-                      </div>
-                      <div style={{ color: "#334155" }}>Top3: <b>{code}</b></div>
-                      <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-                        <Btn variant="secondary" onClick={() => viewSubmission(row)}>View</Btn>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <Btn variant="secondary" onClick={exportJSON} disabled={subs.length === 0}>
-                Export JSON
-              </Btn>
-              <Btn variant="back" onClick={clearSubs} disabled={subs.length === 0}>
-                Clear Local Submissions
-              </Btn>
-            </div>
-
-            <p style={{ color: "#6b7280", marginTop: 10 }}>
-              Submissions are stored per browser & origin in{" "}
-              <code>localStorage("{STORAGE_KEY}")</code>. If you changed machine,
-              browser, domain, or used incognito, the old ones won’t be here.
-            </p>
-          </Card>
-        </>
-      )}
+      {/* Footer actions (hidden in print) */}
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+        <button
+          onClick={() => onNavigate?.(fromAdmin ? "admin" : "home")}
+          style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
+        >
+          {fromAdmin ? "Back to Submissions" : "Back Home"}
+        </button>
+        <button
+          onClick={handlePrint}
+          style={{ border: "1px solid #2563eb", background: "#2563eb", color: "#fff", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
+          title="Export to PDF"
+        >
+          Export PDF
+        </button>
+      </div>
     </PageWrap>
   );
 }
