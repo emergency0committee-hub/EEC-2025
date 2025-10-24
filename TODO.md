@@ -1,9 +1,8 @@
-- [x] Install @supabase/supabase-js dependency
-- [x] Create .env file with Supabase credentials
-- [x] Create src/lib/supabase.js for Supabase client initialization
-- [x] Edit src/main.jsx to import Supabase client
-- [x] Run npm install to install dependencies (already done via npm install @supabase/supabase-js)
-- [x] Test Supabase connection (added test function and called on app load)
-- [x] Integrate Supabase into storage: store name, email, school, answers, and results in database
-- [x] Create test_submissions table in Supabase database
-- [x] Update Admin panel to load submissions from Supabase with localStorage fallback
+# Deployment to GitHub TODO
+
+- [ ] Check git status
+- [ ] Stage all files (git add .)
+- [ ] Commit changes with message "Initial commit for EEC-2025 career test app"
+- [ ] Create GitHub repo: gh repo create emergency0committee-hub/EEC-2025 --public
+- [ ] Set remote origin to the new repo
+- [ ] Push to main branch

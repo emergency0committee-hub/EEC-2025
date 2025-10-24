@@ -8,7 +8,7 @@ import Admin from "./pages/Admin.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
-import { testSupabaseConnection } from "./lib/testSupabase.js";
+import { testSupabaseConnection } from "./lib/supabase.js";
 
 function SatPlaceholder({ onNavigate }) {
   return (
