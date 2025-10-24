@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/EEC/",          // <-- repo name
+  base: "/EEC-2025/",          // <-- repo name
   server: {               // (optional) local dev settings
     port: 5173,
     open: true,
