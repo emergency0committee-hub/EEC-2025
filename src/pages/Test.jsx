@@ -15,6 +15,7 @@ import {
   interestPercents,
 } from "../lib/scoring.js";
 import { validateAll } from "../lib/validate.js";
+import { saveTestSubmission } from "../lib/supabaseStorage.js";
 
 import {
   RIASEC_SCALE_MAX,
@@ -232,22 +233,35 @@ export default function Test({ onNavigate }) {
     return set;
   }, [ansTF, shuffledRIASEC, totalQuestions]);
 
-  const saveSubmission = () => {
+  const saveSubmission = async () => {
     const endTs = Date.now();
-    const rows = readSubs();
-    rows.push({
-      ts: new Date(endTs).toISOString(),
-      name: profile.name,
-      email: profile.email,
-      school: profile.school,
+    const results = {
       top3,
       radarData,
       areaPercents: areaPerc,
       interestPercents: interestsPerc,
       pillarAgg,
       pillarCounts,
-    });
-    writeSubs(rows);
+    };
+
+    // Try to save to Supabase first
+    const supabaseSuccess = await saveTestSubmission(profile, ansTF, results);
+
+    if (supabaseSuccess) {
+      console.log('Test submission saved to Supabase successfully');
+    } else {
+      console.warn('Failed to save to Supabase, falling back to localStorage');
+      // Fallback to localStorage
+      const rows = readSubs();
+      rows.push({
+        ts: new Date(endTs).toISOString(),
+        name: profile.name,
+        email: profile.email,
+        school: profile.school,
+        ...results,
+      });
+      writeSubs(rows);
+    }
   };
 
   const next = () => setPage((p) => Math.min(p + 1, LAST));

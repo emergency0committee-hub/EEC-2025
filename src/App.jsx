@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Home from "./pages/Home.jsx";
 import Career from "./pages/Career.jsx";
 import Test from "./pages/Test.jsx";
@@ -8,6 +8,7 @@ import Admin from "./pages/Admin.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
+import { testSupabaseConnection } from "./lib/testSupabase.js";
 
 function SatPlaceholder({ onNavigate }) {
   return (
@@ -27,6 +28,10 @@ function SatPlaceholder({ onNavigate }) {
 export default function App() {
   const [route, setRoute] = useState("home");
   const [resultsPayload, setResultsPayload] = useState(null);
+
+  useEffect(() => {
+    testSupabaseConnection();
+  }, []);
 
   const onNavigate = (to, data = null) => {
     if (to === "results" && data) setResultsPayload(data);

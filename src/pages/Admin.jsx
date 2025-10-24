@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
+import { getTestSubmissions } from "../lib/supabaseStorage.js";
 
 export default function Admin({ onNavigate }) {
   // =======================
@@ -66,38 +67,66 @@ export default function Admin({ onNavigate }) {
 
   const [subs, setSubs] = useState([]);
   const [subCount, setSubCount] = useState(0);
+  const [loadingSubs, setLoadingSubs] = useState(false);
 
   // migration + load
-  const loadSubs = () => {
+  const loadSubs = async () => {
+    setLoadingSubs(true);
     let rows = [];
+
+    // Load from Supabase first
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        rows = JSON.parse(raw) || [];
-      } else {
-        // try legacy keys (migrate first one we find)
-        for (const k of LEGACY_KEYS) {
-          const legacy = localStorage.getItem(k);
-          if (legacy) {
-            try {
-              const parsed = JSON.parse(legacy);
-              if (Array.isArray(parsed)) {
-                rows = parsed;
-                // migrate to v1
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-                break;
-              }
-            } catch {}
+      const supabaseSubs = await getTestSubmissions();
+      if (supabaseSubs.length > 0) {
+        rows = supabaseSubs.map(row => ({
+          ts: row.submitted_at,
+          name: row.name,
+          email: row.email,
+          school: row.school,
+          top3: row.top3,
+          radarData: row.radar_data,
+          areaPercents: row.area_percents,
+          interestPercents: row.interest_percents,
+          pillarAgg: row.pillar_agg,
+          pillarCounts: row.pillar_counts,
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load from Supabase:', err);
+    }
+
+    // If no Supabase data, fall back to localStorage
+    if (rows.length === 0) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          rows = JSON.parse(raw) || [];
+        } else {
+          // try legacy keys (migrate first one we find)
+          for (const k of LEGACY_KEYS) {
+            const legacy = localStorage.getItem(k);
+            if (legacy) {
+              try {
+                const parsed = JSON.parse(legacy);
+                if (Array.isArray(parsed)) {
+                  rows = parsed;
+                  // migrate to v1
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+                  break;
+                }
+              } catch {}
+            }
           }
         }
-      }
-    } catch {}
+      } catch {}
+    }
 
     if (!Array.isArray(rows)) rows = [];
     // sort newest first
     rows.sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
     setSubs(rows);
     setSubCount(rows.length);
+    setLoadingSubs(false);
   };
 
   useEffect(() => {
@@ -115,9 +144,14 @@ export default function Admin({ onNavigate }) {
     // Results page expects the same payload shape used by Test.jsx on navigate
     onNavigate("results", {
       code: row.top3,
-      radar: row.radarData,
+      radarData: row.radarData,
       areaPercents: row.areaPercents,
       interestPercents: row.interestPercents,
+      pillarAgg: row.pillarAgg,
+      pillarCounts: row.pillarCounts,
+      fromAdmin: true,
+      participant: row,
+      showParticipantHeader: true,
     });
   };
 
@@ -231,7 +265,9 @@ export default function Admin({ onNavigate }) {
           <Card>
             <h3 style={{ marginTop: 0 }}>📄 Past Submissions ({subCount})</h3>
 
-            {subs.length === 0 ? (
+            {loadingSubs ? (
+              <div style={{ color: "#6b7280" }}>Loading submissions...</div>
+            ) : subs.length === 0 ? (
               <div style={{ color: "#6b7280" }}>No submissions found in this browser.</div>
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
