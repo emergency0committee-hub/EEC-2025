@@ -1,8 +1,8 @@
 // src/pages/Admin.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
-import Btn from "../components/Btn.jsx";
-import { supabase } from "../lib/db.js";
+import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
+import Btn from "./components/Btn.jsx";
+import { supabase } from "./lib/db.js";
 
 // Simple row render
 function Row({ row, onOpen }) {
