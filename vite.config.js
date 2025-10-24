@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? "/EEC-2025/" : "/",          // <-- repo name
+  base:"/emergency0committee-hub", // <-- repo name
   server: {               // (optional) local dev settings
     port: 5173,
     open: true,
