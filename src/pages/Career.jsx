@@ -1,10 +1,11 @@
-// src/pages/Home.jsx
+// src/pages/Career.jsx
 import React, { useState } from "react";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
+import LanguageButton from "../components/LanguageButton.jsx";
 import { STR, LANGS } from "../i18n/strings.js";
 
-export default function Home({ onNavigate, onAdmin, lang = "EN", setLang }) {
+export default function Career({ onNavigate, lang = "EN", setLang }) {
   const t = STR[lang] || STR.EN;
   const [showRules, setShowRules] = useState(false);
   const [agree, setAgree] = useState(false);
@@ -35,30 +36,13 @@ export default function Home({ onNavigate, onAdmin, lang = "EN", setLang }) {
             </span>
           </div>
         }
-        // Right: Language selector + Admin button
+        // Right: Language button + Admin button
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <select
-              value={lang}
-              onChange={(e) => setLang?.(e.target.value)}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 6,
-                border: "1px solid #d1d5db",
-                fontSize: 14,
-                color: "#111827",
-                background: "#fff",
-              }}
-            >
-              {LANGS.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
+            <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
             <Btn
               variant="secondary"
-              onClick={onAdmin}
+              onClick={() => onNavigate("admin")}
               title={t.adminLogin}
               style={{ padding: "8px 14px" }}
             >
@@ -98,7 +82,7 @@ export default function Home({ onNavigate, onAdmin, lang = "EN", setLang }) {
               </Btn>
               <Btn
                 variant="secondary"
-                onClick={onAdmin}
+                onClick={() => onNavigate("admin")}
                 style={{ padding: "12px 18px" }}
               >
                 {t.adminLogin}

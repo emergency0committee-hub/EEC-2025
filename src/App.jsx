@@ -10,7 +10,7 @@ import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
 import { testSupabaseConnection } from "./lib/supabase.js";
 
-function SatPlaceholder({ onNavigate }) {
+function SatPlaceholder({ onNavigate, lang, setLang }) {
   return (
     <PageWrap>
       <HeaderBar title="SAT Practice" right={null} />
@@ -26,8 +26,54 @@ function SatPlaceholder({ onNavigate }) {
 }
 
 export default function App() {
-  const [route, setRoute] = useState("home");
+  // Route state with localStorage persistence
+  const [route, setRoute] = useState(() => {
+    try {
+      const savedRoute = localStorage.getItem("cg_current_route");
+      // Don't persist test or results routes for security/UX reasons
+      if (savedRoute && !["test", "results"].includes(savedRoute)) {
+        return savedRoute;
+      }
+      return "home";
+    } catch {
+      return "home";
+    }
+  });
+  
   const [resultsPayload, setResultsPayload] = useState(null);
+
+  // Global language state with localStorage persistence
+  const [lang, setLang] = useState(() => {
+    try {
+      return localStorage.getItem("cg_lang") || "EN";
+    } catch {
+      return "EN";
+    }
+  });
+
+  // Persist language preference and set document direction
+  useEffect(() => {
+    try {
+      localStorage.setItem("cg_lang", lang);
+      // Set document direction for RTL support
+      document.documentElement.dir = lang === "AR" ? "rtl" : "ltr";
+      document.documentElement.lang = lang.toLowerCase();
+    } catch (e) {
+      console.warn("Failed to save language preference:", e);
+    }
+  }, [lang]);
+
+  // Persist current route
+  useEffect(() => {
+    try {
+      // Don't persist test or results routes
+      if (!["test", "results"].includes(route)) {
+        localStorage.setItem("cg_current_route", route);
+      }
+    } catch (e) {
+      console.warn("Failed to save route:", e);
+    }
+  }, [route]);
 
   useEffect(() => {
     testSupabaseConnection();
@@ -47,12 +93,12 @@ export default function App() {
     }
   }, [route]);
 
-  if (route === "home")   return <Home onNavigate={onNavigate} />;
-  if (route === "career") return <Career onNavigate={onNavigate} />;
-  if (route === "sat")    return <SatPlaceholder onNavigate={onNavigate} />;
-  if (route === "test")   return <Test onNavigate={onNavigate} />;
-  if (route === "thanks") return <Thanks onNavigate={onNavigate} />;
-  if (route === "admin")  return <Admin onNavigate={onNavigate} />;
+  if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "sat")    return <SatPlaceholder onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "admin")  return <Admin onNavigate={onNavigate} lang={lang} setLang={setLang} />;
 
   if (route === "results") {
     if (!canViewResults) {

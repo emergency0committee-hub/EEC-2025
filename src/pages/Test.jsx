@@ -2,9 +2,11 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Btn from "../components/Btn.jsx";
+import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
 import TimerHeader from "../components/TimerHeader.jsx";
 import useCountdown from "../hooks/useCountdown.js";
+import { LANGS } from "../i18n/strings.js";
 
 import {
   riasecFromAnswers,
@@ -171,7 +173,7 @@ function QuestionPalette({
 }
 
 /* ---------- MAIN COMPONENT ---------- */
-export default function Test({ onNavigate }) {
+export default function Test({ onNavigate, lang = "EN", setLang }) {
   const lenR = Q_RIASEC.length;
   const INTRO = 0;
   const R_START = 1;
@@ -320,7 +322,12 @@ export default function Test({ onNavigate }) {
   }, [page, R_START, LAST, shuffledRIASEC, setAnsTF, next, prev, endTest]);
 
   /* ---------- Pages ---------- */
-  const Timer = <TimerHeader label={`⏳ ${cd.fmt(cd.remaining)}`} />;
+  const Timer = (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
+      <TimerHeader label={`⏳ ${cd.fmt(cd.remaining)}`} />
+    </div>
+  );
 
   // Intro
   if (page === INTRO) {
