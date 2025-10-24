@@ -22,6 +22,64 @@ import {
   Q_UNIFIED as RAW_RIASEC,
 } from "../questionBank.js";
 
+import { supabase } from "../lib/db.js";
+
+/* ====================== Supabase helpers ====================== */
+async function ensureAuth(email) {
+  // if already logged in, return user
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) return user;
+
+  // kick off magic-link sign-in
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin },
+  });
+  if (error) throw error;
+
+  alert("A login link was sent to your email. Open it, then return to start the test.");
+  return null;
+}
+
+async function sbStartAttempt(userId, profile) {
+  // Add name/school here if you added these columns to `attempts`
+  const { data, error } = await supabase
+    .from("attempts")
+    .insert({ user_id: userId, test_version: "v1" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data; // { id, ... }
+}
+
+async function sbSaveAnswers(attemptId, answersMap) {
+  const rows = Object.entries(answersMap)
+    .filter(([, v]) => v != null)
+    .map(([qid, value]) => ({ attempt_id: attemptId, qid, value }));
+  if (!rows.length) return;
+  const { error } = await supabase.from("answers").insert(rows);
+  if (error) throw error;
+}
+
+async function sbFinishAttempt(attemptId, resultObj) {
+  const { error: e1 } = await supabase
+    .from("attempts")
+    .update({ completed_at: new Date().toISOString() })
+    .eq("id", attemptId);
+  if (e1) throw e1;
+
+  const { error: e2 } = await supabase
+    .from("results")
+    .insert({
+      attempt_id: attemptId,
+      riasec: resultObj.riasec,
+      top_codes: resultObj.top_codes,
+      overall: resultObj.overall ?? null,
+    });
+  if (e2) throw e2;
+}
+
+/* ====================== Validation / Questions ====================== */
 const RAW_APT = [];
 const RAW_WORK = [];
 const RAW_INT = [];
@@ -33,13 +91,10 @@ const { Q_RIASEC, Q_APT, Q_WORK, Q_INT } = validateAll({
   Q_INT: RAW_INT,
 });
 
-const STORAGE_KEY = "cg_submissions_v1";
+/* ====================== Local profile keys ====================== */
 const PROFILE_KEY = "cg_profile_v1";
 
-const readSubs = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; } };
-const writeSubs = (rows) => localStorage.setItem(STORAGE_KEY, JSON.stringify(rows || []));
-
-// Shuffle
+/* ====================== Utils ====================== */
 function shuffleArray(arr) {
   const a = [...(arr || [])];
   for (let i = a.length - 1; i > 0; i--) {
@@ -170,7 +225,7 @@ function QuestionPalette({
   );
 }
 
-/* ---------- MAIN COMPONENT ---------- */
+/* ====================== MAIN COMPONENT ====================== */
 export default function Test({ onNavigate }) {
   const lenR = Q_RIASEC.length;
   const INTRO = 0;
@@ -187,6 +242,7 @@ export default function Test({ onNavigate }) {
   const [ansTF, setAnsTF] = useState({});
   const [showPalette, setShowPalette] = useState(false);
   const [savedScroll, setSavedScroll] = useState(null);
+  const [attemptId, setAttemptId] = useState(null);
 
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 30);
@@ -233,58 +289,52 @@ export default function Test({ onNavigate }) {
     return set;
   }, [ansTF, shuffledRIASEC, totalQuestions]);
 
-  const saveSubmission = async () => {
-    const endTs = Date.now();
-    const results = {
-      top3,
-      radarData,
-      areaPercents: areaPerc,
-      interestPercents: interestsPerc,
-      pillarAgg,
-      pillarCounts,
-    };
-
-    // Try to save to Supabase first
-    const supabaseSuccess = await saveTestSubmission(profile, ansTF, results);
-
-    if (supabaseSuccess) {
-      console.log('Test submission saved to Supabase successfully');
-    } else {
-      console.warn('Failed to save to Supabase, falling back to localStorage');
-      // Fallback to localStorage
-      const rows = readSubs();
-      rows.push({
-        ts: new Date(endTs).toISOString(),
-        name: profile.name,
-        email: profile.email,
-        school: profile.school,
-        ...results,
-      });
-      writeSubs(rows);
-    }
-  };
-
   const next = () => setPage((p) => Math.min(p + 1, LAST));
   const prev = () => setPage((p) => Math.max(p - 1, INTRO));
 
-  const startTest = () => {
+  const startTest = async () => {
     if (!isValidProfile()) return setShowProfileError(true);
     setShowProfileError(false);
+
+    const user = await ensureAuth(profile.email);
+    if (!user) return; // user must finish email sign-in
+
+    const attempt = await sbStartAttempt(user.id, profile);
+    setAttemptId(attempt.id);
+
     cd.reset(); cd.start();
     setStartTs(Date.now());
     setPage(R_START);
   };
 
-  const endTest = () => {
-    saveSubmission();
-    onNavigate("results", {
-      radarData,
-      areaPercents: areaPerc,
-      interestPercents: interestsPerc,
-      participant: { ...profile, ts: Date.now() },
-      pillarAgg,
-      pillarCounts,
-    });
+  const endTest = async () => {
+    try {
+      if (!attemptId) {
+        alert("No attempt started. Please start again.");
+        return;
+      }
+
+      const resultObj = {
+        riasec: riasecSums,
+        top_codes: Array.isArray(top3) ? top3.map(t => t.letter ?? t?.code ?? t) : [],
+        overall: null,
+      };
+
+      await sbSaveAnswers(attemptId, ansTF);
+      await sbFinishAttempt(attemptId, resultObj);
+
+      onNavigate("results", {
+        radarData,
+        areaPercents: areaPerc,
+        interestPercents: interestsPerc,
+        participant: { ...profile, ts: Date.now() },
+        pillarAgg,
+        pillarCounts,
+      });
+    } catch (e) {
+      console.error(e);
+      alert("Could not save to the server. Please check your connection and try again.");
+    }
   };
 
   /* ---------- Keyboard Shortcuts ---------- */
@@ -338,10 +388,20 @@ export default function Test({ onNavigate }) {
           {isAdmin && (
             <div style={{ marginTop: 16, padding: 12, border: "1px dashed #cbd5e1", borderRadius: 10, background: "#f8fafc", display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontWeight: 600 }}>⏱ Timer (minutes):</div>
-              <input type="number" min={1} max={180} value={timerMin} onChange={(e)=>setTimerMin(Math.max(1,Math.min(180,Number(e.target.value)||1)))} style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontWeight: 600 }}/>
+              <input
+                type="number"
+                min={1}
+                max={180}
+                value={timerMin}
+                onChange={(e)=>setTimerMin(Math.max(1,Math.min(180,Number(e.target.value)||1)))}
+                style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontWeight: 600 }}
+              />
               <div style={{ marginLeft: "auto", color: "#475569" }}>Current: <b>{timerMin} min</b></div>
             </div>
           )}
+          <p style={{ color:"#475569", marginTop: 10 }}>
+            We’ll send a one-time login link to your email to secure your results.
+          </p>
           {invalid && <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 14 }}>Please complete all fields correctly.</div>}
           <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
             <Btn variant="back" onClick={()=>onNavigate("home")}>Back Home</Btn>

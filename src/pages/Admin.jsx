@@ -5,59 +5,10 @@ import Btn from "../components/Btn.jsx";
 import { getTestSubmissions } from "../lib/supabaseStorage.js";
 
 export default function Admin({ onNavigate }) {
-  // =======================
-  // === Admin Auth (password) ========
-  // =======================
-  const ADMIN_PASSWORD = "careeradmin123"; // change this
+  const [isAdmin, setIsAdmin] = useState(false);
   const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-
-  const isAdmin = useMemo(() => {
-    try {
-      return localStorage.getItem("cg_admin_ok_v1") === "1";
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const handleLogin = () => {
-    if (password === ADMIN_PASSWORD) {
-      try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
-      location.reload();
-    } else {
-      setAuthError("❌ Incorrect password. Please try again.");
-    }
-  };
-
-  const handleLogout = () => {
-    try { localStorage.removeItem("cg_admin_ok_v1"); } catch {}
-    location.reload();
-  };
-
-  // =======================
-  // === Timer Settings ====
-  // =======================
-  const [timerMin, setTimerMin] = useState(() => {
-    const saved = Number(localStorage.getItem("cg_timer_min") || 30);
-    return Number.isFinite(saved) && saved > 0 ? saved : 30;
-  });
+  const [timerMin, setTimerMin] = useState(30);
   const [dirty, setDirty] = useState(false);
-
-  const applyTimer = () => {
-    const safe = Math.max(1, Math.min(180, Number(timerMin) || 30));
-    setTimerMin(safe);
-    try { localStorage.setItem("cg_timer_min", String(safe)); } catch {}
-    setDirty(false);
-  };
-  const resetTimer = () => {
-    setTimerMin(30);
-    try { localStorage.setItem("cg_timer_min", "30"); } catch {}
-    setDirty(false);
-  };
-  const setPreset = (m) => {
-    setTimerMin(m);
-    setDirty(true);
-  };
 
   // =======================
   // === Submissions =======
@@ -129,15 +80,59 @@ export default function Admin({ onNavigate }) {
     setLoadingSubs(false);
   };
 
+  // load timer from localStorage
   useEffect(() => {
-    loadSubs();
+    const stored = localStorage.getItem("cg_timer_min");
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      if (!isNaN(parsed) && parsed > 0) setTimerMin(parsed);
+    }
   }, []);
 
-  const clearSubs = () => {
-    if (!confirm("Delete all saved submissions on this browser?")) return;
-    try { localStorage.setItem(STORAGE_KEY, "[]"); } catch {}
+  // check admin password
+  useEffect(() => {
+    const stored = localStorage.getItem("cg_admin_pass");
+    if (stored) setIsAdmin(true);
+  }, []);
+
+  const handleLogin = () => {
+    const correct = import.meta.env.VITE_ADMIN_PASS || "ChangeThisToSomethingStrong";
+    if (password === correct) {
+      localStorage.setItem("cg_admin_pass", "1");
+      setIsAdmin(true);
+      setPassword("");
+      loadSubs(); // load subs on login
+    } else {
+      alert("Incorrect password");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("cg_admin_pass");
+    setIsAdmin(false);
     setSubs([]);
     setSubCount(0);
+  };
+
+  const applyTimer = () => {
+    const min = parseInt(timerMin, 10);
+    if (isNaN(min) || min < 1 || min > 180) {
+      alert("Please enter a valid number between 1 and 180 minutes");
+      return;
+    }
+    localStorage.setItem("cg_timer_min", min.toString());
+    setDirty(false);
+  };
+
+  const resetTimer = () => {
+    setTimerMin(30);
+    localStorage.setItem("cg_timer_min", "30");
+    setDirty(false);
+  };
+
+  const setPreset = (min) => {
+    setTimerMin(min);
+    setDirty(true);
   };
 
   const viewSubmission = (row) => {
@@ -146,7 +141,7 @@ export default function Admin({ onNavigate }) {
       code: row.top3,
       radarData: row.radarData,
       areaPercents: row.areaPercents,
-      interestPercents: row.interestPercents,
+      interestPercents: row.interest_percents,
       pillarAgg: row.pillarAgg,
       pillarCounts: row.pillarCounts,
       fromAdmin: true,
@@ -156,49 +151,50 @@ export default function Admin({ onNavigate }) {
   };
 
   const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(subs, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `submissions_${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const dataStr = JSON.stringify(subs, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = 'submissions.json';
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
   };
 
-  // =======================
-  // === Render ============
-  // =======================
+  const clearSubs = () => {
+    if (confirm("Are you sure you want to clear all local submissions? This cannot be undone.")) {
+      localStorage.removeItem(STORAGE_KEY);
+      setSubs([]);
+      setSubCount(0);
+    }
+  };
+
+  const headerRight = useMemo(() => (
+    <div className="no-print" style={{ display: "flex", gap: 8 }}>
+      <Btn variant="secondary" onClick={() => onNavigate("home")}>Home</Btn>
+    </div>
+  ), [onNavigate]);
+
   return (
     <PageWrap>
-      <HeaderBar
-        title="Admin Panel"
-        right={<Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>}
-      />
+      <HeaderBar title="Admin" right={headerRight} />
 
-      {/* LOGIN (if not admin) */}
-      {!isAdmin && (
+      {!isAdmin ? (
         <Card>
-          <h3 style={{ marginTop: 0 }}>🔐 Admin Login</h3>
-          <Field
-            label="Enter Admin Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-          />
-          {authError && <div style={{ color: "#b91c1c", marginTop: 6 }}>{authError}</div>}
-          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <Btn variant="primary" onClick={handleLogin}>Sign In</Btn>
-            <Btn variant="back" onClick={() => onNavigate("home")}>Cancel</Btn>
+          <h3 style={{ marginTop: 0 }}>🔒 Admin Login</h3>
+          <div style={{ maxWidth: 300 }}>
+            <Field
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter admin password"
+            />
+            <Btn variant="primary" onClick={handleLogin} style={{ marginTop: 8 }}>
+              Login
+            </Btn>
           </div>
-          <p style={{ color: "#6b7280", marginTop: 10 }}>
-            Admin mode is client-side (stored in your browser only).
-          </p>
         </Card>
-      )}
-
-      {/* ADMIN DASHBOARD */}
-      {isAdmin && (
+      ) : (
         <>
           {/* Access */}
           <Card>

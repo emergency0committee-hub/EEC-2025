@@ -1,12 +1,15 @@
 {
   "name": "career-guidance-test",
+  "homepage": "https://emergency0committee-hub.github.io/EEC/",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --port 5173"
+    "preview": "vite preview --port 5173",
+    "predeploy": "vite build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",
@@ -16,6 +19,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "gh-pages": "^6.1.1",
     "vite": "^5.4.8"
   }
 }
