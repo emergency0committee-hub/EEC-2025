@@ -34,7 +34,8 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  const canViewResults = useMemo(() => {
+  // Only protect the Admin page. Results should be visible to users.
+  const isAdmin = useMemo(() => {
     try {
       return localStorage.getItem("cg_admin_ok_v1") === "1";
     } catch {
@@ -47,22 +48,26 @@ export default function App() {
   if (route === "sat")    return <SatPlaceholder onNavigate={onNavigate} />;
   if (route === "test")   return <Test onNavigate={onNavigate} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} />;
-  if (route === "admin")  return <Admin onNavigate={onNavigate} />;
 
-  if (route === "results") {
-    if (!canViewResults) {
+  if (route === "admin") {
+    if (!isAdmin) {
       return (
         <PageWrap>
           <HeaderBar title="Not Authorized" right={null} />
           <Card>
             <p style={{ color: "#6b7280" }}>
-              Results are visible to administrators only.
+              This page is restricted to administrators.
             </p>
             <Btn variant="primary" onClick={() => onNavigate("home")}>Back to Home</Btn>
           </Card>
         </PageWrap>
       );
     }
+    return <Admin onNavigate={onNavigate} />;
+  }
+
+  // Results: allow access for everyone.
+  if (route === "results") {
     return <Results onNavigate={onNavigate} {...(resultsPayload || {})} />;
   }
 
