@@ -25,7 +25,7 @@ export default function LanguageButton({ lang, setLang, langs }) {
           background: "none",
           border: "1px solid #d1d5db",
           borderRadius: 6,
-          padding: "12px 20px",
+          padding: "12px 16px",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
