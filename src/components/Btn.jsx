@@ -1,13 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import PropTypes from "prop-types";
 
-export default function Btn({ children, onClick, variant = "primary", style = {}, ...props }) {
+export default function Btn({ children, onClick, variant = "primary", style = {}, selected = false, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }) {
   Btn.propTypes = {
     children: PropTypes.node.isRequired,
     onClick: PropTypes.func,
     variant: PropTypes.oneOf(["primary", "secondary", "back"]),
     style: PropTypes.object,
+    selected: PropTypes.bool,
   };
+
+  const [hovering, setHovering] = useState(false);
 
   const baseStyle = {
     padding: "12px 20px",
@@ -40,10 +43,30 @@ export default function Btn({ children, onClick, variant = "primary", style = {}
     },
   };
 
+  // Compose dynamic styles
+  let dynamic = {};
+  if (variant === "secondary") {
+    if (selected) {
+      dynamic = { background: "#2563eb", color: "#ffffff", border: "1px solid #2563eb" };
+    } else if (hovering) {
+      dynamic = { background: "#f3f4f6" };
+    }
+  }
+
+  const handleMouseEnter = (e) => { setHovering(true); onMouseEnter && onMouseEnter(e); };
+  const handleMouseLeave = (e) => { setHovering(false); onMouseLeave && onMouseLeave(e); };
+  const handleFocus = (e) => { setHovering(true); onFocus && onFocus(e); };
+  const handleBlur = (e) => { setHovering(false); onBlur && onBlur(e); };
+
   return (
     <button
       onClick={onClick}
-      style={{ ...baseStyle, ...variants[variant], ...style }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      style={{ ...baseStyle, ...variants[variant], ...dynamic, ...style }}
+      aria-pressed={selected || undefined}
       {...props}
     >
       {children}

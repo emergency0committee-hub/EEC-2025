@@ -1,0 +1,12 @@
+// vite.config.js
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  base: "/EEC-2025/", // <-- matches package.json homepage
+  server: {               // (optional) local dev settings
+    port: 5173,
+    open: true,
+  },
+});

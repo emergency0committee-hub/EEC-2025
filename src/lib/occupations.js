@@ -1,4 +1,5 @@
 // src/lib/occupations.js
+import { supabase } from "./supabase.js";
 let _cache = null;
 
 function normalizeTheme(s) {

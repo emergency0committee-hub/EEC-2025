@@ -7,8 +7,10 @@ import Test from "./pages/Test.jsx";
 import Results from "./pages/Results.jsx";
 import SelectResults from "./pages/SelectResults.jsx";
 import Admin from "./pages/Admin.jsx";
+import Login from "./pages/Login.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import Thanks from "./pages/Thanks.jsx";
+import Account from "./pages/Account.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
 // import { testSupabaseConnection } from "./lib/supabase.js";
@@ -120,6 +122,8 @@ export default function App() {
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin")  return <Admin onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "account") return <Account onNavigate={onNavigate} />;
   if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
 
   if (route === "results") {

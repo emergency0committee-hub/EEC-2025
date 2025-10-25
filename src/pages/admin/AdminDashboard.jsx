@@ -18,8 +18,9 @@ export default function AdminDashboard({ onNavigate }) {
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
+        const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
         const { data, error } = await supabase
-          .from("submissions")
+          .from(table)
           .select("*")
           .order("ts", { ascending: false });
 

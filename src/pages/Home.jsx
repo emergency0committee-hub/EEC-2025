@@ -3,6 +3,7 @@ import React from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
+import UserMenu from "../components/UserMenu.jsx";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import { LANGS, STR } from "../i18n/strings.js";
 import logoUrl from "../assets/logo.png"; // optional
@@ -17,16 +18,8 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
 
   const HeaderActions = (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      {/* Language Button */}
       <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-
-      {/* Login (you can route to a dedicated login page, or admin) */}
-      <Btn variant="primary" onClick={() => {
-        localStorage.setItem("cg_admin_ok_v1", "1");
-        onNavigate("select-results");
-      }}>
-        {t.adminLogin}
-      </Btn>
+      <UserMenu onNavigate={onNavigate} />
     </div>
   );
 

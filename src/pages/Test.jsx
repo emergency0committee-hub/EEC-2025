@@ -1,7 +1,7 @@
 // src/pages/Test.jsx
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import PropTypes from "prop-types";
-import { createPortal } from "react-dom";
+// import { createPortal } from "react-dom";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
@@ -23,65 +23,9 @@ import { saveTestSubmission } from "../lib/supabaseStorage.js";
 
 import {
   RIASEC_SCALE_MAX,
-  Q_UNIFIED as RAW_RIASEC,
+  Q_UNIFIED_CLEAN as RAW_RIASEC,
 } from "../questionBank.js";
 
-import { supabase } from "../lib/supabase.js";
-
-/* ====================== Supabase helpers ====================== */
-async function ensureAuth(email) {
-  // if already logged in, return user
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) return user;
-
-  // kick off magic-link sign-in
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin },
-  });
-  if (error) throw error;
-
-  alert("A login link was sent to your email. Open it, then return to start the test.");
-  return null;
-}
-
-async function sbStartAttempt(userId, profile) {
-  // Add name/school here if you added these columns to `attempts`
-  const { data, error } = await supabase
-    .from("attempts")
-    .insert({ user_id: userId, test_version: "v1" })
-    .select()
-    .single();
-  if (error) throw error;
-  return data; // { id, ... }
-}
-
-async function sbSaveAnswers(attemptId, answersMap) {
-  const rows = Object.entries(answersMap)
-    .filter(([, v]) => v != null)
-    .map(([qid, value]) => ({ attempt_id: attemptId, qid, value }));
-  if (!rows.length) return;
-  const { error } = await supabase.from("answers").insert(rows);
-  if (error) throw error;
-}
-
-async function sbFinishAttempt(attemptId, resultObj) {
-  const { error: e1 } = await supabase
-    .from("attempts")
-    .update({ completed_at: new Date().toISOString() })
-    .eq("id", attemptId);
-  if (e1) throw e1;
-
-  const { error: e2 } = await supabase
-    .from("results")
-    .insert({
-      attempt_id: attemptId,
-      riasec: resultObj.riasec,
-      top_codes: resultObj.top_codes,
-      overall: resultObj.overall ?? null,
-    });
-  if (e2) throw e2;
-}
 
 /* ====================== Validation / Questions ====================== */
 const RAW_APT = [];
@@ -140,102 +84,10 @@ function pillarAggAndCountsFromAnswers(questions, ansTF) {
 }
 
 /* ---------- Palette Overlay ---------- */
-function QuestionPalette({
-  totalQuestions,
-  currentIndex,
-  onJump,
-  onClose,
-  savedScroll,
-  setSavedScroll,
-  answeredIndexes,
-}) {
-  const scrollRef = useRef(null);
-  useEffect(() => {
-    if (scrollRef.current != null && savedScroll != null) {
-      scrollRef.current.scrollTop = savedScroll;
-    }
-  }, [savedScroll]);
-
-  const handleClose = () => {
-    if (scrollRef.current) setSavedScroll(scrollRef.current.scrollTop);
-    onClose();
-  };
-  const handleJump = (idx) => {
-    if (scrollRef.current) setSavedScroll(scrollRef.current.scrollTop);
-    onJump(idx);
-    onClose();
-  };
-
-  return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 10000,
-      }}
-    >
-      <div
-        ref={scrollRef}
-        style={{
-          background: "#fff",
-          padding: 20,
-          borderRadius: 12,
-          maxWidth: 900,
-          width: "90vw",
-          maxHeight: "80vh",
-          overflowY: "auto",
-          boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Jump to a Question</h3>
-          <Btn variant="back" onClick={handleClose}>Close</Btn>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(10, minmax(40px, 1fr))", gap: 8 }}>
-          {Array.from({ length: totalQuestions }, (_, i) => {
-            const idx = i + 1;
-            const isCurrent = idx === currentIndex;
-            const isAnswered = answeredIndexes?.has(idx);
-            const bg = isCurrent ? "#2563eb" : isAnswered ? "#d1fae5" : "#f3f4f6";
-            const br = isCurrent ? "1px solid #2563eb" : isAnswered ? "1px solid #10b981" : "1px solid #d1d5db";
-            const fg = isCurrent ? "#fff" : "#111827";
-            return (
-              <button
-                key={idx}
-                onClick={() => handleJump(idx)}
-                style={{
-                  padding: "10px 0",
-                  borderRadius: 6,
-                  border: br,
-                  background: bg,
-                  color: fg,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {idx}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
+// Using PaletteOverlay component for question navigation
 
 /* ====================== MAIN COMPONENT ====================== */
 export default function Test({ onNavigate, lang = "EN", setLang }) {
-  Test.propTypes = {
-    onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string.isRequired,
-    setLang: PropTypes.func.isRequired,
-  };
   const lenR = Q_RIASEC.length;
   const INTRO = 0;
   const R_START = 1;
@@ -245,13 +97,52 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const indexFromPage = (p) => (p >= R_START && p <= LAST ? p - R_START + 1 : 0);
   const pageFromIndex = (idx) => R_START + (idx - 1);
 
+  // Require sign-in before taking the test (local-only auth)
+  const [currentUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  if (!currentUser) {
+    return (
+      <PageWrap>
+        <HeaderBar title="Sign In Required" right={null} />
+        <Card>
+          <p style={{ color: "#6b7280" }}>
+            Please sign in to start the test.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="primary" onClick={() => onNavigate("login")}>Go to Login</Btn>
+            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+          </div>
+        </Card>
+      </PageWrap>
+    );
+  }
+
   const [page, setPage] = useState(INTRO);
-  const [profile, setProfile] = useState({ name: "", email: "", school: "" });
+  const [profile, setProfile] = useState(() => {
+    let user = null;
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      user = raw ? JSON.parse(raw) : null;
+    } catch {}
+    return {
+      name: user?.name || user?.username || "",
+      email: user?.email || "",
+      school: "",
+    };
+  });
   const [showProfileError, setShowProfileError] = useState(false);
   const [ansTF, setAnsTF] = useState({});
   const [showPalette, setShowPalette] = useState(false);
   const [savedScroll, setSavedScroll] = useState(null);
   const [attemptId, setAttemptId] = useState(null);
+  const [hoverVal, setHoverVal] = useState(null);
 
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 30);
@@ -261,12 +152,18 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const cd = useCountdown(timerMin * 60);
   const [startTs, setStartTs] = useState(null);
 
-  const shuffledRIASEC = useMemo(() => shuffleArray(Q_RIASEC), []);
+  const [shuffledRIASEC, setShuffledRIASEC] = useState([]);
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-      if (saved && (saved.name || saved.email || saved.school)) setProfile(saved);
+      if (saved && (saved.name || saved.email || saved.school)) {
+        setProfile((prev) => ({
+          name: saved.name || prev.name,
+          email: saved.email || prev.email,
+          school: saved.school || prev.school,
+        }));
+      }
     } catch {}
   }, []);
   useEffect(() => { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }, [profile]);
@@ -298,19 +195,14 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     return set;
   }, [ansTF, shuffledRIASEC, totalQuestions]);
 
-  const next = () => setPage((p) => Math.min(p + 1, LAST));
-  const prev = () => setPage((p) => Math.max(p - 1, INTRO));
+  const next = useCallback(() => setPage((p) => Math.min(p + 1, LAST)), [LAST]);
+  const prev = useCallback(() => setPage((p) => Math.max(p - 1, INTRO)), [INTRO]);
 
   const startTest = async () => {
     if (!isValidProfile()) return setShowProfileError(true);
     setShowProfileError(false);
-
-    const user = await ensureAuth(profile.email);
-    if (!user) return; // user must finish email sign-in
-
-    const attempt = await sbStartAttempt(user.id, profile);
-    setAttemptId(attempt.id);
-
+    // Shuffle questions each time the test starts
+    setShuffledRIASEC(shuffleArray(Q_RIASEC));
     cd.reset(); cd.start();
     setStartTs(Date.now());
     setPage(R_START);
@@ -318,19 +210,23 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
   const endTest = async () => {
     try {
-      if (!attemptId) {
-        alert("No attempt started. Please start again.");
-        return;
+      const topCodes = Array.isArray(top3) ? top3.map(t => t.code || t) : [];
+      try {
+        await saveTestSubmission({
+          profile,
+          answers: ansTF,
+          radarData,
+          areaPercents: areaPerc,
+          pillarAgg,
+          pillarCounts,
+          topCodes,
+        });
+      } catch (e) {
+        console.warn("Save to Supabase failed, falling back to localStorage:", e);
+        const rows = JSON.parse(localStorage.getItem("cg_submissions_v1") || "[]");
+        rows.push({ id: Date.now(), ts: Date.now(), profile, answers: ansTF, radar_data: radarData, area_percents: areaPerc, pillar_agg: pillarAgg, pillar_counts: pillarCounts, top_codes: topCodes, riasec_code: topCodes[0] || null });
+        localStorage.setItem("cg_submissions_v1", JSON.stringify(rows));
       }
-
-      const resultObj = {
-        riasec: riasecSums,
-        top_codes: Array.isArray(top3) ? top3.map(t => t.letter ?? t?.code ?? t) : [],
-        overall: null,
-      };
-
-      await sbSaveAnswers(attemptId, ansTF);
-      await sbFinishAttempt(attemptId, resultObj);
 
       onNavigate("results", {
         radarData,
@@ -342,7 +238,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       });
     } catch (e) {
       console.error(e);
-      alert("Could not save to the server. Please check your connection and try again.");
+      alert("Could not save your results. Please try again.");
     }
   };
 
@@ -376,13 +272,13 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [page, R_START, LAST, shuffledRIASEC, setAnsTF, next, prev, endTest]);
+  }, [page, R_START, LAST, shuffledRIASEC, next, prev, endTest]);
 
   /* ---------- Pages ---------- */
   const Timer = (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
       <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-      <TimerHeader label={`⏳ ${cd.fmt(cd.remaining)}`} />
+      <TimerHeader label={`Time ${cd.fmt(cd.remaining)}`} />
     </div>
   );
 
@@ -395,13 +291,28 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         <HeaderBar title="Career Guidance Test" />
         <Card>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-            <Field label="Name" value={profile.name} onChange={(e)=>setProfile({...profile,name:e.target.value})}/>
-            <Field label="Email" value={profile.email} onChange={(e)=>setProfile({...profile,email:e.target.value})}/>
-            <Field label="School / Organization" value={profile.school} onChange={(e)=>setProfile({...profile,school:e.target.value})}/>
+            <Field
+              label="Name"
+              value={profile.name}
+              onChange={(e)=>setProfile({...profile,name:e.target.value})}
+              placeholder="e.g., Amina Khalil"
+            />
+            <Field
+              label="Email"
+              value={profile.email}
+              onChange={(e)=>setProfile({...profile,email:e.target.value})}
+              placeholder="e.g., name@example.com"
+            />
+            <Field
+              label="School / Organization"
+              value={profile.school}
+              onChange={(e)=>setProfile({...profile,school:e.target.value})}
+              placeholder="e.g., Horizon High School"
+            />
           </div>
           {isAdmin && (
             <div style={{ marginTop: 16, padding: 12, border: "1px dashed #cbd5e1", borderRadius: 10, background: "#f8fafc", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 600 }}>⏱ Timer (minutes):</div>
+              <div style={{ fontWeight: 600 }}>Timer (minutes):</div>
               <input
                 type="number"
                 min={1}
@@ -414,7 +325,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
             </div>
           )}
           <p style={{ color:"#475569", marginTop: 10 }}>
-            We’ll send a one-time login link to your email to secure your results.
+            Your results will be saved securely and available to admins.
           </p>
           {invalid && <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 14 }}>Please complete all fields correctly.</div>}
           <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
@@ -430,6 +341,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   if (page >= R_START && page <= LAST) {
     const idx = page - R_START;
     const q = shuffledRIASEC[idx];
+    if (!q) return null;
     const current = ansTF[q.id];
     const isLast = page === LAST;
     return (
@@ -445,9 +357,10 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
               </div>
             )}
             <p style={{ color: "#6b7280", marginTop: 8 }}>Rate (1 = Not at all, 5 = Very much)</p>
+            <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>Tip: you can press keys 1�5 to answer</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
               {[1,2,3,4,5].map(v=>(
-                <Btn key={v} variant="secondary" selected={current===v} onClick={()=>setAnsTF(s=>({...s,[q.id]:v}))} style={{minWidth:48}}>{v}</Btn>
+                <Btn key={v} variant="secondary" selected={current===v}  onClick={()=>setAnsTF(s=>({...s,[q.id]:v}))} style={{minWidth:48}} onMouseEnter={() => setHoverVal(v)} onMouseLeave={() => setHoverVal(null)} onFocus={() => setHoverVal(v)} onBlur={() => setHoverVal(null)}>{v}</Btn>
               ))}
             </div>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:20,gap:8 }}>
@@ -476,3 +389,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
   return null;
 }
+
+
+
+

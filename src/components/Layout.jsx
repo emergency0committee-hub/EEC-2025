@@ -5,7 +5,6 @@ export function PageWrap({ children }) {
   PageWrap.propTypes = {
     children: PropTypes.node.isRequired,
   };
-
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: 16 }}>
       {children}

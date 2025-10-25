@@ -1,0 +1,1 @@
+[1,2,3,4,5].map(v=>(`n                <Btn key={v} variant="secondary" selected={current===v} onClick={()=>setAnsTF(s=>({...s,[q.id]:v}))

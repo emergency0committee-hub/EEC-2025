@@ -110,11 +110,19 @@ export default function Results({
   participant,
   showParticipantHeader = false,
   fromAdmin = false,
-
-  // (from Test.jsx save): pillarAgg sums + pillarCounts (answered counts)
+  submission,
   pillarAgg,
   pillarCounts,
 }) {
+  // If an admin passed a 'submission' record, derive props from it
+  if (submission) {
+    radarData = submission.radar_data || radarData;
+    areaPercents = submission.area_percents || areaPercents;
+    participant = submission.participant || submission.profile || participant;
+    pillarAgg = submission.pillar_agg || pillarAgg;
+    pillarCounts = submission.pillar_counts || pillarCounts;
+    fromAdmin = true;
+  }
   // Get selected sections from localStorage
   const selectedSections = useMemo(() => {
     try {
@@ -468,3 +476,4 @@ export default function Results({
     </PageWrap>
   );
 }
+

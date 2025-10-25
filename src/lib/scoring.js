@@ -23,26 +23,43 @@ export function answeredCountByLetter(questions, answers) {
 }
 
 export function topRIASECFiltered(scores, counts) {
-  // Return top 3 RIASEC types based on scores
   const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  return entries.slice(0, 3).map(([type, score]) => ({ type, score, count: counts[type] || 0 }));
+  return entries.slice(0, 3).map(([code, score]) => ({ code, score, count: counts[code] || 0 }));
 }
 
 export function riasecRadarDataFiltered(scores, counts, maxScale) {
-  // Prepare data for radar chart
-  return Object.entries(scores).map(([type, score]) => ({
-    type,
-    score: counts[type] > 0 ? (score / (counts[type] * maxScale)) * 100 : 0,
+  // Percent per theme = (sum answers) / (answered * maxScale) * 100
+  return Object.entries(scores).map(([code, raw]) => ({
+    code,
+    score: counts[code] > 0 ? (raw / (counts[code] * maxScale)) * 100 : 0,
   }));
 }
 
 export function riasecAreaPercents(questions, answers, maxScale) {
-  const scores = riasecFromAnswers(questions, answers);
-  const counts = answeredCountByLetter(questions, answers);
-  return Object.entries(scores).map(([type, score]) => ({
-    type,
-    percent: counts[type] > 0 ? (score / (counts[type] * maxScale)) * 100 : 0,
-  }));
+  // Compute percent per AREA within each theme code
+  const map = new Map(); // key: `${code}||${area}` -> { sum, count }
+  for (const q of questions || []) {
+    const v = answers?.[q.id];
+    if (v == null) continue;
+    const code = q.code;
+    const area = q.area || "";
+    if (!code || !area) continue;
+    const key = `${code}||${area}`;
+    const cur = map.get(key) || { sum: 0, count: 0 };
+    cur.sum += Number(v) || 0;
+    cur.count += 1;
+    map.set(key, cur);
+  }
+  const out = [];
+  for (const [key, agg] of map.entries()) {
+    const [code, area] = key.split("||");
+    const max = agg.count * maxScale;
+    const percent = max > 0 ? (agg.sum / max) * 100 : 0;
+    out.push({ code, area, percent });
+  }
+  // sort by highest percent first
+  out.sort((a, b) => b.percent - a.percent);
+  return out;
 }
 
 export function interestPercents(questions, answers) {

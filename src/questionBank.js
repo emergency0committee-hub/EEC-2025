@@ -1,4 +1,4 @@
-export const RIASEC_SCALE_MAX = 5;   // <â€” required by Test.jsx
+export const RIASEC_SCALE_MAX = 5;   // required by Test.jsx
 
 export const Q_UNIFIED = [
 
@@ -303,3 +303,24 @@ export const Q_UNIFIED = [
   {"id": 299, "code": "C", "area": "Taxes & Accounting", "text": "You role-play as an accountant for a small company during a workshop. How much would you enjoy this?", "DISC": "I", "UN_Goal": "SDG 6: Clean Water & Sanitation", "BLOOM": "Remember" },
   {"id": 300, "code": "C", "area": "Taxes & Accounting", "text": "You prepare a final financial report showing income, expenses, and net balance for an event. How much would you enjoy this?", "DISC": "S", "UN_Goal": "SDG 13: Climate Action", "BLOOM": "Remember" },
 ];
+
+
+// Lightweight sanitizer to clean mojibake and stray control chars in text fields
+function sanitizeStr(s) {
+  let x = String(s || "");
+  // Replace common mojibake sequences seen in source
+  x = x.replace(/A?A\?ATs/g, "'s");
+  x = x.replace(/A?A\?ATre/g, "'re");
+  x = x.replace(/A?A\?ATt/g, "'t");
+  x = x.replace(/A?A\?A\"/g, " — ");
+  x = x.replace(/[\uFFFD\u0000-\u001F]+/g, " ");
+  // Collapse multiple spaces
+  x = x.replace(/\s{2,}/g, " ").trim();
+  return x;
+}
+
+export const Q_UNIFIED_CLEAN = Q_UNIFIED.map((q) => ({
+  ...q,
+  text: sanitizeStr(q.text),
+  area: sanitizeStr(q.area),
+}));

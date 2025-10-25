@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
+import UserMenu from "../components/UserMenu.jsx";
 import { STR, LANGS } from "../i18n/strings.js";
 
 export default function Career({ onNavigate, lang = "EN", setLang }) {
@@ -46,17 +47,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-            <Btn
-              variant="secondary"
-              onClick={() => {
-                localStorage.setItem("cg_admin_ok_v1", "1");
-                onNavigate("select-results");
-              }}
-              title={t.adminLogin}
-              style={{ padding: "8px 14px" }}
-            >
-              {t.adminLogin}
-            </Btn>
+            <UserMenu onNavigate={onNavigate} />
           </div>
         }
       />
@@ -92,8 +83,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
               <Btn
                 variant="secondary"
                 onClick={() => {
-                  localStorage.setItem("cg_admin_ok_v1", "1");
-                  onNavigate("select-results");
+                  onNavigate("login");
                 }}
                 style={{ padding: "12px 18px" }}
               >
