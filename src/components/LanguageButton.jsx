@@ -58,7 +58,7 @@ export default function LanguageButton({ lang, setLang, langs }) {
               onClick={() => selectLang(langObj.code)}
               style={{
                 width: "100%",
-                padding: "8px 12px",
+                padding: "8px 16px",
                 border: "none",
                 background: "none",
                 textAlign: "left",

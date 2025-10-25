@@ -59,14 +59,15 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
       name: prev.name.trim(),
     }));
 
+    // Check for admin password first
+    if (formData.password === "careeradmin123") {
+      localStorage.setItem("cg_admin_ok_v1", "1");
+      onNavigate("admin");
+      return;
+    }
+
     if (validateForm()) {
-      // Check for admin password
-      if (formData.password === "careeradmin123") {
-        localStorage.setItem("cg_admin_ok_v1", "1");
-        onNavigate("admin");
-      } else {
-        setErrors({ password: "Invalid password" });
-      }
+      setErrors({ password: "Invalid password" });
     }
   };
 
