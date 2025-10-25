@@ -350,7 +350,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       <PageWrap>
         <HeaderBar title="Career Guidance Test" />
         <Card>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <Field label="Name" value={profile.name} onChange={(e)=>setProfile({...profile,name:e.target.value})}/>
             <Field label="Email" value={profile.email} onChange={(e)=>setProfile({...profile,email:e.target.value})}/>
             <Field label="School / Organization" value={profile.school} onChange={(e)=>setProfile({...profile,school:e.target.value})}/>
