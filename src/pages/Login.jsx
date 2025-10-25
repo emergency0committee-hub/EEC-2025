@@ -183,6 +183,26 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           {t.backToHome}
         </Btn>
       </div>
+
+      <div style={{ textAlign: "center", marginTop: 16 }}>
+        <button
+          onClick={() => {
+            localStorage.setItem("cg_admin_ok_v1", "1");
+            onNavigate("admin");
+          }}
+          style={{
+            background: "none",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            padding: "8px 16px",
+            cursor: "pointer",
+            fontSize: 14,
+            color: "#6b7280",
+          }}
+        >
+          Access Admin Directly (for testing)
+        </button>
+      </div>
     </PageWrap>
   );
 }
