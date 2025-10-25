@@ -65,7 +65,10 @@ export default function UserMenu({ onNavigate }) {
           cursor: "pointer",
         }}
       >
-        <span aria-hidden style={{ fontSize: 18 }}>⚙️</span>
+        <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="#374151" strokeWidth="1.6"/>
+          <path d="M20 12a8.001 8.001 0 0 1-.25 2l2.02 1.54-2 3.46-2.46-.63a8.07 8.07 0 0 1-1.73 1l-.38 2.53H9.8l-.38-2.53a8.07 8.07 0 0 1-1.73-1l-2.46.63-2-3.46L5.25 14A8.001 8.001 0 0 1 5 12c0-.68.09-1.34.25-2L3.23 8.46l2-3.46 2.46.63c.53-.41 1.11-.76 1.73-1L9.8 2.1h4.4l.38 2.53c.62.24 1.2.59 1.73 1l2.46-.63 2 3.46L19.75 10c.16.66.25 1.32.25 2Z" stroke="#374151" strokeWidth="1.6" strokeLinejoin="round"/>
+        </svg>
       </button>
 
       {open && (

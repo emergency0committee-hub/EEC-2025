@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
-import AdminTable from "./AdminTable.jsx";
+import AdminTable from "./AdminTable2.jsx";
 import AdminLegend from "./AdminLegend.jsx";
 import { supabase } from "../../lib/supabase.js";
 
@@ -50,6 +50,8 @@ export default function AdminDashboard({ onNavigate }) {
 
   const handleDeleteSubmission = async (submission) => {
     try {
+      const ok = window.confirm("Delete this submission? This cannot be undone.");
+      if (!ok) return;
       const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
       const { error } = await supabase.from(table).delete().eq("id", submission.id);
       if (error) throw error;
@@ -63,12 +65,12 @@ export default function AdminDashboard({ onNavigate }) {
 
   return (
     <PageWrap>
-      <HeaderBar title="Admin Dashboard" right={null} />
+      <HeaderBar title="Test Submissions" right={null} />
       <Card>
-        <h3 style={{ marginTop: 0 }}>Submissions</h3>
+        <h3 style={{ marginTop: 0 }}>Recent Test Submissions</h3>
         <AdminLegend />
         {loading ? (
-          <p style={{ color: "#6b7280" }}>Loading submissions…</p>
+          <p style={{ color: "#6b7280" }}>Loading test submissions...</p>
         ) : (
           <AdminTable submissions={submissions} onViewSubmission={handleViewSubmission} onDeleteSubmission={handleDeleteSubmission} />
         )}

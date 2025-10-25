@@ -6,7 +6,6 @@ import Career from "./pages/Career.jsx";
 import Test from "./pages/Test.jsx";
 import Results from "./pages/Results.jsx";
 import SelectResults from "./pages/SelectResults.jsx";
-import Admin from "./pages/Admin.jsx";
 import Login from "./pages/Login.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import Thanks from "./pages/Thanks.jsx";
@@ -99,11 +98,12 @@ export default function App() {
   // }, []);
 
   const onNavigate = (to, data = null) => {
-    if (to === "results" && data) setResultsPayload(data);
-    setRoute(to);
+    const normalized = String(to || "").replace(/^\/+/, "").trim();
+    if (normalized === "results" && data) setResultsPayload(data);
+    setRoute(normalized);
     window.scrollTo(0, 0);
     // Update URL for navigation
-    const newUrl = to === "home" ? "/" : `/${to}`;
+    const newUrl = normalized === "home" ? "/" : `/${normalized}`;
     window.history.pushState(null, null, newUrl);
   };
 
@@ -120,7 +120,6 @@ export default function App() {
   if (route === "sat")    return <SatPlaceholder onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "admin")  return <Admin onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "account") return <Account onNavigate={onNavigate} />;

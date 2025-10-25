@@ -1,27 +1,22 @@
 // src/pages/Account.jsx
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
+import { supabase } from "../lib/supabase.js";
+import { hashPassword } from "../lib/hash.js";
 
 export default function Account({ onNavigate }) {
   Account.propTypes = {
     onNavigate: PropTypes.func.isRequired,
   };
 
-  const LS_USERS = "cg_users_v1";
   const LS_CURRENT_USER = "cg_current_user_v1";
-  const loadUsers = () => {
-    try { const raw = localStorage.getItem(LS_USERS); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; } catch { return []; }
-  };
-  const saveUsers = (arr) => { try { localStorage.setItem(LS_USERS, JSON.stringify(arr || [])); } catch {} };
   const loadCurrent = () => {
     try { const raw = localStorage.getItem(LS_CURRENT_USER); return raw ? JSON.parse(raw) : null; } catch { return null; }
   };
   const saveCurrent = (u) => { try { localStorage.setItem(LS_CURRENT_USER, JSON.stringify(u)); } catch {} };
-
-  const users = useMemo(loadUsers, []);
-  const current = useMemo(loadCurrent, []);
+  const current = loadCurrent();
   const [form, setForm] = useState({
     name: current?.name || "",
     username: current?.username || "",
@@ -47,41 +42,66 @@ export default function Account({ onNavigate }) {
 
   const handleChange = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
-  const onSave = () => {
+  const onSave = async () => {
     const errs = {};
     const name = (form.name || "").trim();
     const username = (form.username || "").trim();
     const email = (form.email || "").trim();
     if (!name) errs.name = "Name is required";
     if (!username) errs.username = "Username is required";
-    // enforce unique username (case-insensitive)
-    const takenUser = users.find((u) => u.username && u.username.toLowerCase() === username.toLowerCase() && u.email !== current.email);
-    if (takenUser) errs.username = "Username already taken";
+    // enforce unique username (case-insensitive) in Supabase
+    try {
+      const table = import.meta.env.VITE_USERS_TABLE || "app_users";
+      const { data: exists } = await supabase
+        .from(table)
+        .select("email")
+        .ilike("username", username)
+        .limit(1);
+      if (exists && exists.length && exists[0].email.toLowerCase() !== email.toLowerCase()) {
+        errs.username = "Username already taken";
+      }
+    } catch {}
     // Optional password change
     if (form.newPassword || form.confirmNewPassword) {
       if (!form.password) errs.password = "Current password required";
-      else {
-        const rec = users.find((u) => u.email === current.email);
-        if (!rec || rec.password !== form.password) errs.password = "Current password incorrect";
-      }
-      if (!form.newPassword || form.newPassword.length < 6) errs.newPassword = "New password must be at least 6 characters";
-      if (form.newPassword !== form.confirmNewPassword) errs.confirmNewPassword = "Passwords do not match";
+      // verify against Supabase stored hash
+    if (!form.newPassword || form.newPassword.length < 6) errs.newPassword = "New password must be at least 6 characters";
+    if (form.newPassword !== form.confirmNewPassword) errs.confirmNewPassword = "Passwords do not match";
     }
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
     setSaving(true);
     try {
-      const updatedUsers = users.map((u) => {
-        if (u.email !== current.email) return u;
-        const next = { ...u, name, username };
-        if (form.newPassword) next.password = form.newPassword;
-        return next;
-      });
-      saveUsers(updatedUsers);
-      const updatedCurrent = { ...current, name, username };
-      saveCurrent(updatedCurrent);
+      const table = import.meta.env.VITE_USERS_TABLE || "app_users";
+      // Fetch current row
+      const { data: rows, error: selErr } = await supabase
+        .from(table)
+        .select("*")
+        .ilike("email", email)
+        .limit(1);
+      if (selErr) throw selErr;
+      const row = rows && rows[0];
+      if (!row) throw new Error("Account not found.");
+      // verify current password if changing
+      if (form.newPassword) {
+        const candidate = await hashPassword(form.password || "");
+        if (!row.password_hash || row.password_hash !== candidate) {
+          setErrors((e) => ({ ...e, password: "Current password incorrect" }));
+          setSaving(false);
+          return;
+        }
+      }
+      const patch = { name, username };
+      if (form.newPassword) patch.password_hash = await hashPassword(form.newPassword);
+      const { error: updErr } = await supabase.from(table).update(patch).eq("email", email);
+      if (updErr) throw updErr;
+      // Update local session
+      saveCurrent({ ...current, name, username });
       onNavigate("home");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save changes. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -105,7 +125,7 @@ export default function Account({ onNavigate }) {
         <Field label="Username" value={form.username} onChange={(e) => handleChange("username", e.target.value)} />
         {errors.username && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.username}</p>}
         <Field label="Email" value={form.email} onChange={() => {}} />
-        <p style={{ color: "#6b7280", fontSize: 12, marginTop: -6 }}>Email cannot be changed in local mode.</p>
+        <p style={{ color: "#6b7280", fontSize: 12, marginTop: -6 }}>Email cannot be changed.</p>
       </Card>
       <Card>
         <h3 style={{ marginTop: 0 }}>Change Password (optional)</h3>
@@ -124,4 +144,3 @@ export default function Account({ onNavigate }) {
     </PageWrap>
   );
 }
-

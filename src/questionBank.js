@@ -309,18 +309,25 @@ export const Q_UNIFIED = [
 function sanitizeStr(s) {
   let x = String(s || "");
   // Replace common mojibake sequences seen in source
-  x = x.replace(/A?A\?ATs/g, "'s");
-  x = x.replace(/A?A\?ATre/g, "'re");
-  x = x.replace(/A?A\?ATt/g, "'t");
-  x = x.replace(/A?A\?A\"/g, " � ");
+  // Bad encodings of apostrophes/dashes
+  x = x.replace(/â/g, "'");
+  x = x.replace(/â/g, "—");
+  x = x.replace(/â/g, "–");
+  // Broken sequences around contractions (both with U+FFFD and '?')
+  x = x.replace(/A[\uFFFD\?]?ATs/g, "'s");
+  x = x.replace(/A[\uFFFD\?]?ATre/g, "'re");
+  x = x.replace(/A[\uFFFD\?]?ATt/g, "'t");
+  // Broken em-dash like A�A?A" or A?A" → replace with a dash
+  x = x.replace(/A[\uFFFD\?]?A\"/g, " — ");
+  x = x.replace(/A\"/g, " — ");
   x = x.replace(/[\uFFFD\u0000-\u001F]+/g, " ");
   // Collapse multiple spaces
   x = x.replace(/\s{2,}/g, " ").trim();
   return x;
 }
-
 export const Q_UNIFIED_CLEAN = Q_UNIFIED.map((q) => ({
   ...q,
   text: sanitizeStr(q.text),
   area: sanitizeStr(q.area),
 }));
+

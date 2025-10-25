@@ -75,23 +75,48 @@ function parseCsv(text) {
 export async function loadOccupations() {
   if (_cache) return _cache;
   try {
-    const { data, error } = await supabase.storage
-      .from("occupations")
-      .download("occupations.csv");
+    // 1) Try Supabase Storage bucket
+    try {
+      const { data, error } = await supabase.storage
+        .from("occupations")
+        .download("occupations.csv");
+      if (!error && data) {
+        const text = await data.text();
+        const rows = parseCsv(text);
+        if (rows.length) {
+          _cache = rows;
+          return _cache;
+        }
+      }
+    } catch {}
 
-    if (error) throw error;
-
-    const text = await data.text();
-    const rows = parseCsv(text);
-    if (!rows.length) {
-      console.warn(
-        "[occupations] CSV loaded but 0 rows parsed. Check header and delimiter."
-      );
+    // 2) Fallback to bundled assets
+    const base = (import.meta?.env?.BASE_URL || "/").replace(/\/$/, "/");
+    const candidates = [
+      `${base}occupations.csv`,
+      `${base}data/occupations.csv`,
+      "/occupations.csv",
+      "/data/occupations.csv",
+    ];
+    for (const url of candidates) {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (res.ok) {
+          const text = await res.text();
+          const rows = parseCsv(text);
+          if (rows.length) {
+            _cache = rows;
+            return _cache;
+          }
+        }
+      } catch {}
     }
-    _cache = rows;
+
+    console.warn("[occupations] No occupations.csv found in storage or assets.");
+    _cache = [];
     return _cache;
   } catch (e) {
-    console.error("[occupations] Failed to load occupations.csv from Supabase:", e);
+    console.error("[occupations] Unexpected error:", e);
     _cache = [];
     return _cache;
   }
@@ -126,3 +151,4 @@ export function pickContainingLetter(rows, letter, limit = 12) {
   }
   return out;
 }
+

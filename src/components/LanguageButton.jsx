@@ -29,14 +29,18 @@ export default function LanguageButton({ lang, setLang, langs }) {
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
-          gap: 4,
+          gap: 6,
           fontSize: 14,
           fontWeight: 600,
           boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
           transition: "all 0.2s ease",
         }}
       >
-        🌍 {lang}
+        <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9Z" stroke="#374151" strokeWidth="1.6"/>
+          <path d="M3 12h18M12 3c-2.5 2.7-3.75 5.4-3.75 9S9.5 17.3 12 21M12 3c2.5 2.7 3.75 5.4 3.75 9S14.5 17.3 12 21" stroke="#374151" strokeWidth="1.6" strokeLinecap="round"/>
+        </svg>
+        {lang}
       </button>
       {isOpen && (
         <div
@@ -74,3 +78,4 @@ export default function LanguageButton({ lang, setLang, langs }) {
     </div>
   );
 }
+

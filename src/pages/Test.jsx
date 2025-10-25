@@ -43,6 +43,18 @@ const { Q_RIASEC, Q_APT, Q_WORK, Q_INT } = validateAll({
 const PROFILE_KEY = "cg_profile_v1";
 
 /* ====================== Utils ====================== */
+function cleanText(s) {
+  if (!s) return "";
+  // Quick sanitize for common mojibake sequences
+  return String(s)
+    .replace(/â/g, "'")
+    .replace(/â/g, "—")
+    .replace(/â/g, "–")
+    .replace(/A�A\?A"/g, " — ")
+    .replace(/A�A\?ATs/g, "'s")
+    .replace(/A�A\?ATre/g, "'re")
+    .replace(/A�A\?ATt/g, "'t");
+}
 function shuffleArray(arr) {
   const a = [...(arr || [])];
   for (let i = a.length - 1; i > 0; i--) {
@@ -212,8 +224,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     try {
       const topCodes = Array.isArray(top3) ? top3.map(t => t.code || t) : [];
       try {
-        await saveTestSubmission({
-          profile,
+        const finishedAt = Date.now(); const participant = { ...profile, started_at: (startTs ? new Date(startTs).toISOString() : null), finished_at: new Date(finishedAt).toISOString() }; await saveTestSubmission({ profile: participant,
           answers: ansTF,
           radarData,
           areaPercents: areaPerc,
@@ -350,14 +361,14 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         <Card>
           <ProgressBar value={Math.round((indexFromPage(page)/totalQuestions)*100)} />
           <div style={{ marginTop: 18 }}>
-            <h3 style={{ margin: 0, color: "#111827" }}>{q.text}</h3>
+            <h3 style={{ margin: 0, color: "#111827" }}>{cleanText(q.text)}</h3>
             {q.area && (
               <div style={{ marginTop: 8, fontSize: 13, color: "#374151" }}>
-                <b>Area:</b> {q.area}
+                <b>Area:</b> {cleanText(q.area)}
               </div>
             )}
             <p style={{ color: "#6b7280", marginTop: 8 }}>Rate (1 = Not at all, 5 = Very much)</p>
-            <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>Tip: you can press keys 1�5 to answer</div>
+            <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>Tip: you can press keys 1-5 to answer</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
               {[1,2,3,4,5].map(v=>(
                 <Btn key={v} variant="secondary" selected={current===v}  onClick={()=>setAnsTF(s=>({...s,[q.id]:v}))} style={{minWidth:48}} onMouseEnter={() => setHoverVal(v)} onMouseLeave={() => setHoverVal(null)} onFocus={() => setHoverVal(v)} onBlur={() => setHoverVal(null)}>{v}</Btn>
@@ -389,6 +400,8 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
   return null;
 }
+
+
 
 
 

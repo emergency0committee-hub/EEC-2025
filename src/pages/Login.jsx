@@ -4,7 +4,8 @@ import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { LANGS, STR } from "../i18n/strings.js";
-// Local-only auth for now (later: wire to Supabase)
+import { supabase } from "../lib/supabase.js";
+import { hashPassword } from "../lib/hash.js";
 
 export default function Login({ onNavigate, lang = "EN", setLang }) {
   Login.propTypes = {
@@ -24,7 +25,6 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     name: "",
   });
   const [errors, setErrors] = useState({});
-  const [showDirectAccess, setShowDirectAccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleInputChange = (field, value) => {
@@ -78,42 +78,42 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     try {
       let isAdminUser = false;
       if (isSignUp) {
-        // Local uniqueness checks
-        const users = loadUsers();
-        const emailTaken = users.some((u) => (u.email || "").toLowerCase() === email.toLowerCase());
-        if (emailTaken) throw new Error("Email already registered");
-        const usernameTaken = users.some((u) => (u.username || "").toLowerCase() === username.toLowerCase());
-        if (usernameTaken) throw new Error("Username already taken");
+        const table = import.meta.env.VITE_USERS_TABLE || "app_users";
+        // Uniqueness checks
+        const { data: e1 } = await supabase.from(table).select("id").ilike("email", email).limit(1);
+        if (e1 && e1.length) throw new Error("Email already registered");
+        const { data: e2 } = await supabase.from(table).select("id").ilike("username", username).limit(1);
+        if (e2 && e2.length) throw new Error("Username already taken");
 
         const role = email.toLowerCase() === "anasitani186@gmail.com" ? "admin" : "user";
-        const newUser = {
-          id: Date.now(),
-          email,
-          username,
-          name,
-          role,
-          password, // storing plaintext locally; replace with hash when moving to server
-          created_at: new Date().toISOString(),
-        };
-        saveUsers([...users, newUser]);
-        saveCurrent({ email, username, name, role });
+        const password_hash = await hashPassword(password);
+        const { error: insErr } = await supabase.from(table).insert({ email, username, name, role, password_hash });
+        if (insErr) throw insErr;
+
+        // Save session locally
+        const current = { email, username, name, role };
+        try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
+        if (role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
         isAdminUser = role === "admin";
       } else {
-        // Local sign-in using username OR email
-        const users = loadUsers();
-        const finder = (u) => {
-          const lid = loginId.toLowerCase();
-          return (u.email || "").toLowerCase() === lid || (u.username || "").toLowerCase() === lid;
-        };
-        const u = users.find(finder);
-        if (!u || u.password !== password) throw new Error("Invalid username or password");
-        saveCurrent({ email: u.email, username: u.username, name: u.name, role: u.role });
-        if (u.role === "admin") {
-          localStorage.setItem("cg_admin_ok_v1", "1");
-          isAdminUser = true;
+        // Sign-in from Supabase table (no auth)
+        const table = import.meta.env.VITE_USERS_TABLE || "app_users";
+        const isEmail = /\S+@\S+\.\S+/.test(loginId);
+        let row = null;
+        if (isEmail) {
+          const { data } = await supabase.from(table).select("*").ilike("email", loginId).limit(1);
+          row = data && data[0];
         } else {
-          isAdminUser = false;
+          const { data } = await supabase.from(table).select("*").ilike("username", loginId).limit(1);
+          row = data && data[0];
         }
+        if (!row) throw new Error("Invalid username or password");
+        const candidate = await hashPassword(password);
+        if (!row.password_hash || row.password_hash !== candidate) throw new Error("Invalid username or password");
+        const current = { email: row.email, username: row.username, name: row.name, role: row.role };
+        try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
+        if (row.role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
+        isAdminUser = row.role === "admin";
       }
       // Navigate based on role
       onNavigate(isAdminUser ? "admin-dashboard" : "home");
@@ -281,23 +281,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
 
 
 
-      {/* Local-only auth; later wire to Supabase */}
+      {/* Using Supabase table (no auth) */}
     </PageWrap>
   );
 }
-  // Local storage helpers
-  const LS_USERS = "cg_users_v1";
-  const LS_CURRENT_USER = "cg_current_user_v1";
-  const loadUsers = () => {
-    try {
-      const raw = localStorage.getItem(LS_USERS);
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    } catch {
-      return [];
-    }
-  };
-  const saveUsers = (arr) => {
-    try { localStorage.setItem(LS_USERS, JSON.stringify(arr || [])); } catch {}
-  };
-  const saveCurrent = (u) => { try { localStorage.setItem(LS_CURRENT_USER, JSON.stringify(u)); } catch {} };

@@ -144,7 +144,7 @@ export default function Results({
       };
     }
   }, []);
-  // Map of theme → score
+  // Map of theme code to score
   const radarByCode = useMemo(() => {
     const m = {};
     (radarData || []).forEach((d) => (m[d.code] = d.score ?? 0));
@@ -215,7 +215,7 @@ export default function Results({
 
   return (
     <PageWrap>
-      {/* Print styles — elegant PDF distribution */}
+      {/* Print styles - elegant PDF distribution */}
       <style>{`
         /* Base card style used across sections */
         .card {
@@ -266,7 +266,7 @@ export default function Results({
       {/* Actions (hidden on print) */}
       <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
         <button
-          onClick={() => onNavigate?.(fromAdmin ? "admin" : "home")}
+          onClick={() => onNavigate(fromAdmin ? "admin-dashboard" : "home")}
           style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
         >
           {fromAdmin ? "Back to Submissions" : "Back Home"}
@@ -295,20 +295,20 @@ export default function Results({
           >
             <div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Name</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.name || "—"}</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.name || "-"}</div>
             </div>
             <div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Email</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.email || "—"}</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.email || "-"}</div>
             </div>
             <div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>School</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.school || "—"}</div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.school || "-"}</div>
             </div>
             <div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Submitted</div>
               <div style={{ fontWeight: 600, color: "#111827" }}>
-                {participant.ts ? new Date(participant.ts).toLocaleString() : "—"}
+                {participant.ts ? new Date(participant.ts).toLocaleString() : "-"}
               </div>
             </div>
           </div>
@@ -381,7 +381,7 @@ export default function Results({
                   <h4 style={{ margin: 0, color: "#111827" }}>
                     {THEME_NAME[code]}{" "}
                     <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
-                      — {level}
+                      Level: {level}
                     </span>
                   </h4>
                   <span
@@ -434,10 +434,10 @@ export default function Results({
         }}
       />
 
-      {/* GROUP 5: Pillars — three elegant cards */}
+      {/* GROUP 5: Pillars - three elegant cards */}
       {[
         { title: "DISC", data: useMemo(() => pctRowsFromTotals(totals.disc, effectiveCounts.disc), [totals, effectiveCounts]), color: "#6366f1" },
-        { title: "Bloom’s Taxonomy", data: useMemo(() => pctRowsFromTotals(totals.bloom, effectiveCounts.bloom), [totals, effectiveCounts]), color: "#06b6d4" },
+        { title: 'Bloom\'s Taxonomy', data: useMemo(() => pctRowsFromTotals(totals.bloom, effectiveCounts.bloom), [totals, effectiveCounts]), color: '#06b6d4' },
         { title: "UN Sustainable Development Goals", data: useMemo(() => pctRowsFromTotals(totals.sdg, effectiveCounts.sdg), [totals, effectiveCounts]), color: "#f59e0b" },
       ].map((section) => (
         <div key={section.title} className="card section avoid-break" style={{ padding: 16 }}>
@@ -445,7 +445,7 @@ export default function Results({
             {section.title} (Percent of Max)
           </h3>
           <p style={{ margin: "6px 0 12px", color: "#6b7280", fontSize: 13 }}>
-            % = (your total ÷ (answered × {RIASEC_SCALE_MAX})) × 100
+            % = (your total / (answered * {RIASEC_SCALE_MAX})) * 100
           </p>
           {section.data.length === 0 ? (
             <div style={{ color: "#6b7280" }}>No data.</div>
@@ -460,7 +460,7 @@ export default function Results({
       {/* Footer actions (hidden in print) */}
       <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
         <button
-          onClick={() => onNavigate?.(fromAdmin ? "admin" : "home")}
+          onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}
           style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
         >
           {fromAdmin ? "Back to Submissions" : "Back Home"}
@@ -476,4 +476,6 @@ export default function Results({
     </PageWrap>
   );
 }
+
+
 
