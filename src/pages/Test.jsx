@@ -279,7 +279,10 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const prev = () => setPage((p) => Math.max(p - 1, INTRO));
 
   const startTest = () => {
-    if (!isValidProfile()) return setShowProfileError(true);
+    if (!isValidProfile()) {
+      setShowProfileError(true);
+      return;
+    }
     setShowProfileError(false);
     cd.reset();
     cd.start();
