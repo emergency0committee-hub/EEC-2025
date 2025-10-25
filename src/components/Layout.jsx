@@ -34,7 +34,15 @@ export function Card({ children, style = {} }) {
   };
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 16, marginBottom: 16, ...style }}>
+    <div style={{
+      border: "1px solid #e5e7eb",
+      borderRadius: 12,
+      padding: 24,
+      marginBottom: 20,
+      background: "#ffffff",
+      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+      ...style
+    }}>
       {children}
     </div>
   );
