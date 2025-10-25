@@ -98,6 +98,9 @@ export default function App() {
     if (to === "results" && data) setResultsPayload(data);
     setRoute(to);
     window.scrollTo(0, 0);
+    // Update URL for navigation
+    const newUrl = to === "home" ? "/" : `/${to}`;
+    window.history.pushState(null, null, newUrl);
   };
 
   const canViewResults = useMemo(() => {

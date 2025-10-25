@@ -21,6 +21,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     name: "",
   });
   const [errors, setErrors] = useState({});
+  const [showDirectAccess, setShowDirectAccess] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -154,8 +155,14 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           )}
 
           <div style={{ marginTop: 24 }}>
-            <Btn variant="primary" type="submit" style={{ width: "100%" }}>
+            <Btn variant="primary" type="submit" style={{ width: "100%" }} onClick={() => setShowDirectAccess(true)}>
               {isSignUp ? t.signUp : t.signIn}
+            </Btn>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <Btn variant="secondary" onClick={() => onNavigate("home")} style={{ width: "100%" }}>
+              {t.backToHome}
             </Btn>
           </div>
 
@@ -178,31 +185,29 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         </form>
       </Card>
 
-      <div style={{ textAlign: "center", marginTop: 16 }}>
-        <Btn variant="secondary" onClick={() => onNavigate("home")}>
-          {t.backToHome}
-        </Btn>
-      </div>
 
-      <div style={{ textAlign: "center", marginTop: 16 }}>
-        <button
-          onClick={() => {
-            localStorage.setItem("cg_admin_ok_v1", "1");
-            onNavigate("admin");
-          }}
-          style={{
-            background: "none",
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            padding: "8px 16px",
-            cursor: "pointer",
-            fontSize: 14,
-            color: "#6b7280",
-          }}
-        >
-          Access Admin Directly (for testing)
-        </button>
-      </div>
+
+      {showDirectAccess && (
+        <div style={{ textAlign: "center", marginTop: 16 }}>
+          <button
+            onClick={() => {
+              localStorage.setItem("cg_admin_ok_v1", "1");
+              onNavigate("admin");
+            }}
+            style={{
+              background: "none",
+              border: "1px solid #d1d5db",
+              borderRadius: 6,
+              padding: "8px 16px",
+              cursor: "pointer",
+              fontSize: 14,
+              color: "#6b7280",
+            }}
+          >
+            Access Admin Directly (for testing)
+          </button>
+        </div>
+      )}
     </PageWrap>
   );
 }
