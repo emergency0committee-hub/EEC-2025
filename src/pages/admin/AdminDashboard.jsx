@@ -48,6 +48,19 @@ export default function AdminDashboard({ onNavigate }) {
     onNavigate("results", { submission });
   };
 
+  const handleDeleteSubmission = async (submission) => {
+    try {
+      const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
+      const { error } = await supabase.from(table).delete().eq("id", submission.id);
+      if (error) throw error;
+      setSubmissions((rows) => rows.filter((r) => r.id !== submission.id));
+    } catch (e) {
+      console.error("Failed to delete submission:", e);
+      alert("Failed to delete submission. Please try again.");
+    }
+  };
+
+
   return (
     <PageWrap>
       <HeaderBar title="Admin Dashboard" right={null} />
@@ -55,9 +68,9 @@ export default function AdminDashboard({ onNavigate }) {
         <h3 style={{ marginTop: 0 }}>Submissions</h3>
         <AdminLegend />
         {loading ? (
-          <p style={{ color: "#6b7280" }}>Loading submissionsâ€¦</p>
+          <p style={{ color: "#6b7280" }}>Loading submissions…</p>
         ) : (
-          <AdminTable submissions={submissions} onViewSubmission={handleViewSubmission} />
+          <AdminTable submissions={submissions} onViewSubmission={handleViewSubmission} onDeleteSubmission={handleDeleteSubmission} />
         )}
         <div style={{ marginTop: 16 }}>
           <Btn variant="back" onClick={() => onNavigate("home")}>Back to Home</Btn>
@@ -66,3 +79,5 @@ export default function AdminDashboard({ onNavigate }) {
     </PageWrap>
   );
 }
+
+
