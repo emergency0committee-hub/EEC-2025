@@ -48,7 +48,10 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
             <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
             <Btn
               variant="secondary"
-              onClick={() => onNavigate("admin")}
+              onClick={() => {
+                localStorage.setItem("cg_admin_ok_v1", "1");
+                onNavigate("select-results");
+              }}
               title={t.adminLogin}
               style={{ padding: "8px 14px" }}
             >
@@ -88,7 +91,10 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
               </Btn>
               <Btn
                 variant="secondary"
-                onClick={() => onNavigate("admin")}
+                onClick={() => {
+                  localStorage.setItem("cg_admin_ok_v1", "1");
+                  onNavigate("select-results");
+                }}
                 style={{ padding: "12px 18px" }}
               >
                 {t.adminLogin}

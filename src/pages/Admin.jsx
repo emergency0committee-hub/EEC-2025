@@ -15,7 +15,7 @@ export default function Admin({ onNavigate, lang, setLang }) {
   const handleLogin = () => {
     if (password === "admin123") { // Simple password for demo
       localStorage.setItem("cg_admin_ok_v1", "1");
-      onNavigate("home");
+      onNavigate("admin-dashboard");
     } else {
       setError("Invalid password");
     }

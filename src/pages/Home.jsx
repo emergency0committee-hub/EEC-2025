@@ -21,7 +21,10 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
       <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
 
       {/* Login (you can route to a dedicated login page, or admin) */}
-      <Btn variant="primary" onClick={() => onNavigate("admin")}>
+      <Btn variant="primary" onClick={() => {
+        localStorage.setItem("cg_admin_ok_v1", "1");
+        onNavigate("select-results");
+      }}>
         {t.adminLogin}
       </Btn>
     </div>
@@ -126,13 +129,7 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
       {/* Optional: keep your NewsFeed here if you added it previously */}
       {/* <NewsFeed items={newsItems} title="News & Updates" max={6} /> */}
 
-      {/* Utility */}
-      <Card>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn variant="secondary" onClick={() => onNavigate("admin")}>{t.adminBtn}</Btn>
-          <Btn variant="secondary" onClick={() => onNavigate("thanks")}>{t.sampleReceipt}</Btn>
-        </div>
-      </Card>
+
 
       <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, marginTop: 8 }}>
         {t.footer(new Date().getFullYear())}

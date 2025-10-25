@@ -5,7 +5,9 @@ import Home from "./pages/Home.jsx";
 import Career from "./pages/Career.jsx";
 import Test from "./pages/Test.jsx";
 import Results from "./pages/Results.jsx";
+import SelectResults from "./pages/SelectResults.jsx";
 import Admin from "./pages/Admin.jsx";
+import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
@@ -117,6 +119,8 @@ export default function App() {
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin")  return <Admin onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
 
   if (route === "results") {
     if (!canViewResults) {

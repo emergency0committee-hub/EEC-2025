@@ -60,16 +60,9 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
       name: prev.name.trim(),
     }));
 
-    // Check for admin password first
-    if (formData.password === "careeradmin123") {
-      localStorage.setItem("cg_admin_ok_v1", "1");
-      onNavigate("admin");
-      return;
-    }
-
-    if (validateForm()) {
-      setErrors({ password: "Invalid password" });
-    }
+    // Directly navigate to select results page
+    localStorage.setItem("cg_admin_ok_v1", "1");
+    onNavigate("select-results");
   };
 
   const HeaderActions = (

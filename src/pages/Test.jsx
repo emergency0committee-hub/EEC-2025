@@ -83,95 +83,7 @@ function pillarAggAndCountsFromAnswers(questions, ansTF) {
   return { pillarAgg: { disc, bloom, sdg }, pillarCounts: { discCount, bloomCount, sdgCount } };
 }
 
-/* ---------- Palette Overlay ---------- */
-function QuestionPalette({
-  totalQuestions,
-  currentIndex,
-  onJump,
-  onClose,
-  savedScroll,
-  setSavedScroll,
-  answeredIndexes,
-}) {
-  const scrollRef = useRef(null);
-  useEffect(() => {
-    if (scrollRef.current != null && savedScroll != null) {
-      scrollRef.current.scrollTop = savedScroll;
-    }
-  }, [savedScroll]);
 
-  const handleClose = () => {
-    if (scrollRef.current) setSavedScroll(scrollRef.current.scrollTop);
-    onClose();
-  };
-  const handleJump = (idx) => {
-    if (scrollRef.current) setSavedScroll(scrollRef.current.scrollTop);
-    onJump(idx);
-    onClose();
-  };
-
-  return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 10000,
-      }}
-    >
-      <div
-        ref={scrollRef}
-        style={{
-          background: "#fff",
-          padding: 20,
-          borderRadius: 12,
-          maxWidth: 900,
-          width: "90vw",
-          maxHeight: "80vh",
-          overflowY: "auto",
-          boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h3 style={{ margin: 0 }}>Jump to a Question</h3>
-          <Btn variant="back" onClick={handleClose}>Close</Btn>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(10, minmax(40px, 1fr))", gap: 8 }}>
-          {Array.from({ length: totalQuestions }, (_, i) => {
-            const idx = i + 1;
-            const isCurrent = idx === currentIndex;
-            const isAnswered = answeredIndexes?.has(idx);
-            const bg = isCurrent ? "#2563eb" : isAnswered ? "#d1fae5" : "#f3f4f6";
-            const br = isCurrent ? "1px solid #2563eb" : isAnswered ? "1px solid #10b981" : "1px solid #d1d5db";
-            const fg = isCurrent ? "#fff" : "#111827";
-            return (
-              <button
-                key={idx}
-                onClick={() => handleJump(idx)}
-                style={{
-                  padding: "10px 0",
-                  borderRadius: 6,
-                  border: br,
-                  background: bg,
-                  color: fg,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {idx}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 /* ---------- MAIN COMPONENT ---------- */
 export default function Test({ onNavigate, lang = "EN", setLang }) {
@@ -405,17 +317,19 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
             </div>
           </div>
         </Card>
-        {showPalette && (
-          <QuestionPalette
-            totalQuestions={totalQuestions}
-            currentIndex={indexFromPage(page)}
-            onJump={(idx1)=>setPage(pageFromIndex(idx1))}
-            onClose={()=>setShowPalette(false)}
-            savedScroll={savedScroll}
-            setSavedScroll={setSavedScroll}
-            answeredIndexes={answeredIndexes}
-          />
-        )}
+        <PaletteOverlay
+          open={showPalette}
+          onOpen={() => setShowPalette(true)}
+          onClose={() => setShowPalette(false)}
+          model={{
+            title: "RIASEC Questions",
+            items: shuffledRIASEC,
+            base: R_START - 1,
+            answers: ansTF,
+            type: "rating",
+          }}
+          goTo={(idx) => setPage(pageFromIndex(idx + 1))}
+        />
       </PageWrap>
     );
   }
