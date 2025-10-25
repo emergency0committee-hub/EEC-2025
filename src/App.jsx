@@ -34,6 +34,15 @@ function SatPlaceholder({ onNavigate, lang, setLang }) {
 export default function App() {
   // Route state with localStorage persistence
   const [route, setRoute] = useState(() => {
+    // Check for redirected path from 404.html
+    const urlParams = new URLSearchParams(window.location.search);
+    const path = urlParams.get('/');
+    if (path) {
+      const route = path.startsWith('/') ? path.slice(1) : path;
+      // Clear the URL
+      window.history.replaceState(null, null, window.location.pathname);
+      return route || "home";
+    }
     try {
       const savedRoute = localStorage.getItem("cg_current_route");
       // Don't persist test or results routes for security/UX reasons
