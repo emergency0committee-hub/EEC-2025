@@ -60,8 +60,13 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     }));
 
     if (validateForm()) {
-      // TODO: replace with real auth
-      onNavigate("admin");
+      // Check for admin password
+      if (formData.password === "careeradmin123") {
+        localStorage.setItem("cg_admin_ok_v1", "1");
+        onNavigate("admin");
+      } else {
+        setErrors({ password: "Invalid password" });
+      }
     }
   };
 
