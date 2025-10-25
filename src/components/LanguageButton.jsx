@@ -25,12 +25,15 @@ export default function LanguageButton({ lang, setLang, langs }) {
           background: "none",
           border: "1px solid #d1d5db",
           borderRadius: 6,
-          padding: "6px 8px",
+          padding: "12px 20px",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           gap: 4,
           fontSize: 14,
+          fontWeight: 600,
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+          transition: "all 0.2s ease",
         }}
       >
         🌍 {lang}
