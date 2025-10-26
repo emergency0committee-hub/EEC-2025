@@ -15,13 +15,20 @@ export async function saveTestSubmission({
   if (!url || !key) {
     throw new Error("Supabase is not configured (missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY)");
   }
-  const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
+  // Write to the new results table by default
+  const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_results";
   const ts = new Date().toISOString();
   const primaryCode = Array.isArray(topCodes) && topCodes.length ? String(topCodes[0]) : null;
+  // Attach auth email if available (schema has user_email but no user_id)
+  let authEmail = null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) { authEmail = user.email || null; }
+  } catch {}
   const row = {
     ts,
     participant: profile || null,
-    user_email: profile?.email || null,
+    user_email: authEmail || profile?.email || null,
     answers: answers || null,
     radar_data: radarData || null,
     area_percents: areaPercents || null,
@@ -30,7 +37,7 @@ export async function saveTestSubmission({
     riasec_code: primaryCode,
     top_codes: topCodes || null,
   };
-  const { data, error } = await supabase.from(table).insert([row]).select("id").single();
+  const { error } = await supabase.from(table).insert([row]);
   if (error) throw error;
-  return { ok: true, ts, id: data?.id };
+  return { ok: true, ts };
 }

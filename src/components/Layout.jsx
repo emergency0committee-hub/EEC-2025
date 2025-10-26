@@ -67,21 +67,23 @@ export function Field({ label, value, onChange, placeholder }) {
           placeholder={placeholder}
           style={{
             width: "100%",
-            padding: "12px 16px",
+            padding: "10px 12px",
             border: "1px solid #d1d5db",
             borderRadius: 8,
-            fontSize: 16,
+            fontSize: 14,
+            lineHeight: "20px",
             background: "#ffffff",
-            boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+            boxShadow: "none",
+            boxSizing: "border-box",
             transition: "border-color 0.2s ease, box-shadow 0.2s ease",
           }}
           onFocus={(e) => {
-            e.target.style.borderColor = "#667eea";
-            e.target.style.boxShadow = "0 0 0 3px rgba(102, 126, 234, 0.1)";
+            e.target.style.borderColor = "#2563eb";
+            e.target.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.12)";
           }}
           onBlur={(e) => {
             e.target.style.borderColor = "#d1d5db";
-            e.target.style.boxShadow = "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)";
+            e.target.style.boxShadow = "none";
           }}
         />
       </div>

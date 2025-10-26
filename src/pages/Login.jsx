@@ -5,7 +5,7 @@ import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { LANGS, STR } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
-import { hashPassword } from "../lib/hash.js";
+import PhoneInput from "../components/PhoneInput.jsx";
 
 export default function Login({ onNavigate, lang = "EN", setLang }) {
   Login.propTypes = {
@@ -23,9 +23,40 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     password: "",
     confirmPassword: "",
     name: "",
+    phone: "",        // phone (for sign-up, stored in auth metadata)
+    region: "",
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Minimal flag placeholder (solid color) + dialing code mapping
+  function FlagSVG({ r }) {
+    const fill = (
+      r === "US" ? "#b91c1c" :
+      r === "CA" ? "#dc2626" :
+      r === "UK" ? "#1e3a8a" :
+      r === "EG" ? "#111827" :
+      r === "SA" ? "#16a34a" :
+      r === "AE" ? "#0ea5e9" :
+      r === "JO" ? "#ef4444" :
+      r === "LB" ? "#ef4444" : "#9ca3af"
+    );
+    return (
+      <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden>
+        <rect x="0" y="0" width="16" height="12" rx="2" fill={fill} />
+      </svg>
+    );
+  }
+
+  const dialCode = (r) => (
+    r === "US" || r === "CA" ? "+1" :
+    r === "UK" ? "+44" :
+    r === "EG" ? "+20" :
+    r === "SA" ? "+966" :
+    r === "AE" ? "+971" :
+    r === "JO" ? "+962" :
+    r === "LB" ? "+961" : "+"
+  );
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -39,10 +70,13 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     const password = formData.password;
     const confirmPassword = formData.confirmPassword;
     const name = formData.name.trim();
+    const phone = (formData.phone || "").trim();
+    const region = (formData.region || "").trim();
     const username = formData.username.trim();
-    // Sign-in requires loginId (username or email)
+    // Sign-in requires email (works across devices with Supabase Auth)
     if (!isSignUp) {
-      if (!loginId) newErrors.loginId = "Username or Email is required";
+      if (!loginId) newErrors.loginId = "Email is required";
+      else if (!/\S+@\S+\.\S+/.test(loginId)) newErrors.loginId = "Please enter a valid email";
     }
 
     // Sign-up requires email, username, password, confirm, name
@@ -50,7 +84,15 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
       if (!email) newErrors.email = t.emailRequired;
       else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = t.emailInvalid;
       if (!username) newErrors.username = "Username is required";
+      if (phone && phone.length < 6) newErrors.phone = "Please enter a valid phone";
       else if (!/^[a-zA-Z0-9_\-\.]{3,30}$/.test(username)) newErrors.username = "3–30 chars, letters/digits/_-.";
+    }
+
+    // Normalize username validation message (override any garbled text)
+    if (isSignUp) {
+      if (!/^[a-zA-Z0-9_\-\.]{3,30}$/.test(username)) {
+        newErrors.username = "3–30 chars, letters/digits/_-.";
+      }
     }
 
     if (!password) newErrors.password = t.passwordRequired;
@@ -73,47 +115,56 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     const loginId = formData.loginId.trim();
     const email = formData.email.trim();
     const username = formData.username.trim();
+    const phone = (formData.phone || "").trim();
+    const region = (formData.region || "").trim();
     const password = formData.password;
     const name = formData.name.trim();
     try {
       let isAdminUser = false;
       if (isSignUp) {
-        const table = import.meta.env.VITE_USERS_TABLE || "app_users";
-        // Uniqueness checks
-        const { data: e1 } = await supabase.from(table).select("id").ilike("email", email).limit(1);
-        if (e1 && e1.length) throw new Error("Email already registered");
-        const { data: e2 } = await supabase.from(table).select("id").ilike("username", username).limit(1);
-        if (e2 && e2.length) throw new Error("Username already taken");
+        // Supabase Auth: sign up with email/password
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { name: (username || name), username, phone, region } },
+        });
+        if (error) throw error;
 
+        const user = data.user;
+        const session = data.session;
+        // If confirmations are enabled, session may be null
+        if (!session || !user) {
+          setErrors((prev) => ({ ...prev, submit: "Check your email to confirm your account, then sign in." }));
+          setLoading(false);
+          return;
+        }
+        // Upsert profile with default role
         const role = email.toLowerCase() === "anasitani186@gmail.com" ? "admin" : "user";
-        const password_hash = await hashPassword(password);
-        const { error: insErr } = await supabase.from(table).insert({ email, username, name, role, password_hash });
-        if (insErr) throw insErr;
-
-        // Save session locally
-        const current = { email, username, name, role };
+        await supabase.from("profiles").upsert({ id: user.id, email, username, name: (username || name), role });
+        const current = { email, username, name: (username || name), role };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
         if (role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
         isAdminUser = role === "admin";
       } else {
-        // Sign-in from Supabase table (no auth)
-        const table = import.meta.env.VITE_USERS_TABLE || "app_users";
-        const isEmail = /\S+@\S+\.\S+/.test(loginId);
-        let row = null;
-        if (isEmail) {
-          const { data } = await supabase.from(table).select("*").ilike("email", loginId).limit(1);
-          row = data && data[0];
-        } else {
-          const { data } = await supabase.from(table).select("*").ilike("username", loginId).limit(1);
-          row = data && data[0];
+        // Supabase Auth: sign in using email/password
+        const { data, error } = await supabase.auth.signInWithPassword({ email: loginId, password });
+        if (error) throw new Error("Invalid email or password");
+        const user = data.user;
+        // Get or create profile
+        let profile = null;
+        const { data: profRows } = await supabase.from("profiles").select("*").eq("id", user.id).limit(1);
+        profile = profRows && profRows[0];
+        if (!profile) {
+          const role = user.email?.toLowerCase() === "anasitani186@gmail.com" ? "admin" : "user";
+          const uname = user.user_metadata?.username || (user.email ? user.email.split("@")[0] : "");
+          const nm = user.user_metadata?.name || "";
+          await supabase.from("profiles").insert({ id: user.id, email: user.email, username: uname, name: uname, role });
+          profile = { email: user.email, username: uname, name: uname, role };
         }
-        if (!row) throw new Error("Invalid username or password");
-        const candidate = await hashPassword(password);
-        if (!row.password_hash || row.password_hash !== candidate) throw new Error("Invalid username or password");
-        const current = { email: row.email, username: row.username, name: row.name, role: row.role };
+        const current = { email: profile.email, username: profile.username, name: profile.name, role: profile.role };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
-        if (row.role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
-        isAdminUser = row.role === "admin";
+        if (profile.role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
+        isAdminUser = profile.role === "admin";
       }
       // Navigate based on role
       onNavigate(isAdminUser ? "admin-dashboard" : "home");
@@ -169,7 +220,12 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
                 onChange={(e) => handleInputChange("username", e.target.value)}
                 placeholder="Choose a username"
                 invalid={!!errors.username}
-                autoComplete="username"
+                autoComplete="username" />
+              <PhoneInput
+                region={formData.region}
+                phone={formData.phone}
+                onChange={({ region, phone }) => setFormData((s) => ({ ...s, region, phone }))}
+                error={errors.phone}
               />
               {errors.username && (
                 <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.username}</p>
@@ -179,12 +235,13 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           {!isSignUp ? (
             <>
               <Field
-                label="Username or Email"
+                label="Email"
                 value={formData.loginId}
                 onChange={(e) => handleInputChange("loginId", e.target.value)}
-                placeholder="Enter your username or email"
+                placeholder="Enter your email"
                 invalid={!!errors.loginId}
-                autoComplete="username"
+                type="email"
+                autoComplete="email"
               />
               {errors.loginId && (
                 <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.loginId}</p>
@@ -285,3 +342,5 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     </PageWrap>
   );
 }
+
+

@@ -13,14 +13,18 @@ export default function Btn({ children, onClick, variant = "primary", style = {}
   const [hovering, setHovering] = useState(false);
 
   const baseStyle = {
-    padding: "12px 20px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 40,
+    padding: "0 16px",
     border: "none",
     borderRadius: 8,
     cursor: "pointer",
     fontSize: 14,
     fontWeight: 600,
     transition: "all 0.2s ease",
-    boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
+    boxShadow: "none",
   };
 
   const variants = {

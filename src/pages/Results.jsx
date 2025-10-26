@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { PageWrap, HeaderBar } from "../components/Layout.jsx";
+import Btn from "../components/Btn.jsx";
 import { THEME_COLORS } from "../components/Chart.jsx";
 import OccupationScales from "../components/OccupationScales.jsx";
 import ResultsRadar from "./results/ResultsRadar.jsx";
@@ -265,19 +266,12 @@ export default function Results({
 
       {/* Actions (hidden on print) */}
       <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
-        <button
-          onClick={() => onNavigate(fromAdmin ? "admin-dashboard" : "home")}
-          style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
-        >
+        <Btn variant="secondary" onClick={() => onNavigate(fromAdmin ? "admin-dashboard" : "home")}>
           {fromAdmin ? "Back to Submissions" : "Back Home"}
-        </button>
-        <button
-          onClick={handlePrint}
-          style={{ border: "1px solid #2563eb", background: "#2563eb", color: "#fff", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
-          title="Export to PDF"
-        >
+        </Btn>
+        <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
           Export PDF
-        </button>
+        </Btn>
       </div>
 
       {/* Participant header */}
@@ -459,19 +453,12 @@ export default function Results({
 
       {/* Footer actions (hidden in print) */}
       <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-        <button
-          onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}
-          style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
-        >
+        <Btn variant="secondary" onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}>
           {fromAdmin ? "Back to Submissions" : "Back Home"}
-        </button>
-        <button
-          onClick={handlePrint}
-          style={{ border: "1px solid #2563eb", background: "#2563eb", color: "#fff", padding: "10px 14px", borderRadius: 8, cursor: "pointer" }}
-          title="Export to PDF"
-        >
+        </Btn>
+        <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
           Export PDF
-        </button>
+        </Btn>
       </div>
     </PageWrap>
   );

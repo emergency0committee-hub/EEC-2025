@@ -90,7 +90,7 @@ export default function AdminTable2({ submissions, onViewSubmission, onDeleteSub
             const p = sub.participant || sub.profile || {};
             const name = p.name || "—";
             const school = p.school || "—";
-            const finished = p.finished_at || sub.ts || null;
+            const finished = p.finished_at || sub.ts || sub.created_at || null;
             const d = finished ? new Date(finished) : null;
             const dateStr = d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }) : "—";
             const timeStr = d ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : "—";

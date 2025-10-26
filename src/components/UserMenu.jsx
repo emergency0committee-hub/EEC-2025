@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "./Btn.jsx";
+import { supabase } from "../lib/supabase.js";
 
 export default function UserMenu({ onNavigate }) {
   UserMenu.propTypes = {
@@ -36,8 +37,9 @@ export default function UserMenu({ onNavigate }) {
     );
   }
 
-  const signOut = () => {
+  const signOut = async () => {
     try {
+      await supabase.auth.signOut();
       localStorage.removeItem("cg_current_user_v1");
       localStorage.removeItem("cg_admin_ok_v1");
     } catch {}
@@ -130,4 +132,3 @@ function MenuItem({ children, onClick }) {
     </button>
   );
 }
-

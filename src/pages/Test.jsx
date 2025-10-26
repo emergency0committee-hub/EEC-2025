@@ -20,6 +20,7 @@ import {
 } from "../lib/scoring.js";
 import { validateAll } from "../lib/validate.js";
 import { saveTestSubmission } from "../lib/supabaseStorage.js";
+import { supabase } from "../lib/supabase.js";
 
 import {
   RIASEC_SCALE_MAX,
@@ -109,17 +110,29 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const indexFromPage = (p) => (p >= R_START && p <= LAST ? p - R_START + 1 : 0);
   const pageFromIndex = (idx) => R_START + (idx - 1);
 
-  // Require sign-in before taking the test (local-only auth)
-  const [currentUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem("cg_current_user_v1");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  // Require sign-in before taking the test (Supabase Auth)
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authUser, setAuthUser] = useState(null);
 
-  if (!currentUser) {
+  useEffect(() => {
+    let mounted = true;
+    const init = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!mounted) return;
+        setAuthUser(user || null);
+      } finally {
+        if (mounted) setAuthLoading(false);
+      }
+    };
+    init();
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setAuthUser(session?.user || null);
+    });
+    return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
+  }, []);
+
+  if (!authLoading && !authUser) {
     return (
       <PageWrap>
         <HeaderBar title="Sign In Required" right={null} />
@@ -137,18 +150,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   }
 
   const [page, setPage] = useState(INTRO);
-  const [profile, setProfile] = useState(() => {
-    let user = null;
-    try {
-      const raw = localStorage.getItem("cg_current_user_v1");
-      user = raw ? JSON.parse(raw) : null;
-    } catch {}
-    return {
-      name: user?.name || user?.username || "",
-      email: user?.email || "",
-      school: "",
-    };
-  });
+  const [profile, setProfile] = useState(() => ({ name: "", email: "", school: "" }));
   const [showProfileError, setShowProfileError] = useState(false);
   const [ansTF, setAnsTF] = useState({});
   const [showPalette, setShowPalette] = useState(false);
@@ -169,15 +171,17 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-      if (saved && (saved.name || saved.email || saved.school)) {
-        setProfile((prev) => ({
-          name: saved.name || prev.name,
-          email: saved.email || prev.email,
-          school: saved.school || prev.school,
-        }));
-      }
+      const initName = saved?.name || authUser?.user_metadata?.name || authUser?.user_metadata?.username || (authUser?.email ? authUser.email.split("@")[0] : "");
+      const initEmail = saved?.email || authUser?.email || "";
+      const initSchool = saved?.school || "";
+      setProfile((prev) => ({
+        ...prev,
+        name: initName || prev.name,
+        email: initEmail || prev.email,
+        school: initSchool || prev.school,
+      }));
     } catch {}
-  }, []);
+  }, [authUser]);
   useEffect(() => { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }, [profile]);
 
   const isEmail = (s) => /^\S+@\S+\.\S+$/.test(String(s || "").trim());
@@ -223,21 +227,21 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const endTest = async () => {
     try {
       const topCodes = Array.isArray(top3) ? top3.map(t => t.code || t) : [];
-      try {
-        const finishedAt = Date.now(); const participant = { ...profile, started_at: (startTs ? new Date(startTs).toISOString() : null), finished_at: new Date(finishedAt).toISOString() }; await saveTestSubmission({ profile: participant,
-          answers: ansTF,
-          radarData,
-          areaPercents: areaPerc,
-          pillarAgg,
-          pillarCounts,
-          topCodes,
-        });
-      } catch (e) {
-        console.warn("Save to Supabase failed, falling back to localStorage:", e);
-        const rows = JSON.parse(localStorage.getItem("cg_submissions_v1") || "[]");
-        rows.push({ id: Date.now(), ts: Date.now(), profile, answers: ansTF, radar_data: radarData, area_percents: areaPerc, pillar_agg: pillarAgg, pillar_counts: pillarCounts, top_codes: topCodes, riasec_code: topCodes[0] || null });
-        localStorage.setItem("cg_submissions_v1", JSON.stringify(rows));
-      }
+      const finishedAt = Date.now();
+      const participant = {
+        ...profile,
+        started_at: startTs ? new Date(startTs).toISOString() : null,
+        finished_at: new Date(finishedAt).toISOString(),
+      };
+      await saveTestSubmission({
+        profile: participant,
+        answers: ansTF,
+        radarData,
+        areaPercents: areaPerc,
+        pillarAgg,
+        pillarCounts,
+        topCodes,
+      });
 
       onNavigate("results", {
         radarData,
@@ -248,8 +252,9 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         pillarCounts,
       });
     } catch (e) {
-      console.error(e);
-      alert("Could not save your results. Please try again.");
+      console.error("Save failed:", e);
+      const msg = e?.message || String(e);
+      alert(`Could not save your results. ${msg}`);
     }
   };
 

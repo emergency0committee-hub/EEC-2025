@@ -18,23 +18,40 @@ export default function AdminDashboard({ onNavigate }) {
   useEffect(() => {
     const fetchSubmissions = async () => {
       try {
-        const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
-        const { data, error } = await supabase
-          .from(table)
-          .select("*")
-          .order("ts", { ascending: false });
-
-        if (error) throw error;
-        setSubmissions(data || []);
+        const envTable = import.meta.env.VITE_SUBMISSIONS_TABLE;
+        // Prefer new table, then env override, then old table as fallback to show historic rows
+        const candidates = Array.from(new Set([
+          "cg_results",
+          envTable,
+          "cg_submissions",
+        ].filter(Boolean)));
+        try { console.info("Admin fetch candidates:", candidates); } catch {}
+        let rows = [];
+        let lastErr = null;
+        for (const table of candidates) {
+          try {
+            let resp = await supabase.from(table).select("*").order("ts", { ascending: false });
+            if (resp.error) {
+              // Retry ordering by id if ts is missing
+              try {
+                resp = await supabase.from(table).select("*").order("id", { ascending: false });
+              } catch (_) {}
+            }
+            if (resp.error) { lastErr = resp.error; continue; }
+            rows = Array.isArray(resp.data) ? resp.data : [];
+            if (rows.length) {
+              break;
+            }
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (!rows.length && lastErr) {
+          console.warn("No submissions found in configured or legacy tables.", lastErr);
+        }
+        setSubmissions(rows);
       } catch (err) {
         console.error("Failed to fetch submissions:", err);
-        // Fallback to localStorage
-        try {
-          const localSubs = JSON.parse(localStorage.getItem("cg_submissions_v1") || "[]");
-          setSubmissions(localSubs);
-        } catch (e) {
-          console.error("Failed to load local submissions:", e);
-        }
       } finally {
         setLoading(false);
       }
@@ -52,13 +69,29 @@ export default function AdminDashboard({ onNavigate }) {
     try {
       const ok = window.confirm("Delete this submission? This cannot be undone.");
       if (!ok) return;
-      const table = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
-      const { error } = await supabase.from(table).delete().eq("id", submission.id);
-      if (error) throw error;
+      const envTable = import.meta.env.VITE_SUBMISSIONS_TABLE;
+      const candidates = Array.from(new Set([
+        "cg_results",
+        envTable,
+        "cg_submissions",
+      ].filter(Boolean)));
+      let deleted = false;
+      let lastErr = null;
+      for (const table of candidates) {
+        try {
+          const { error } = await supabase.from(table).delete().eq("id", submission.id);
+          if (!error) { deleted = true; break; }
+          lastErr = error;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!deleted) throw lastErr || new Error("Delete failed");
       setSubmissions((rows) => rows.filter((r) => r.id !== submission.id));
     } catch (e) {
       console.error("Failed to delete submission:", e);
-      alert("Failed to delete submission. Please try again.");
+      const msg = e?.message || String(e);
+      alert(`Failed to delete submission. ${msg}`);
     }
   };
 
