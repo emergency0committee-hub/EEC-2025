@@ -101,6 +101,9 @@ export default function UserMenu({ onNavigate }) {
               <MenuItem onClick={() => { setOpen(false); onNavigate("admin-sat"); }}>
                 SAT Dashboard
               </MenuItem>
+              <MenuItem onClick={() => { setOpen(false); onNavigate("admin-sat-training"); }}>
+                SAT Training Analytics
+              </MenuItem>
             </>
           )}
           <div style={{ height: 1, background: "#e5e7eb", margin: "6px 0" }} />

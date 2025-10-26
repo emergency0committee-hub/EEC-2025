@@ -9,8 +9,8 @@ import { supabase } from "../../lib/supabase.js";
 import { saveSatResult } from "../../lib/supabaseStorage.js";
 import { loadRWModules, MATH_MODULES } from "../../sat/questions.js";
 
-export default function SATExam({ onNavigate }) {
-  SATExam.propTypes = { onNavigate: PropTypes.func.isRequired };
+export default function SATExam({ onNavigate, practice = null }) {
+  SATExam.propTypes = { onNavigate: PropTypes.func.isRequired, practice: PropTypes.object };
 
   // Require auth
   const [authUser, setAuthUser] = useState(null);
@@ -41,12 +41,22 @@ export default function SATExam({ onNavigate }) {
   // Build modules [RW1, RW2, M1, M2]
   const [rwMods, setRwMods] = useState([[], []]);
   useEffect(() => { (async () => { const rw = await loadRWModules(); setRwMods(rw); })(); }, []);
-  const modules = useMemo(() => ([
-    { key: "rw1", title: "Reading & Writing — Module 1", durationSec: 32 * 60, questions: rwMods[0] || [] },
-    { key: "rw2", title: "Reading & Writing — Module 2", durationSec: 32 * 60, questions: rwMods[1] || [] },
-    { key: "m1",  title: "Math — Module 1",              durationSec: 35 * 60, questions: MATH_MODULES[0] || [] },
-    { key: "m2",  title: "Math — Module 2",              durationSec: 35 * 60, questions: MATH_MODULES[1] || [] },
-  ]), [rwMods]);
+  const modules = useMemo(() => {
+    if (practice) {
+      // Simple practice: one module per selection
+      if (practice.section === 'MATH') {
+        const m = MATH_MODULES[0] || [];
+        return [{ key: 'pm', title: 'Math Practice', durationSec: 15 * 60, questions: m }];
+      }
+      return [{ key: 'prw', title: 'Reading & Writing Practice', durationSec: 15 * 60, questions: (rwMods[0] || []).slice(0, 10) }];
+    }
+    return [
+      { key: "rw1", title: "Reading & Writing — Module 1", durationSec: 32 * 60, questions: rwMods[0] || [] },
+      { key: "rw2", title: "Reading & Writing — Module 2", durationSec: 32 * 60, questions: rwMods[1] || [] },
+      { key: "m1",  title: "Math — Module 1",              durationSec: 35 * 60, questions: MATH_MODULES[0] || [] },
+      { key: "m2",  title: "Math — Module 2",              durationSec: 35 * 60, questions: MATH_MODULES[1] || [] },
+    ];
+  }, [rwMods, practice]);
 
   const [modIdx, setModIdx] = useState(0);
   const mod = modules[modIdx];
@@ -105,13 +115,27 @@ export default function SATExam({ onNavigate }) {
     const elapsedSec = Math.round((finishedAt - startedAtRef.current) / 1000);
     const summary = scoreSummary();
     try {
-      await saveSatResult({
-        summary,
-        answers,
-        modules: modules.map((m) => ({ key: m.key, title: m.title, count: m.questions.length })),
-        elapsedSec,
-      });
-      onNavigate("results", { participant: { name: authUser?.user_metadata?.name || authUser?.email || "" }, radarData: [], areaPercents: [], pillarAgg: {}, pillarCounts: {} });
+      if (practice) {
+        const { saveSatTraining } = await import("../../lib/supabaseStorage.js");
+        await saveSatTraining({
+          kind: practice.kind || 'classwork',
+          section: practice.section || null,
+          unit: practice.unit || null,
+          lesson: practice.lesson || null,
+          summary,
+          answers,
+          elapsedSec,
+        });
+        onNavigate('sat-training');
+      } else {
+        await saveSatResult({
+          summary,
+          answers,
+          modules: modules.map((m) => ({ key: m.key, title: m.title, count: m.questions.length })),
+          elapsedSec,
+        });
+        onNavigate("sat-results", { submission: { pillar_agg: { summary }, pillar_counts: { modules: modules.map((m) => ({ key: m.key, title: m.title, count: m.questions.length })), elapsedSec } } });
+      }
     } catch (e) {
       console.error("SAT save failed:", e);
       alert(e?.message || String(e));

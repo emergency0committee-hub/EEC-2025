@@ -7,20 +7,20 @@ import Btn from "../../components/Btn.jsx";
 function colorForPct(pct) {
   const p = Math.max(0, Math.min(100, Number(pct || 0)));
   if (p < 20) return "#ef4444";      // red
-  if (p < 40) return "#f59e0b";      // orange
+  if (p < 40) return "#e2f50bff";      // orange
   if (p < 60) return "#fbbf24";      // amber
   if (p < 80) return "#84cc16";      // lime
   return "#22c55e";                   // green
 }
 
-function BarRow({ label, valuePct, color = "auto" }) {
+function BarRow({ label, valuePct, color = "auto", hideValue = false }) {
   const pct = Math.round(Math.max(0, Math.min(100, Number(valuePct || 0))));
   const barColor = (color === "auto" || !color) ? colorForPct(pct) : color;
   return (
     <div className="avoid-break" style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151", marginBottom: 4 }}>
         <span style={{ fontWeight: 600 }}>{label}</span>
-        <span>{pct}%</span>
+        {!hideValue && <span>{pct}%</span>}
       </div>
       <div style={{ height: 10, background: "#f3f4f6", borderRadius: 999, border: "1px solid #e5e7eb", overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: barColor }} />
@@ -41,10 +41,10 @@ function ScoreChip({ label, pct, color = "#2563eb" }) {
       alignItems: "center",
       justifyContent: "space-between",
       gap: 12,
+      minWidth: 220,
     }}>
       <div>
         <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
-        <div style={{ fontWeight: 800, color: "#111827" }}>{pct}%</div>
       </div>
       <div style={{ textAlign: "right" }}>
         <div style={{ fontSize: 12, color: "#6b7280" }}>Estimated</div>
@@ -177,56 +177,74 @@ export default function SATResults({ onNavigate, submission }) {
 
       <HeaderBar title="SAT Diagnostic Results" />
 
-      {/* Summary banner */}
+      {/* Card 1: Total Score out of 1600 (name/date left, total box right) */}
       <div className="card avoid-break" style={{ marginBottom: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1fr", gap: 16, alignItems: "stretch" }}>
-          <div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Candidate</div>
-            <div style={{ fontWeight: 800, color: "#111827" }}>{participant.name || participant.email || "—"}</div>
-            <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>{dateStr} • {fmtDur(elapsedSec)}</div>
-          </div>
-          <ScoreChip label="Reading & Writing" pct={rwPct} color={colorForPct(rwPct)} />
-          <ScoreChip label="Math" pct={mathPct} color={colorForPct(mathPct)} />
-        </div>
+        {(() => {
+          const scaledRW = Math.round(200 + Math.max(0, Math.min(100, Number(rwPct || 0))) * 6);
+          const scaledM  = Math.round(200 + Math.max(0, Math.min(100, Number(mathPct || 0))) * 6);
+          const total = Math.max(400, Math.min(1600, scaledRW + scaledM));
+          const totalPct = Math.round(((total - 400) / 1200) * 100);
+          const c = colorForPct(totalPct);
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", alignItems: "center", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Candidate</div>
+                <div style={{ fontWeight: 800, color: "#111827" }}>{participant.name || participant.email || "—"}</div>
+                <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>{dateStr} • {fmtDur(elapsedSec)}</div>
+              </div>
+              <div style={{ justifySelf: "end", minWidth: 220 }}>
+                <div style={{
+                  border: `1px solid ${c}`,
+                  background: "#fff",
+                  borderRadius: 12,
+                  padding: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>Total Score</div>
+                    <div style={{ fontWeight: 800, color: c, fontSize: 22 }}>{total}/1600</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
-      {/* Candidate header */}
+      {/* Card 2: Student details (class, school, phone) */}
       <div className="card avoid-break" style={{ marginBottom: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(140px, 1fr))", gap: 12 }}>
+        <h3 style={{ marginTop: 0, color: "#111827" }}>Candidate Details</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(140px, 1fr))", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Candidate Name</div>
-            <div style={{ fontWeight: 700, color: "#111827" }}>{participant.name || "—"}</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>Class</div>
+            <div style={{ fontWeight: 700, color: "#111827" }}>{participant.class || participant.className || participant.grade || "—"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Email</div>
-            <div style={{ fontWeight: 700, color: "#111827" }}>{participant.email || "—"}</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>School</div>
+            <div style={{ fontWeight: 700, color: "#111827" }}>{participant.school || "—"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Date</div>
-            <div style={{ fontWeight: 700, color: "#111827" }}>{dateStr}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Duration</div>
-            <div style={{ fontWeight: 700, color: "#111827" }}>{fmtDur(elapsedSec)}</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>Phone</div>
+            <div style={{ fontWeight: 700, color: "#111827" }}>{participant.phone || participant.tel || "—"}</div>
           </div>
         </div>
       </div>
 
       {/* Overall scores */}
+      {/* Card 3: Estimated section scores (bars + boxed estimates, aligned per section) */}
       <div className="card avoid-break" style={{ marginBottom: 16 }}>
-        <h3 style={{ marginTop: 0, color: "#111827" }}>Overall Performance</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div>
-            <BarRow label={`Reading & Writing (${summary.rw.correct}/${summary.rw.total})`} valuePct={rwPct} color="auto" />
-            <BarRow label={`Math (${summary.math.correct}/${summary.math.total})`} valuePct={mathPct} color="auto" />
+        <h3 style={{ marginTop: 0, color: "#111827" }}>Estimated Section Scores</h3>
+        <div style={{ display: "grid", gridTemplateRows: "auto auto", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16, alignItems: "center" }}>
+            <BarRow label="Reading & Writing" valuePct={rwPct} color="auto" hideValue={true} />
+            <ScoreChip label="Reading & Writing" pct={rwPct} color={colorForPct(rwPct)} />
           </div>
-          <div>
-            <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 6 }}>Modules</div>
-            <ul style={{ margin: 0, paddingLeft: 18, color: "#374151" }}>
-              {modules.map((m, i) => (
-                <li key={i} style={{ margin: "4px 0" }}>{m.title} — {m.count} items</li>
-              ))}
-            </ul>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 16, alignItems: "center" }}>
+            <BarRow label="Math" valuePct={mathPct} color="auto" hideValue={true} />
+            <ScoreChip label="Math" pct={mathPct} color={colorForPct(mathPct)} />
           </div>
         </div>
       </div>

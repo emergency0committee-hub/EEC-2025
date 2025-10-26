@@ -29,6 +29,28 @@ export default function Account({ onNavigate }) {
 });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const isAdmin = (() => { try { return localStorage.getItem("cg_admin_ok_v1") === "1"; } catch { return false; } })();
+
+  // Access code generator (changes every 30 minutes)
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
+  const windowMs = 30 * 60 * 1000;
+  const windowIdx = Math.floor(now / windowMs);
+  const msLeft = windowMs - (now % windowMs);
+  const mm = Math.floor(msLeft / 60000).toString().padStart(2, "0");
+  const ss = Math.floor((msLeft % 60000) / 1000).toString().padStart(2, "0");
+  const seed = (import.meta.env.VITE_ACCESS_CODE_SEED || "EEC-SEED").trim();
+  function genCode(label) {
+    const s = `${seed}|${label}|${windowIdx}`;
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24); }
+    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 1/0/I/O
+    let out = ""; let v = Math.abs(h);
+    for (let i = 0; i < 6; i++) { out += alphabet[v % alphabet.length]; v = Math.floor(v / alphabet.length) ^ (v << 1); }
+    return out;
+  }
+  const satCode = genCode("SAT");
+  const cgCode = genCode("CG");
 
   // Helpers for flag + dialing code display
   function FlagSVG({ r }) {
@@ -193,6 +215,28 @@ export default function Account({ onNavigate }) {
   return (
     <PageWrap>
       <HeaderBar title="Account" right={null} />
+      {isAdmin && (
+        <Card>
+          <h3 style={{ marginTop: 0 }}>Access Codes (auto-rotate every 30 min)</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(160px, 1fr))", gap: 12, alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>SAT Diagnostic</div>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{satCode}</div>
+              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(satCode); }}>Copy</Btn>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Career Guidance</div>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{cgCode}</div>
+              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(cgCode); }}>Copy</Btn>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Next refresh in</div>
+              <div style={{ fontWeight: 700 }}>{mm}:{ss}</div>
+            </div>
+          </div>
+          <p style={{ color: "#6b7280", marginTop: 8, fontSize: 12 }}>Configure seed with VITE_ACCESS_CODE_SEED. Codes are valid within the current 30‑min window.</p>
+        </Card>
+      )}
       <Card>
         <h3 style={{ marginTop: 0 }}>Profile</h3>
         <Field label="Full Name" value={form.name} onChange={(e) => handleChange("name", e.target.value)} />

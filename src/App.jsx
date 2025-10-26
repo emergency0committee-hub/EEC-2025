@@ -10,10 +10,12 @@ import Login from "./pages/Login.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import SATAdmin from "./pages/admin/SATDashboard.jsx";
 import SATResults from "./pages/sat/SATResults.jsx";
+import SATTrainingAdmin from "./pages/admin/SATTrainingDashboard.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import Account from "./pages/Account.jsx";
 import SATIntro from "./pages/sat/SATIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
+import SATTraining from "./pages/sat/SATTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
 // import { testSupabaseConnection } from "./lib/supabase.js";
@@ -104,7 +106,8 @@ export default function App() {
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
-  if (route === "sat-exam") return <SATExam onNavigate={onNavigate} />;
+  if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
+  if (route === "sat-training") return <SATTraining onNavigate={onNavigate} />;
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
@@ -129,7 +132,23 @@ export default function App() {
     }
     return <Results onNavigate={onNavigate} {...(resultsPayload || {})} />;
   }
-  if (route === "sat-results") return <SATResults onNavigate={onNavigate} {...(resultsPayload || {})} />;
+  if (route === "sat-results") {
+    if (!canViewResults) {
+      return (
+        <PageWrap>
+          <HeaderBar title="Not Authorized" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              SAT results are visible to administrators only.
+            </p>
+            <Btn variant="primary" onClick={() => onNavigate("home")}>Back to Home</Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    return <SATResults onNavigate={onNavigate} {...(resultsPayload || {})} />;
+  }
+  if (route === "admin-sat-training") return <SATTrainingAdmin onNavigate={onNavigate} />;
 
   // 404
   return (

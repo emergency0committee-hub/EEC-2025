@@ -150,6 +150,11 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   }
 
   const [page, setPage] = useState(INTRO);
+  const [cgUnlocked, setCgUnlocked] = useState(() => {
+    try { return localStorage.getItem("cg_access_ok_v1") === "1"; } catch { return false; }
+  });
+  const [cgCode, setCgCode] = useState("");
+  const [cgErr, setCgErr] = useState("");
   const [profile, setProfile] = useState(() => ({ name: "", email: "", school: "" }));
   const [showProfileError, setShowProfileError] = useState(false);
   const [ansTF, setAnsTF] = useState({});
@@ -300,54 +305,51 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
   // Intro
   if (page === INTRO) {
-    const invalid = showProfileError && !isValidProfile();
     const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1";
     return (
       <PageWrap>
         <HeaderBar title="Career Guidance Test" />
         <Card>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-            <Field
-              label="Name"
-              value={profile.name}
-              onChange={(e)=>setProfile({...profile,name:e.target.value})}
-              placeholder="e.g., Amina Khalil"
-            />
-            <Field
-              label="Email"
-              value={profile.email}
-              onChange={(e)=>setProfile({...profile,email:e.target.value})}
-              placeholder="e.g., name@example.com"
-            />
-            <Field
-              label="School / Organization"
-              value={profile.school}
-              onChange={(e)=>setProfile({...profile,school:e.target.value})}
-              placeholder="e.g., Horizon High School"
-            />
-          </div>
-          {isAdmin && (
-            <div style={{ marginTop: 16, padding: 12, border: "1px dashed #cbd5e1", borderRadius: 10, background: "#f8fafc", display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 600 }}>Timer (minutes):</div>
-              <input
-                type="number"
-                min={1}
-                max={180}
-                value={timerMin}
-                onChange={(e)=>setTimerMin(Math.max(1,Math.min(180,Number(e.target.value)||1)))}
-                style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontWeight: 600 }}
-              />
-              <div style={{ marginLeft: "auto", color: "#475569" }}>Current: <b>{timerMin} min</b></div>
-            </div>
+          {!cgUnlocked ? (
+            <>
+              <h3 style={{ marginTop: 0 }}>Access Code Required</h3>
+              <p style={{ color: "#6b7280" }}>Enter the access code provided by your instructor to start the Career Guidance test.</p>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", maxWidth: 420 }}>
+                <input
+                  type="text"
+                  value={cgCode}
+                  onChange={(e)=>{ setCgCode(e.target.value); setCgErr(""); }}
+                  placeholder="Enter access code"
+                  style={{ flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+                />
+                <Btn variant="primary" onClick={() => {
+                  const expected = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
+                  if (expected && cgCode.trim() !== expected) { setCgErr("Invalid access code"); return; }
+                  try { localStorage.setItem("cg_access_ok_v1", "1"); } catch {}
+                  setCgUnlocked(true);
+                }}>Unlock</Btn>
+              </div>
+              {cgErr && <p style={{ color: "#dc2626", fontSize: 13, marginTop: 6 }}>{cgErr}</p>}
+              <div style={{ marginTop: 12 }}>
+                <Btn variant="back" onClick={()=>onNavigate("home")}>Back Home</Btn>
+              </div>
+            </>
+          ) : (
+            <>
+              {isAdmin && (
+                <div style={{ marginBottom: 12, padding: 12, border: "1px dashed #cbd5e1", borderRadius: 10, background: "#f8fafc", display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ fontWeight: 600 }}>Timer (minutes):</div>
+                  <input type="number" min={1} max={180} value={timerMin} onChange={(e)=>setTimerMin(Math.max(1,Math.min(180,Number(e.target.value)||1)))} style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontWeight: 600 }} />
+                  <div style={{ marginLeft: "auto", color: "#475569" }}>Current: <b>{timerMin} min</b></div>
+                </div>
+              )}
+              <p style={{ color:"#475569" }}>You are signed in as <b>{authUser?.email || profile.email || "user"}</b>. Your account details will be used for the report.</p>
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
+                <Btn variant="back" onClick={()=>onNavigate("home")}>Back Home</Btn>
+                <Btn variant="primary" onClick={startTest}>Start Test</Btn>
+              </div>
+            </>
           )}
-          <p style={{ color:"#475569", marginTop: 10 }}>
-            Your results will be saved securely and available to admins.
-          </p>
-          {invalid && <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 14 }}>Please complete all fields correctly.</div>}
-          <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
-            <Btn variant="back" onClick={()=>onNavigate("home")}>Back Home</Btn>
-            <Btn variant="primary" onClick={startTest} disabled={!isValidProfile()}>Start Test</Btn>
-          </div>
         </Card>
       </PageWrap>
     );

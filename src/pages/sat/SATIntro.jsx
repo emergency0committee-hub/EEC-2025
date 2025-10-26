@@ -10,6 +10,11 @@ export default function SATIntro({ onNavigate }) {
 
   const [authLoading, setAuthLoading] = useState(true);
   const [authUser, setAuthUser] = useState(null);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [unlocked, setUnlocked] = useState(() => {
+    try { return localStorage.getItem("sat_access_ok_v1") === "1"; } catch { return false; }
+  });
 
   useEffect(() => {
     let alive = true;
@@ -39,21 +44,53 @@ export default function SATIntro({ onNavigate }) {
     <PageWrap>
       <HeaderBar title="SAT Diagnostic" />
       <Card>
-        <h3 style={{ marginTop: 0 }}>Overview</h3>
-        <p style={{ color: "#6b7280" }}>
-          This diagnostic simulates the new Digital SAT structure with two modules for Reading & Writing and two modules for Math. It uses strict timers, a question palette, and basic scoring. Your submission will be saved.
-        </p>
-        <ul style={{ color: "#374151" }}>
-          <li>Reading & Writing: 2 modules × 32 minutes each</li>
-          <li>Math: 2 modules × 35 minutes each</li>
-          <li>Answer navigation via a palette; timer per module</li>
-        </ul>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <Btn variant="primary" onClick={() => onNavigate("sat-exam")}>Start Diagnostic</Btn>
-          <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-        </div>
+        {!unlocked ? (
+          <>
+            <h3 style={{ marginTop: 0 }}>Access Code Required</h3>
+            <p style={{ color: "#6b7280" }}>
+              Enter the access code provided by your instructor to start the SAT diagnostic.
+            </p>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", maxWidth: 420 }}>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => { setCode(e.target.value); setError(""); }}
+                placeholder="Enter access code"
+                style={{ flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+              />
+              <Btn
+                variant="primary"
+                onClick={() => {
+                  const expected = (import.meta.env.VITE_SAT_ACCESS_CODE || "").trim();
+                  if (expected && code.trim() !== expected) { setError("Invalid access code"); return; }
+                  try { localStorage.setItem("sat_access_ok_v1", "1"); } catch {}
+                  setUnlocked(true);
+                }}
+              >Unlock</Btn>
+            </div>
+            {error && <p style={{ color: "#dc2626", fontSize: 13, marginTop: 6 }}>{error}</p>}
+            <div style={{ marginTop: 12 }}>
+              <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 style={{ marginTop: 0 }}>Overview</h3>
+            <p style={{ color: "#6b7280" }}>
+              This diagnostic simulates the new Digital SAT structure with two modules for Reading & Writing and two modules for Math. It uses strict timers, a question palette, and basic scoring. Your submission will be saved.
+            </p>
+            <ul style={{ color: "#374151" }}>
+              <li>Reading & Writing: 2 modules × 32 minutes each</li>
+              <li>Math: 2 modules × 35 minutes each</li>
+              <li>Answer navigation via a palette; timer per module</li>
+            </ul>
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <Btn variant="primary" onClick={() => onNavigate("sat-exam")}>Start Diagnostic</Btn>
+              <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+            </div>
+          </>
+        )}
       </Card>
     </PageWrap>
   );
 }
-

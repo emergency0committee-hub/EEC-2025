@@ -69,3 +69,36 @@ export async function saveSatResult({ summary, answers, modules, elapsedSec }) {
   if (error) throw error;
   return { ok: true, ts };
 }
+
+// Save SAT training activity (lecture/classwork/homework)
+export async function saveSatTraining({
+  kind = "classwork",         // 'lecture' | 'classwork' | 'homework'
+  section = null,             // 'RW' | 'MATH'
+  unit = null,                // e.g., 'algebra'
+  lesson = null,              // e.g., 'linear_equations'
+  summary = null,             // { rw: {correct,total}, math: {correct,total} } or custom
+  answers = null,
+  elapsedSec = 0,
+}) {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error("Supabase is not configured");
+  const table = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+  const ts = new Date().toISOString();
+  let userEmail = null;
+  try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
+  const row = {
+    ts,
+    user_email: userEmail,
+    kind,
+    section,
+    unit,
+    lesson,
+    summary: summary || null,
+    answers: answers || null,
+    elapsed_sec: elapsedSec || 0,
+  };
+  const { error } = await supabase.from(table).insert([row]);
+  if (error) throw error;
+  return { ok: true, ts };
+}

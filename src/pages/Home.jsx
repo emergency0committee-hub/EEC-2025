@@ -111,11 +111,19 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
         </Card>
 
         <Card>
-          <h3 style={{ marginTop: 0, color: "#111827" }}>{t.satTitle}</h3>
+          <h3 style={{ marginTop: 0, color: "#111827" }}>SAT Diagnostic Test</h3>
           <p style={{ color: "#6b7280" }}>
-            {t.satDesc}
+            Simulates the Digital SAT with timed modules and a full results report.
           </p>
-          <Btn variant="secondary" onClick={() => onNavigate("sat")}>{t.goToSAT}</Btn>
+          <Btn variant="primary" onClick={() => onNavigate("sat")}>Start Diagnostic</Btn>
+        </Card>
+
+        <Card>
+          <h3 style={{ marginTop: 0, color: "#111827" }}>SAT Training</h3>
+          <p style={{ color: "#6b7280" }}>
+            Practice Reading & Writing and Math by skill with untimed sets.
+          </p>
+          <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Open Training</Btn>
         </Card>
       </div>
 

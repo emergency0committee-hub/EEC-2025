@@ -25,6 +25,8 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     name: "",
     phone: "",        // phone (for sign-up, stored in auth metadata)
     region: "",
+    school: "",
+    className: "",
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -126,7 +128,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { name: (username || name), username, phone, region } },
+          options: { data: { name: (username || name), username, phone, region, school: formData.school || "", class: formData.className || "" } },
         });
         if (error) throw error;
 
@@ -227,6 +229,28 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
                 onChange={({ region, phone }) => setFormData((s) => ({ ...s, region, phone }))}
                 error={errors.phone}
               />
+              <Field
+                label="School"
+                value={formData.school}
+                onChange={(e) => handleInputChange("school", e.target.value)}
+                placeholder="Your school"
+                invalid={!!errors.school}
+                autoComplete="organization"
+              />
+              {errors.school && (
+                <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.school}</p>
+              )}
+              <Field
+                label="Class"
+                value={formData.className}
+                onChange={(e) => handleInputChange("className", e.target.value)}
+                placeholder="e.g., Grade 11"
+                invalid={!!errors.className}
+                autoComplete="off"
+              />
+              {errors.className && (
+                <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.className}</p>
+              )}
               {errors.username && (
                 <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.username}</p>
               )}
