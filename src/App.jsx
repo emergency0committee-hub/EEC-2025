@@ -8,31 +8,17 @@ import Results from "./pages/Results.jsx";
 import SelectResults from "./pages/SelectResults.jsx";
 import Login from "./pages/Login.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import SATAdmin from "./pages/admin/SATDashboard.jsx";
+import SATResults from "./pages/sat/SATResults.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import Account from "./pages/Account.jsx";
+import SATIntro from "./pages/sat/SATIntro.jsx";
+import SATExam from "./pages/sat/SATExam.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import Btn from "./components/Btn.jsx";
 // import { testSupabaseConnection } from "./lib/supabase.js";
 
-function SatPlaceholder({ onNavigate, lang, setLang }) {
-  SatPlaceholder.propTypes = {
-    onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string.isRequired,
-    setLang: PropTypes.func.isRequired,
-  };
-  return (
-    <PageWrap>
-      <HeaderBar title="SAT Practice" right={null} />
-      <Card>
-        <h3 style={{ marginTop: 0 }}>SAT Module (Coming Soon)</h3>
-        <p style={{ color: "#6b7280" }}>
-          This is a placeholder for the SAT practice experience. You can wire sections with timers and palettes just like the Career Guidance test.
-        </p>
-        <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-      </Card>
-    </PageWrap>
-  );
-}
+function SatPlaceholder() { return null; }
 
 export default function App() {
   // Route state with localStorage persistence
@@ -99,7 +85,7 @@ export default function App() {
 
   const onNavigate = (to, data = null) => {
     const normalized = String(to || "").replace(/^\/+/, "").trim();
-    if (normalized === "results" && data) setResultsPayload(data);
+    if (data) setResultsPayload(data);
     setRoute(normalized);
     window.scrollTo(0, 0);
     // Update URL for navigation
@@ -117,10 +103,12 @@ export default function App() {
 
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "sat")    return <SatPlaceholder onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
+  if (route === "sat-exam") return <SATExam onNavigate={onNavigate} />;
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "admin-sat") return <SATAdmin onNavigate={onNavigate} />;
   if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "account") return <Account onNavigate={onNavigate} />;
   if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
@@ -141,6 +129,7 @@ export default function App() {
     }
     return <Results onNavigate={onNavigate} {...(resultsPayload || {})} />;
   }
+  if (route === "sat-results") return <SATResults onNavigate={onNavigate} {...(resultsPayload || {})} />;
 
   // 404
   return (

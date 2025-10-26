@@ -41,3 +41,31 @@ export async function saveTestSubmission({
   if (error) throw error;
   return { ok: true, ts };
 }
+
+// Save SAT diagnostic result
+export async function saveSatResult({ summary, answers, modules, elapsedSec }) {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error("Supabase is not configured");
+  const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "cg_sat_results";
+  const ts = new Date().toISOString();
+  // Attach user email if available
+  let userEmail = null;
+  try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
+  const row = {
+    ts,
+    user_email: userEmail,
+    participant: null,
+    // store diagnostic payload
+    answers: answers || null,
+    radar_data: null,
+    area_percents: null,
+    pillar_agg: { summary },
+    pillar_counts: { modules, elapsedSec },
+    riasec_code: null,
+    top_codes: null,
+  };
+  const { error } = await supabase.from(table).insert([row]);
+  if (error) throw error;
+  return { ok: true, ts };
+}

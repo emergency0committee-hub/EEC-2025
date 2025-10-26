@@ -49,7 +49,35 @@ export default function AdminDashboard({ onNavigate }) {
         if (!rows.length && lastErr) {
           console.warn("No submissions found in configured or legacy tables.", lastErr);
         }
-        setSubmissions(rows);
+
+        // Inject a non-deletable demo submission for preview
+        const demoTs = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+        const demo = {
+          id: "demo-career",
+          ts: demoTs,
+          riasec_code: "RIA",
+          participant: {
+            name: "Demo Student",
+            email: "demo@example.com",
+            school: "Preview Academy",
+            started_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+            finished_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+          },
+          radar_data: [
+            { code: "R", score: 68 }, { code: "I", score: 72 }, { code: "A", score: 55 },
+            { code: "S", score: 61 }, { code: "E", score: 49 }, { code: "C", score: 58 },
+          ],
+          area_percents: [
+            { area: "Science & Tech", code: "I", percent: 72 },
+            { area: "Hands-on", code: "R", percent: 68 },
+            { area: "Arts", code: "A", percent: 55 },
+          ],
+          pillar_agg: { disc: {}, bloom: {}, sdg: {} },
+          pillar_counts: { discCount: {}, bloomCount: {}, sdgCount: {} },
+          _demo: true,
+        };
+        const finalRows = [demo, ...(rows || [])];
+        setSubmissions(finalRows);
       } catch (err) {
         console.error("Failed to fetch submissions:", err);
       } finally {
@@ -69,6 +97,10 @@ export default function AdminDashboard({ onNavigate }) {
     try {
       const ok = window.confirm("Delete this submission? This cannot be undone.");
       if (!ok) return;
+      if (submission && (submission._demo || String(submission.id).startsWith("demo-"))) {
+        alert("This preview submission cannot be deleted.");
+        return;
+      }
       const envTable = import.meta.env.VITE_SUBMISSIONS_TABLE;
       const candidates = Array.from(new Set([
         "cg_results",

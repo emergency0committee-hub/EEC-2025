@@ -11,6 +11,7 @@ export default function PaletteOverlay({
   savedScroll,
   setSavedScroll,
   answeredIndexes,
+  flaggedIndexes = new Set(),
 }) {
   const handleJump = (idx1) => {
     onJump(idx1);
@@ -47,16 +48,26 @@ export default function PaletteOverlay({
         <h4 style={{ margin: 0, marginBottom: 16 }}>Question Navigator</h4>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
           {Array.from({ length: totalQuestions }, (_, i) => {
-            const isAnswered = answeredIndexes.has(i + 1);
-            const isCurrent = i + 1 === currentIndex;
+            const idx = i + 1;
+            const isAnswered = answeredIndexes?.has(idx);
+            const isFlagged = flaggedIndexes?.has(idx);
+            const isCurrent = idx === currentIndex;
+            // Color logic: current (primary); flagged = orange; answered = green; else neutral
+            const style = isCurrent
+              ? { minWidth: 40, height: 40, padding: 0 }
+              : isFlagged
+              ? { minWidth: 40, height: 40, padding: 0, background: "#fef3c7", border: "1px solid #f59e0b", color: "#92400e" }
+              : isAnswered
+              ? { minWidth: 40, height: 40, padding: 0, background: "#ecfdf5", border: "1px solid #10b981", color: "#065f46" }
+              : { minWidth: 40, height: 40, padding: 0 };
             return (
               <Btn
                 key={i}
-                variant={isCurrent ? "primary" : isAnswered ? "secondary" : "back"}
-                onClick={() => handleJump(i + 1)}
-                style={{ minWidth: 40, height: 40, padding: 0 }}
+                variant={isCurrent ? "primary" : "back"}
+                onClick={() => handleJump(idx)}
+                style={style}
               >
-                {i + 1}
+                {idx}
               </Btn>
             );
           })}

@@ -94,9 +94,14 @@ export default function UserMenu({ onNavigate }) {
             Profile
           </MenuItem>
           {isAdmin && (
-            <MenuItem onClick={() => { setOpen(false); onNavigate("admin-dashboard"); }}>
-              Admin Dashboard
-            </MenuItem>
+            <>
+              <MenuItem onClick={() => { setOpen(false); onNavigate("admin-dashboard"); }}>
+                Career Dashboard
+              </MenuItem>
+              <MenuItem onClick={() => { setOpen(false); onNavigate("admin-sat"); }}>
+                SAT Dashboard
+              </MenuItem>
+            </>
           )}
           <div style={{ height: 1, background: "#e5e7eb", margin: "6px 0" }} />
           <MenuItem onClick={signOut}>Sign out</MenuItem>
