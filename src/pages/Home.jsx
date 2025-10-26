@@ -103,27 +103,49 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
         }}
       >
         <Card>
-          <h3 style={{ marginTop: 0, color: "#111827" }}>{t.careerTitle}</h3>
-          <p style={{ color: "#6b7280" }}>
-            {t.careerDesc}
-          </p>
-          <Btn variant="primary" onClick={() => onNavigate("career")}>{t.goToCareer}</Btn>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+            <h3 style={{ marginTop: 0, color: "#111827" }}>{t.careerTitle}</h3>
+            <p style={{ color: "#6b7280" }}>{t.careerDesc}</p>
+            <div style={{ marginTop: "auto" }}>
+              <Btn variant="primary" onClick={() => onNavigate("career")}>Open</Btn>
+            </div>
+          </div>
         </Card>
 
         <Card>
-          <h3 style={{ marginTop: 0, color: "#111827" }}>SAT Diagnostic Test</h3>
-          <p style={{ color: "#6b7280" }}>
-            Simulates the Digital SAT with timed modules and a full results report.
-          </p>
-          <Btn variant="primary" onClick={() => onNavigate("sat")}>Start Diagnostic</Btn>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+            <h3 style={{ marginTop: 0, color: "#111827" }}>SAT Diagnostic Test</h3>
+            <p style={{ color: "#6b7280" }}>
+              Simulates the Digital SAT with timed modules and a full results report.
+            </p>
+            <div style={{ marginTop: "auto" }}>
+              <Btn variant="primary" onClick={() => onNavigate("sat")}>Open</Btn>
+            </div>
+          </div>
         </Card>
 
         <Card>
-          <h3 style={{ marginTop: 0, color: "#111827" }}>SAT Training</h3>
-          <p style={{ color: "#6b7280" }}>
-            Practice Reading & Writing and Math by skill with untimed sets.
-          </p>
-          <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Open Training</Btn>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+            <h3 style={{ marginTop: 0, color: "#111827" }}>SAT Training</h3>
+            <p style={{ color: "#6b7280" }}>
+              Practice Reading & Writing and Math by skill with untimed sets.
+            </p>
+            <div style={{ marginTop: "auto" }}>
+              <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Open</Btn>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+            <h3 style={{ marginTop: 0, color: "#111827" }}>AI Educator</h3>
+            <p style={{ color: "#6b7280" }}>
+              Adaptive lessons, instant feedback, and personalized study plans.
+            </p>
+            <div style={{ marginTop: "auto" }}>
+              <Btn variant="secondary" onClick={() => onNavigate("ai-educator")}>Open</Btn>
+            </div>
+          </div>
         </Card>
       </div>
 

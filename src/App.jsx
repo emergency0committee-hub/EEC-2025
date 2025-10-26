@@ -17,6 +17,7 @@ import SATIntro from "./pages/sat/SATIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
 import SATTraining from "./pages/sat/SATTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
+import AIEducator from "./pages/AIEducator.jsx";
 import Btn from "./components/Btn.jsx";
 // import { testSupabaseConnection } from "./lib/supabase.js";
 
@@ -85,14 +86,28 @@ export default function App() {
   //   testSupabaseConnection();
   // }, []);
 
+  // Enable browser back/forward navigation by listening to popstate
+  useEffect(() => {
+    const onPop = () => {
+      const base = import.meta.env.BASE_URL || "/";
+      let path = window.location.pathname || "/";
+      if (path.startsWith(base)) path = path.slice(base.length);
+      const normalized = String(path).replace(/^\/+/, "").trim() || "home";
+      setRoute(normalized);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   const onNavigate = (to, data = null) => {
     const normalized = String(to || "").replace(/^\/+/, "").trim();
     if (data) setResultsPayload(data);
     setRoute(normalized);
     window.scrollTo(0, 0);
     // Update URL for navigation
-    const newUrl = normalized === "home" ? "/" : `/${normalized}`;
-    window.history.pushState(null, null, newUrl);
+    const base = import.meta.env.BASE_URL || "/";
+    const newUrl = normalized === "home" ? base : `${base}${normalized}`;
+    window.history.pushState(null, "", newUrl);
   };
 
   const canViewResults = useMemo(() => {
@@ -108,6 +123,7 @@ export default function App() {
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} />;
+  if (route === "ai-educator") return <AIEducator onNavigate={onNavigate} />;
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
