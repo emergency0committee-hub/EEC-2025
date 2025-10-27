@@ -1,0 +1,22 @@
+// src/pages/Blogs.jsx
+import React from "react";
+import PropTypes from "prop-types";
+import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
+import Btn from "../components/Btn.jsx";
+
+export default function Blogs({ onNavigate }) {
+  Blogs.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+  };
+
+  return (
+    <PageWrap>
+      <HeaderBar title="Blogs" right={null} />
+      <Card>
+        <p style={{ color: "#6b7280", marginTop: 0 }}>Coming soon.</p>
+        <Btn variant="primary" onClick={() => onNavigate("home")}>Back Home</Btn>
+      </Card>
+    </PageWrap>
+  );
+}
+

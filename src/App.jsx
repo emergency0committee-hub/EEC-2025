@@ -2,6 +2,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import PropTypes from "prop-types";
 import Home from "./pages/Home.jsx";
+import Blogs from "./pages/Blogs.jsx";
+import About from "./pages/About.jsx";
 import Career from "./pages/Career.jsx";
 import Test from "./pages/Test.jsx";
 import Results from "./pages/Results.jsx";
@@ -120,6 +122,8 @@ export default function App() {
 
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "blogs")  return <Blogs onNavigate={onNavigate} />;
+  if (route === "about")  return <About onNavigate={onNavigate} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} />;

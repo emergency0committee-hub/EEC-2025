@@ -1,11 +1,78 @@
 // src/pages/sat/SATTraining.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
+import { supabase } from "../../lib/supabase.js";
 
 export default function SATTraining({ onNavigate }) {
   SATTraining.propTypes = { onNavigate: PropTypes.func.isRequired };
+  const [checking, setChecking] = useState(true);
+  const [allowed, setAllowed] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth?.user?.email || "";
+        setUserEmail(email);
+        if (!email) { setAllowed(false); return; }
+        const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+        const { data, error } = await supabase
+          .from(table)
+          .select("*")
+          .eq("student_email", email)
+          .limit(1);
+        if (error) { console.warn("Class check error", error); setAllowed(false); }
+        else setAllowed((data && data.length > 0) ? true : false);
+      } catch (e) {
+        console.warn(e);
+        setAllowed(false);
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, []);
+
+  if (checking) {
+    return (
+      <PageWrap>
+        <HeaderBar title="SAT Training" right={null} />
+        <Card><p style={{ color: "#6b7280" }}>Checking access...</p></Card>
+      </PageWrap>
+    );
+  }
+
+  if (!allowed) {
+    return (
+      <PageWrap>
+        <HeaderBar title="SAT Training" right={null} />
+        <Card>
+          {!userEmail ? (
+            <>
+              <p style={{ color: "#6b7280" }}>
+                You need to sign in to access SAT Training.
+              </p>
+              <Btn variant="primary" onClick={() => onNavigate("login")}>Go to Login</Btn>
+            </>
+          ) : (
+            <>
+              <p style={{ color: "#6b7280" }}>
+                Your administrator needs to assign you a class before you can use SAT Training.
+              </p>
+              <p style={{ color: "#9ca3af", fontSize: 12 }}>
+                Ask your admin to assign a class to {userEmail} in the Admin dashboard.
+              </p>
+            </>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+          </div>
+        </Card>
+      </PageWrap>
+    );
+  }
 
   const [tab, setTab] = useState("classwork"); // stream | classwork | people
 
@@ -134,4 +201,3 @@ export default function SATTraining({ onNavigate }) {
     </PageWrap>
   );
 }
-

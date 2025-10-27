@@ -22,18 +22,18 @@ export default function LanguageButton({ lang, setLang, langs }) {
       <button
         onClick={toggleDropdown}
         style={{
-          background: "none",
-          border: "1px solid #d1d5db",
+          background: "transparent",
+          border: "none",
           borderRadius: 6,
-          padding: "12px 16px",
+          padding: "8px 10px",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           gap: 6,
           fontSize: 14,
           fontWeight: 600,
-          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)",
-          transition: "all 0.2s ease",
+          boxShadow: "none",
+          transition: "opacity 0.2s ease",
         }}
       >
         <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -78,4 +78,3 @@ export default function LanguageButton({ lang, setLang, langs }) {
     </div>
   );
 }
-

@@ -16,8 +16,34 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
   };
   const t = STR[lang] || STR.EN;
 
+  const NavLink = ({ label, to }) => (
+    <button
+      onClick={() => onNavigate(to)}
+      style={{
+        background: "transparent",
+        border: "none",
+        padding: "8px 10px",
+        borderRadius: 6,
+        cursor: "pointer",
+        color: "#374151",
+        fontWeight: 600,
+      }}
+    >
+      {label}
+    </button>
+  );
+
   const HeaderActions = (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Left nav: Home / Blogs / About */}
+      <NavLink label="Home" to="home" />
+      <NavLink label="Blogs" to="blogs" />
+      <NavLink label="About Us" to="about" />
+
+      {/* Spacer */}
+      <div style={{ width: 8 }} />
+
+      {/* Language and account (no borders) */}
       <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
       <UserMenu onNavigate={onNavigate} />
     </div>

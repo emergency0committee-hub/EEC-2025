@@ -62,8 +62,8 @@ export default function UserMenu({ onNavigate }) {
           width: 36,
           height: 36,
           borderRadius: 8,
-          border: "1px solid #d1d5db",
-          background: "#fff",
+          border: "none",
+          background: "transparent",
           cursor: "pointer",
         }}
       >
