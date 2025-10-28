@@ -60,6 +60,7 @@ export default function SATTraining({ onNavigate }) {
   const [studentResLoading, setStudentResLoading] = useState(false);
   const [studentResources, setStudentResources] = useState([]);
   const [csvInfo, setCsvInfo] = useState({ name: "", count: 0, items: null, error: "" });
+  const [csvKind, setCsvKind] = useState("quiz");
 
   // Minimal CSV parser (quoted fields, CRLF)
   function parseCSV(text) {
@@ -117,16 +118,28 @@ export default function SATTraining({ onNavigate }) {
       if (!qtext) continue;
       const num = (idx.num >= 0 ? r[idx.num] : String(i)).trim();
       const id = 'q_' + (num || i);
-      const choices = [
+      const rawChoices = [
         { value: 'A', label: (idx.a>=0? r[idx.a]:'').trim() },
         { value: 'B', label: (idx.b>=0? r[idx.b]:'').trim() },
         { value: 'C', label: (idx.c>=0? r[idx.c]:'').trim() },
         { value: 'D', label: (idx.d>=0? r[idx.d]:'').trim() },
       ];
-      const correct = (idx.correct>=0? r[idx.correct]: '').trim().replace(/[^A-D]/ig,'').toUpperCase() || null;
+            const hasChoices = rawChoices.some((ch) => ch.label);
+      const correctRaw = (idx.correct>=0? r[idx.correct]: '').trim();
+      const correct = hasChoices
+        ? (correctRaw.replace(/[^A-D]/ig,'').toUpperCase() || null)
+        : (correctRaw || null);
       const passage = (idx.passage>=0? r[idx.passage]: '').trim() || null;
       const skill = (idx.skill>=0? r[idx.skill]: '').trim() || null;
-      items.push({ id, text: qtext, passage, choices, correct, skill });
+        items.push({
+        id,
+        text: qtext,
+        passage,
+        choices: hasChoices ? rawChoices : [],
+        correct,
+        skill,
+        answerType: hasChoices ? 'choice' : 'numeric',
+      });
     }
     return { items, count: items.length };
   }
@@ -140,13 +153,24 @@ export default function SATTraining({ onNavigate }) {
 
 
   function decodeResourceQuestions(r) {
+     const normalize = (items) => {
+      if (!Array.isArray(items)) return null;
+      return items.map((item) => {
+        const hasChoices = Array.isArray(item?.choices) && item.choices.some((ch) => ch && ch.label);
+        return {
+          ...item,
+          choices: hasChoices ? item.choices : [],
+          answerType: item?.answerType || (hasChoices ? 'choice' : 'numeric'),
+        };
+      });
+    };
     try {
-      if (r?.payload && Array.isArray(r.payload.items)) return r.payload.items;
+      if (r?.payload && Array.isArray(r.payload.items)) return normalize(r.payload.items);
       if (r?.url && r.url.startsWith('data:application/json')) {
         const base64 = r.url.split(',')[1] || '';
         const json = decodeURIComponent(escape(window.atob(base64)));
         const obj = JSON.parse(json);
-        if (Array.isArray(obj.items)) return obj.items;
+         if (Array.isArray(obj.items)) return normalize(obj.items);
       }
     } catch (e) { console.warn('decodeResourceQuestions', e); }
     return null;
@@ -192,6 +216,7 @@ export default function SATTraining({ onNavigate }) {
       }
       setResources((list) => [inserted, ...list]);
       setCsvInfo({ name: '', count: 0, items: null, error: '' });
+       setCsvKind('quiz');
       setResForm({ title: '', url: '', kind: 'classwork' });
       alert('CSV saved.');
     } catch (e) {
@@ -623,7 +648,7 @@ export default function SATTraining({ onNavigate }) {
             <Card>
               <h3 style={{ marginTop: 0 }}>Class Resources</h3>
               {studentResLoading ? (
-                <p style={{ color: '#6b7280' }}>Loading…</p>
+                 <p style={{ color: '#6b7280' }}>Loadingâ€¦</p>
               ) : (studentResources && studentResources.length > 0 ? (
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
                   {studentResources.map(r => (
@@ -639,12 +664,12 @@ export default function SATTraining({ onNavigate }) {
                       )}
                       <div style={{ marginTop:8, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
                         {r.url && <Btn variant="secondary" onClick={()=>window.open(r.url, '_blank')}>Open</Btn>}
-                        {r.kind === 'quiz' && (decodeResourceQuestions(r)?.length > 0) && (
+                         {(decodeResourceQuestions(r)?.length > 0) && (
                           <Btn variant="primary" onClick={()=>{
                             const items = decodeResourceQuestions(r) || [];
                             const minutes = 15;
                             onNavigate('sat-exam', { practice: { kind: r.kind, resourceId: r.id, custom: { questions: items, durationSec: minutes*60, title: r.title } } });
-                          }}>Start Quiz</Btn>
+                           }}>{`Start ${r.kind ? r.kind.charAt(0).toUpperCase() + r.kind.slice(1) : 'Quiz'}`}</Btn>
                         )}
                       </div>
                     </div>
@@ -753,6 +778,14 @@ export default function SATTraining({ onNavigate }) {
                     {/* Managed resources: classwork / homework / quiz */}
                                         <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
                       <div style={{ fontWeight: 700, marginBottom: 8 }}>Add Resource</div>
+                    <div style={{ display:'flex', gap:8, alignItems:'center', margin: '4px 0 8px' }}>
+                      <label style={{ color:'#6b7280', fontSize:12 }}>CSV kind:</label>
+                      <select onChange={(e)=>setCsvInfo((c)=>({ ...c, _kind: e.target.value }))} defaultValue={csvInfo._kind || 'quiz'} style={{ padding:'6px 10px', border:'1px solid #d1d5db', borderRadius:8 }}>
+                        <option value='classwork'>Classwork</option>
+                        <option value='homework'>Homework</option>
+                        <option value='quiz'>Quiz</option>
+                      </select>
+                    </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 160px auto', gap: 8, alignItems: 'center' }}>
                         <input type="text" placeholder="Title" value={resForm.title} onChange={(e)=>setResForm(f=>({...f, title:e.target.value}))} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }} />
                         <input type="url" placeholder="URL (PDF/OneDrive/Link)" value={resForm.url} onChange={(e)=>setResForm(f=>({...f, url:e.target.value}))} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }} />
@@ -771,12 +804,17 @@ export default function SATTraining({ onNavigate }) {
                             {csvInfo.error ? (
                               <span style={{ color:'#dc2626' }}>{csvInfo.error}</span>
                             ) : (
-                              <span>Picked {csvInfo.name} — {csvInfo.count} questions detected</span>
+                              <span>Picked {csvInfo.name} - {csvInfo.count} questions detected</span>
                             )}
                           </div>
                         )}
-                        <div style={{ marginTop: 8 }}>
-                          <Btn variant="secondary" onClick={()=>saveCSVAsResource('quiz')} disabled={!csvInfo.items || !csvInfo.count}>Save as Quiz</Btn>
+                         <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <select value={csvKind} onChange={(e)=>setCsvKind(e.target.value)} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }}>
+                            <option value="classwork">Classwork</option>
+                            <option value="homework">Homework</option>
+                            <option value="quiz">Quiz</option>
+                          </select>
+                          <Btn variant="secondary" onClick={()=>saveCSVAsResource(csvKind)} disabled={!csvInfo.items || !csvInfo.count}>Save CSV</Btn>
                         </div>
                       </div>
                     </div>
@@ -877,7 +915,7 @@ function ClassStreamList({ className }) {
     } catch (e) { console.warn(e); setItems([]); }
     finally { setLoading(false); }
   })(); }, [className]);
-  if (loading) return <div style={{ color: '#6b7280' }}>Loading stream…</div>;
+  if (loading) return <div style={{ color: '#6b7280' }}>Loading streamâ€¦</div>;
   if (!items.length) return <div style={{ color: '#6b7280' }}>No posts yet.</div>;
   return (
     <div style={{ display: 'grid', gap: 8 }}>
