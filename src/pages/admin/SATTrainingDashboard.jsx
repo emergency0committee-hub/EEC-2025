@@ -15,6 +15,8 @@ export default function SATTrainingDashboard({ onNavigate }) {
   const [knownEmails, setKnownEmails] = useState([]);
   const [loadingEmails, setLoadingEmails] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [deletingRowId, setDeletingRowId] = useState(null);
+  const [viewRow, setViewRow] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -107,6 +109,27 @@ export default function SATTrainingDashboard({ onNavigate }) {
       setSavingAssign(false);
     }
   };
+
+  const deleteTrainingRow = async (row) => {
+    if (!row) return;
+    const ok = window.confirm(`Delete this training submission by ${row.user_email || 'student'}?`);
+    if (!ok) return;
+    setDeletingRowId(row.id || null);
+    try {
+      const table = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+      const { error } = await supabase.from(table).delete().eq('id', row.id);
+      if (error) throw error;
+      setRows((list) => list.filter((x) => x.id !== row.id));
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || 'Failed to delete');
+    } finally {
+      setDeletingRowId(null);
+    }
+  };
+
+  const openView = (row) => setViewRow(row || null);
+  const closeView = () => setViewRow(null);
 
   const deleteAssignment = async (row) => {
     if (!row) return;
@@ -274,8 +297,8 @@ export default function SATTrainingDashboard({ onNavigate }) {
                   <th style={{ padding: 10, textAlign: 'left' }}>Kind</th>
                   <th style={{ padding: 10, textAlign: 'left' }}>Section</th>
                   <th style={{ padding: 10, textAlign: 'left' }}>Unit/Lesson</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Score</th>
                   <th style={{ padding: 10, textAlign: 'left' }}>Duration</th>
+                  <th style={{ padding: 10, textAlign: 'left' }}>Manage</th>
                 </tr>
               </thead>
               <tbody>
@@ -293,6 +316,15 @@ export default function SATTrainingDashboard({ onNavigate }) {
                       <td style={{ padding: 10 }}>{r.unit || r.lesson || 'â€”'}</td>
                       <td style={{ padding: 10 }}>{score}</td>
                       <td style={{ padding: 10 }}>{fmtDur(Number(r.elapsed_sec || 0))}</td>
+                      <td style={{ padding: 10 }}>
+                        <button type="button" onClick={() => openView(r)} title="View answers" style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer', marginRight:6 }}>View</button>
+                        <button type="button" onClick={() => deleteTrainingRow(r)} title="Delete submission" style={{ border:'none', background:'transparent', cursor:'pointer', padding:6, borderRadius:6 }} onMouseEnter={(e)=> e.currentTarget.style.background = '#f3f4f6'} onMouseLeave={(e)=> e.currentTarget.style.background = 'transparent'} disabled={deletingRowId === r.id}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                            <path d="M6 7h12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
+                            <path d="M10 11v6M14 11v6" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
+                          </svg>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -304,6 +336,53 @@ export default function SATTrainingDashboard({ onNavigate }) {
           <Btn variant="back" onClick={() => onNavigate('home')}>Back Home</Btn>
         </div>
       </Card>
+    
+      {viewRow && (
+        <div role="dialog" aria-modal="true" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={closeView}>
+          <div onClick={(e)=>e.stopPropagation()} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, width:'min(720px,92vw)', maxHeight:'80vh', overflowY:'auto', padding:16 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <h3 style={{ marginTop:0 }}>Submission Details</h3>
+              <button onClick={closeView} style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer' }}>Close</button>
+            </div>
+            <div style={{ color:'#6b7280', marginBottom:8 }}>User: {viewRow.user_email || '—'} • Date: {fmt(viewRow.ts)} {fmt(viewRow.ts,true)}</div>
+            <div style={{ color:'#6b7280', marginBottom:8 }}>Duration: {fmtDur(Number(viewRow.elapsed_sec || 0))}</div>
+            <div style={{ borderTop:'1px solid #e5e7eb', paddingTop:10 }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+                <thead>
+                  <tr style={{ background:'#f9fafb', borderBottom:'1px solid #e5e7eb' }}>
+                    <th style={{ padding:8, textAlign:'left' }}>Question</th>
+                    <th style={{ padding:8, textAlign:'left' }}>Selected</th>
+                    <th style={{ padding:8, textAlign:'left' }}>Correct</th>
+                    <th style={{ padding:8, textAlign:'left' }}>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const a = viewRow.answers || {};
+                    const choices = a.choices || a.custom || a[viewRow.unit] || a[Object.keys(a)[0]] || {};
+                    const times = a.times || {};
+                    const correct = a.correct || {};
+                    const keys = Object.keys(choices || {});
+                    keys.sort((x,y)=>{
+                      const nx = parseInt(String(x).replace(/\D+/g,''),10); const ny = parseInt(String(y).replace(/\D+/g,''),10);
+                      if (Number.isFinite(nx) && Number.isFinite(ny)) return nx - ny;
+                      return String(x).localeCompare(String(y));
+                    });
+                    return keys.map(k => (
+                      <tr key={k} style={{ borderBottom:'1px solid #f3f4f6' }}>
+                        <td style={{ padding:8 }}>{k}</td>
+                        <td style={{ padding:8 }}>{choices[k] ?? '—'}</td>
+                        <td style={{ padding:8, color: (correct[k] && choices[k]) ? (String(choices[k])===String(correct[k]) ? '#16a34a' : '#ef4444') : '#6b7280' }}>{(correct[k] && choices[k]) ? (String(choices[k])===String(correct[k]) ? 'OK' : ('Wrong (ans: ' + correct[k] + ')')) : '—'}</td>
+                        <td style={{ padding:8 }}>{fmtDur(Number(times[k] || 0))}</td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrap>
   );
 }

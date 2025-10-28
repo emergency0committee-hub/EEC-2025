@@ -643,7 +643,7 @@ export default function SATTraining({ onNavigate }) {
                           <Btn variant="primary" onClick={()=>{
                             const items = decodeResourceQuestions(r) || [];
                             const minutes = 15;
-                            onNavigate('sat-exam', { practice: { kind: r.kind, custom: { questions: items, durationSec: minutes*60, title: r.title } } });
+                            onNavigate('sat-exam', { practice: { kind: r.kind, resourceId: r.id, custom: { questions: items, durationSec: minutes*60, title: r.title } } });
                           }}>Start Quiz</Btn>
                         )}
                       </div>

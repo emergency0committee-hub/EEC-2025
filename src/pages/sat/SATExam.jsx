@@ -6,6 +6,7 @@ import Btn from "../../components/Btn.jsx";
 import { SATFooterBar } from "./SATLayout.jsx";
 import PaletteOverlay from "../test/PaletteOverlay.jsx";
 import useCountdown from "../../hooks/useCountdown.js";
+
 import { supabase } from "../../lib/supabase.js";
 import { saveSatResult } from "../../lib/supabaseStorage.js";
 import { loadRWModules, MATH_MODULES } from "../../sat/questions.js";
@@ -42,13 +43,48 @@ export default function SATExam({ onNavigate, practice = null }) {
   // Build modules [RW1, RW2, M1, M2]
   const [rwMods, setRwMods] = useState([[], []]);
   useEffect(() => { (async () => { const rw = await loadRWModules(); setRwMods(rw); })(); }, []);
+  const [loadedCustom, setLoadedCustom] = useState(null); // { questions, durationSec, title }
+
+  // If practice came only with a resourceId, fetch questions from Supabase
+  useEffect(() => {
+    (async () => {
+      if (!practice || loadedCustom || (practice.custom && Array.isArray(practice.custom.questions))) return;
+      const resId = practice.resourceId;
+      if (!resId) return;
+      try {
+        const table = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
+        const { data, error } = await supabase.from(table).select("*").eq("id", resId).limit(1).single();
+        if (error) return;
+        // Decode questions from payload or data URL
+        let items = [];
+        if (data?.payload?.items && Array.isArray(data.payload.items)) items = data.payload.items;
+        else if (data?.url && String(data.url).startsWith("data:application/json")) {
+          try {
+            const base64 = String(data.url).split(",")[1] || "";
+            const json = decodeURIComponent(escape(window.atob(base64)));
+            const obj = JSON.parse(json);
+            if (Array.isArray(obj.items)) items = obj.items;
+          } catch {}
+        }
+        if (items.length) {
+          setLoadedCustom({
+            questions: items,
+            durationSec: Number(practice.custom?.durationSec || 15 * 60),
+            title: data?.title || practice.custom?.title || "Custom Quiz",
+          });
+        }
+      } catch {}
+    })();
+  }, [practice, loadedCustom]);
+
   const modules = useMemo(() => {
     if (practice) {
-      // Custom quiz (from Classwork/Homework/Quiz CSV)
-      if (practice.custom && Array.isArray(practice.custom.questions)) {
-        const qs = practice.custom.questions || [];
-        const dur = Number(practice.custom.durationSec || 15 * 60);
-        const title = practice.custom.title || 'Custom Quiz';
+      // Custom quiz (from Classwork/Homework/Quiz CSV) or loaded by id
+      const custom = (practice.custom && Array.isArray(practice.custom.questions)) ? practice.custom : loadedCustom;
+      if (custom && Array.isArray(custom.questions)) {
+        const qs = custom.questions || [];
+        const dur = Number(custom.durationSec || 15 * 60);
+        const title = custom.title || 'Custom Quiz';
         return [{ key: 'custom', title, durationSec: dur, questions: qs }];
       }
       // Simple practice: one module per selection
@@ -76,10 +112,16 @@ export default function SATExam({ onNavigate, practice = null }) {
   const qCount = mod?.questions?.length || 0;
   const cd = useCountdown(mod?.durationSec || 60);
   const startedAtRef = useRef(Date.now());
+  const questionStartRef = useRef(Date.now());
+  const prevPageRef = useRef(1);
+  const timesRef = useRef({}); // { qid: seconds }
 
   useEffect(() => { // reset timer and page on module change
     cd.reset(mod?.durationSec || 60); cd.start();
     setPage(1);
+    questionStartRef.current = Date.now();
+    prevPageRef.current = 1;
+    timesRef.current = {};
   }, [modIdx]);
 
   useEffect(() => { // auto-advance on timer end
@@ -88,7 +130,62 @@ export default function SATExam({ onNavigate, practice = null }) {
     }
   }, [cd.remaining]);
 
-  if (!mod) return null;
+  // Track time spent per question
+  useEffect(() => {
+    if (!mod || !Array.isArray(mod.questions) || mod.questions.length === 0) return;
+    const prev = prevPageRef.current;
+    if (prev !== page) {
+      const prevQ = mod.questions[prev - 1];
+      if (prevQ) {
+        const now = Date.now();
+        const deltaSec = Math.max(0, Math.round((now - (questionStartRef.current || now)) / 1000));
+        const t = timesRef.current;
+        t[prevQ.id] = (t[prevQ.id] || 0) + deltaSec;
+        questionStartRef.current = now;
+      }
+      prevPageRef.current = page;
+    } else if (!questionStartRef.current) {
+      questionStartRef.current = Date.now();
+    }
+  }, [page, mod]);
+
+  // If launched with a resourceId and custom payload hasn't loaded yet, show a loading state
+  if (practice && practice.resourceId && (!loadedCustom && (!practice.custom || !Array.isArray(practice.custom.questions) || practice.custom.questions.length === 0))) {
+    return (
+      <PageWrap>
+        <HeaderBar title="SAT Quiz" />
+        <Card>
+          <p style={{ color: "#6b7280" }}>Loading quiz…</p>
+          <Btn variant="back" onClick={() => onNavigate("sat-training")}>Back</Btn>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  if (!mod) {
+    return (
+      <PageWrap>
+        <HeaderBar title="SAT Quiz" />
+        <Card>
+          <p style={{ color: "#6b7280" }}>No module available.</p>
+          <Btn variant="primary" onClick={() => onNavigate("sat-training")}>Back to Training</Btn>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  // No questions found fallback
+  if (!Array.isArray(mod.questions) || mod.questions.length === 0) {
+    return (
+      <PageWrap>
+        <HeaderBar title={mod.title || "SAT Quiz"} />
+        <Card>
+          <p style={{ color: "#6b7280" }}>No questions found in this quiz.</p>
+          <Btn variant="primary" onClick={() => onNavigate("sat-training")}>Back to Training</Btn>
+        </Card>
+      </PageWrap>
+    );
+  }
 
   const currentAns = answers[mod.key] || {};
   const currentFlags = flags[mod.key] || {};
@@ -121,18 +218,32 @@ export default function SATExam({ onNavigate, practice = null }) {
   const handleSubmit = async () => {
     const finishedAt = Date.now();
     const elapsedSec = Math.round((finishedAt - startedAtRef.current) / 1000);
+    // capture current question time
+    try {
+      if (mod && Array.isArray(mod.questions)) {
+        const curQ = mod.questions[Math.max(0, page - 1)];
+        if (curQ) {
+          const now = Date.now();
+          const deltaSec = Math.max(0, Math.round((now - (questionStartRef.current || now)) / 1000));
+          timesRef.current[curQ.id] = (timesRef.current[curQ.id] || 0) + deltaSec;
+        }
+      }
+    } catch {}
     const summary = scoreSummary();
     try {
       if (practice) {
         const { saveSatTraining } = await import("../../lib/supabaseStorage.js");
+        // flatten answers for this module key
+        const ansMap = answers[mod.key] || {};
+        const correctMap = {};
+        try { (mod.questions||[]).forEach(q => { if(q && q.id && q.correct){ correctMap[q.id] = String(q.correct); } }); } catch {}
         await saveSatTraining({
           kind: practice.kind || 'classwork',
           section: practice.section || null,
           unit: practice.unit || null,
           lesson: practice.lesson || null,
           summary,
-          answers,
-          elapsedSec,
+          answers: { choices: ansMap, times: timesRef.current || {}, correct: correctMap, resourceId: practice.resourceId || null },
         });
 
         // If this is a custom quiz (from CSV), route to results page with skills breakdown
