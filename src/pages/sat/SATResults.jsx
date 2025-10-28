@@ -65,6 +65,7 @@ export default function SATResults({ onNavigate, submission }) {
   const summary = s.pillar_agg?.summary || { rw: { correct: 0, total: 0 }, math: { correct: 0, total: 0 } };
   const modules = s.pillar_counts?.modules || [];
   const elapsedSec = s.pillar_counts?.elapsedSec || 0;
+  const avgSec = s.pillar_counts?.avgSec || 0;
 
   const pct = (c, t) => (t > 0 ? Math.round((c / t) * 100) : 0);
   const rwPct = pct(summary.rw.correct, summary.rw.total);
@@ -317,48 +318,69 @@ export default function SATResults({ onNavigate, submission }) {
       })()}
 
       {/* Score Breakdown: two cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        <div className="card avoid-break">
-          <h3 style={{ marginTop: 0, color: "#111827" }}>English (Reading & Writing)</h3>
-          <BarRow label={`Reading & Writing (${summary.rw.correct}/${summary.rw.total})`} valuePct={rwPct} color="auto" />
+            {Array.isArray(s.customSkills) && s.customSkills.length > 0 ? (
+        <div className="card avoid-break" style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0, color: "#111827" }}>Skills</h3>
           <div style={{ marginTop: 8 }}>
-            {rwSkills.map((sk) => (
-              <div key={sk.key} className="avoid-break" style={{ marginBottom: 10 }}>
-                <div style={{ fontWeight: 600, color: "#111827" }}>{sk.label}</div>
-                <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 4 }}>{sk.desc}</div>
+            {s.customSkills.map((sk, i) => (
+              <div key={`${sk.label}_${i}`} className="avoid-break" style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <div style={{ fontWeight: 600, color: "#111827" }}>{sk.label}</div>
+                  <div style={{ color: "#6b7280", fontSize: 12 }}>{sk.correct ?? 0}/{sk.total ?? 0}</div>
+                </div>
                 <BarRow label={" "} valuePct={sk.pct} color="auto" />
               </div>
             ))}
           </div>
         </div>
-        <div className="card avoid-break">
-          <h3 style={{ marginTop: 0, color: "#111827" }}>Math</h3>
-          <BarRow label={`Math (${summary.math.correct}/${summary.math.total})`} valuePct={mathPct} color="auto" />
-          <div style={{ marginTop: 8 }}>
-            {mathUnits.map((u) => (
-              <div key={u.key} className="avoid-break" style={{ marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, color: "#111827" }}>{u.label}</div>
-                <BarRow label={" "} valuePct={u.pct} color="auto" />
-                <div style={{ marginTop: 6 }}>
-                  {u.lessons.map((l) => (
-                    <div key={l.key} style={{ margin: "6px 0" }}>
-                      <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 2 }}>{l.label}</div>
-                      <BarRow label={" "} valuePct={l.pct} color="auto" />
-                    </div>
-                  ))}
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          <div className="card avoid-break">
+            <h3 style={{ marginTop: 0, color: "#111827" }}>English (Reading & Writing)</h3>
+            <BarRow label={`Reading & Writing (${summary.rw.correct}/${summary.rw.total})`} valuePct={rwPct} color="auto" />
+            <div style={{ marginTop: 8 }}>
+              {rwSkills.map((sk) => (
+                <div key={sk.key} className="avoid-break" style={{ marginBottom: 10 }}>
+                  <div style={{ fontWeight: 600, color: "#111827" }}>{sk.label}</div>
+                  <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 4 }}>{sk.desc}</div>
+                  <BarRow label={" "} valuePct={sk.pct} color="auto" />
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+          <div className="card avoid-break">
+            <h3 style={{ marginTop: 0, color: "#111827" }}>Math</h3>
+            <BarRow label={`Math (${summary.math.correct}/${summary.math.total})`} valuePct={mathPct} color="auto" />
+            <div style={{ marginTop: 8 }}>
+              {mathUnits.map((u) => (
+                <div key={u.key} className="avoid-break" style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 600, color: "#111827" }}>{u.label}</div>
+                  <BarRow label={" "} valuePct={u.pct} color="auto" />
+                  <div style={{ marginTop: 6 }}>
+                    {u.lessons.map((l) => (
+                      <div key={l.key} style={{ margin: "6px 0" }}>
+                        <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 2 }}>{l.label}</div>
+                        <BarRow label={" "} valuePct={l.pct} color="auto" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-
+      )}
       
-
-      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+        <div style={{ color: "#6b7280", fontSize: 12 }}>
+          {Number.isFinite(elapsedSec) && modules && modules.length > 0 && (
+            <>Total time: {fmtDur(elapsedSec)}{avgSec ? ` - Avg/question: ${fmtDur(avgSec)}` : ""}</>
+          )}
+        </div>
         <Btn variant="secondary" onClick={() => onNavigate("admin-sat")}>Back to SAT Submissions</Btn>
         <Btn variant="primary" onClick={() => window.print()}>Export PDF</Btn>
       </div>
+
     </PageWrap>
   );
 }

@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, ProgressBar } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
+import { SATFooterBar } from "./SATLayout.jsx";
 import PaletteOverlay from "../test/PaletteOverlay.jsx";
 import useCountdown from "../../hooks/useCountdown.js";
 import { supabase } from "../../lib/supabase.js";
@@ -43,6 +44,13 @@ export default function SATExam({ onNavigate, practice = null }) {
   useEffect(() => { (async () => { const rw = await loadRWModules(); setRwMods(rw); })(); }, []);
   const modules = useMemo(() => {
     if (practice) {
+      // Custom quiz (from Classwork/Homework/Quiz CSV)
+      if (practice.custom && Array.isArray(practice.custom.questions)) {
+        const qs = practice.custom.questions || [];
+        const dur = Number(practice.custom.durationSec || 15 * 60);
+        const title = practice.custom.title || 'Custom Quiz';
+        return [{ key: 'custom', title, durationSec: dur, questions: qs }];
+      }
       // Simple practice: one module per selection
       if (practice.section === 'MATH') {
         const m = MATH_MODULES[0] || [];
@@ -126,7 +134,38 @@ export default function SATExam({ onNavigate, practice = null }) {
           answers,
           elapsedSec,
         });
-        onNavigate('sat-training');
+
+        // If this is a custom quiz (from CSV), route to results page with skills breakdown
+        if (practice.custom && Array.isArray(practice.custom.questions)) {
+          const qs = practice.custom.questions || [];
+          const bySkill = new Map(); // key -> { label, correct, total }
+          const a = answers[modules[0]?.key || 'custom'] || {};
+          qs.forEach((q) => {
+            const sk = (q.skill || '').trim();
+            const label = sk || 'General';
+            if (!bySkill.has(label)) bySkill.set(label, { label, correct: 0, total: 0 });
+            const rec = bySkill.get(label);
+            rec.total += 1;
+            const picked = a[q.id];
+            if (picked != null && String(picked) === String(q.correct)) rec.correct += 1;
+          });
+          const customSkills = Array.from(bySkill.values()).map(r => ({
+            label: r.label,
+            pct: r.total ? Math.round((r.correct / r.total) * 100) : 0,
+            correct: r.correct,
+            total: r.total,
+          }));
+          const count = qs.length;
+          const submission = {
+            ts: new Date().toISOString(),
+            pillar_agg: { summary },
+            pillar_counts: { modules: [{ key: 'custom', title: practice.custom.title || 'Custom Quiz', count }], elapsedSec, avgSec: count ? Math.round(elapsedSec / count) : 0 },
+            customSkills,
+          };
+          onNavigate('sat-results', { submission });
+        } else {
+          onNavigate('sat-training');
+        }
       } else {
         await saveSatResult({
           summary,
@@ -276,45 +315,17 @@ export default function SATExam({ onNavigate, practice = null }) {
         </div>
       </div>
 
-      {/* Bottom bar */}
-      <div style={{ position: "sticky", bottom: 0, background: "#fff", borderTop: "1px dashed #d1d5db", padding: 10, marginTop: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center" }}>
-          {/* Left: user display */}
-          <div style={{ fontWeight: 700, color: "#111827" }}>
-            {(authUser?.user_metadata?.name || authUser?.email || " ")}
-          </div>
-          {/* Center: question pill toggles palette */}
-          <div style={{ textAlign: "center" }}>
-            <button
-              type="button"
-              onClick={() => setShowPalette((v) => !v)}
-              style={{
-                background: "#111827",
-                color: "#fff",
-                border: "none",
-                borderRadius: 999,
-                padding: "10px 16px",
-                fontWeight: 700,
-                cursor: "pointer",
-                minWidth: 160,
-              }}
-            >
-              {`Question ${Math.min(page, qCount || 0)} of ${qCount || 0}`} {showPalette ? "▴" : "▾"}
-            </button>
-          </div>
-          {/* Right: next/back */}
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Btn variant="secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Back</Btn>
-            {page < qCount ? (
-              <Btn variant="primary" onClick={() => setPage((p) => Math.min(qCount, p + 1))}>Next</Btn>
-            ) : (
-              <Btn variant="primary" onClick={handleNextModule}>{modIdx + 1 < totalMods ? "Next Module" : "Finish"}</Btn>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {showPalette && (
+      <SATFooterBar
+        userLabel={(authUser?.user_metadata?.name || authUser?.email || " ")}
+        questionLabel={`Question ${Math.min(page, qCount || 0)} of ${qCount || 0}`}
+        onTogglePalette={() => setShowPalette((v) => !v)}
+        onBack={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(qCount, p + 1))}
+        onFinish={handleNextModule}
+        canBack={page !== 1}
+        canNext={page < qCount}
+        isLast={page >= qCount}
+      />      {showPalette && (
         <PaletteOverlay
           totalQuestions={qCount}
           currentIndex={page}
