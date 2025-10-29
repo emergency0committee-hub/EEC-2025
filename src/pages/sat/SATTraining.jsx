@@ -365,28 +365,64 @@ export default function SATTraining({ onNavigate }) {
     const title = (csvTitle || '').trim() || (csvInfo.name ? csvInfo.name.replace(/\\.csv$/i,'') : ('Quiz (' + csvInfo.count + ' Qs)'));
     const resolvedKind = (kind || 'quiz').toLowerCase();
     const meta = buildMeta(resolvedKind, csvDuration);
+    const payloadMeta = { ...meta, unit: csvUnit, lesson: csvLesson };
     try {
       const rTable = import.meta.env.VITE_CLASS_RES_TABLE || 'cg_class_resources';
       const { data: me } = await supabase.auth.getUser();
       const by = me?.user?.email || userEmail || null;
       // Prefer inserting payload if the column exists
       let inserted = null;
+      const baseRow = {
+        class_name: selectedClass,
+        title,
+        unit: csvUnit,
+        lesson: csvLesson,
+        url: '',
+        kind: resolvedKind,
+        created_by: by,
+        payload: { items: csvInfo.items, meta: payloadMeta },
+      };
       try {
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, unit: csvUnit, lesson: csvLesson, url: '', kind: resolvedKind, created_by: by, payload: { items: csvInfo.items, meta } }).select().single();
+        const { data, error } = await supabase.from(rTable).insert(baseRow).select().single();
         if (error) throw error;
         inserted = data;
       } catch (e) {
-        // Fallback: store as data URL JSON in url field if payload column not present
-        const json = JSON.stringify({ items: csvInfo.items, meta });
-        const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, unit: csvUnit, lesson: csvLesson, url: dataUrl, kind: resolvedKind, created_by: by }).select().single();
-        if (error) throw error;
-        inserted = data;
+        const missingColumn = e?.code === '42703' || /column .* does not exist/i.test(e?.message || '');
+        if (!missingColumn) throw e;
+        const fallbackPayload = { items: csvInfo.items, meta: payloadMeta };
+        try {
+          const { data, error } = await supabase
+            .from(rTable)
+            .insert({ class_name: selectedClass, title, url: '', kind: resolvedKind, created_by: by, payload: fallbackPayload })
+            .select()
+            .single();
+          if (error) throw error;
+          inserted = data;
+        } catch (inner) {
+          const json = JSON.stringify(fallbackPayload);
+          const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
+          const { data, error } = await supabase
+            .from(rTable)
+            .insert({ class_name: selectedClass, title, url: dataUrl, kind: resolvedKind, created_by: by })
+            .select()
+            .single();
+          if (error) throw error;
+          inserted = data;
+        }
       }
       if (inserted && (!inserted.payload || typeof inserted.payload !== 'object')) {
-        inserted = { ...inserted, payload: { items: csvInfo.items, meta } };
+        inserted = { ...inserted, payload: { items: csvInfo.items, meta: payloadMeta } };
+      } else if (inserted?.payload?.meta) {
+        inserted = {
+          ...inserted,
+          payload: { ...inserted.payload, meta: { ...payloadMeta, ...inserted.payload.meta } },
+        };
       }
-      inserted = { ...inserted, unit: inserted.unit ?? csvUnit, lesson: inserted.lesson ?? csvLesson };
+      inserted = {
+        ...inserted,
+        unit: inserted.unit ?? payloadMeta.unit,
+        lesson: inserted.lesson ?? payloadMeta.lesson,
+      };
       setResources((list) => [inserted, ...list]);
       setCsvInfo({ name: '', count: 0, items: null, error: '' });
       setCsvTitle('');
