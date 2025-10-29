@@ -6,6 +6,13 @@ import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
 import { toOneDriveEmbedUrl } from "../../lib/onedrive.js";
 
+const UNIT_LESSONS = {
+  Algebra: ["Fraction and Decimals", "Polynomials", "Solving Equations", "Word Problems"],
+  Arithmetic: ["Percentage", "Average", "Ratio and Proportion", "Probability"],
+  Geometry: ["Lines and Angles", "Triangles", "Quadrilateral", "Solid Geometry", "Coordinate Geometry", "Trigonometry"],
+};
+const UNIT_KEYS = Object.keys(UNIT_LESSONS);
+
 export default function SATTraining({ onNavigate }) {
   SATTraining.propTypes = { onNavigate: PropTypes.func.isRequired };
   const [checking, setChecking] = useState(true);
@@ -51,7 +58,7 @@ export default function SATTraining({ onNavigate }) {
   const [logsLoading, setLogsLoading] = useState(false);
   const [classLogs, setClassLogs] = useState([]);
   // Class sub-tabs (admin view)
-  const [classTab, setClassTab] = useState("stream"); // stream | classwork | analytics
+  const [classTab, setClassTab] = useState("classwork"); // classwork | analytics
 
   // Classwork resources
   const [resLoading, setResLoading] = useState(false);
@@ -59,8 +66,171 @@ export default function SATTraining({ onNavigate }) {
   const [studentClass, setStudentClass] = useState("");
   const [studentResLoading, setStudentResLoading] = useState(false);
   const [studentResources, setStudentResources] = useState([]);
+  const [studentAttempts, setStudentAttempts] = useState({});
   const [csvInfo, setCsvInfo] = useState({ name: "", count: 0, items: null, error: "" });
   const [csvKind, setCsvKind] = useState("quiz");
+  const [csvDuration, setCsvDuration] = useState("15");
+  const [csvTitle, setCsvTitle] = useState("");
+  const [csvUnit, setCsvUnit] = useState(UNIT_KEYS[0]);
+  const [csvLesson, setCsvLesson] = useState(UNIT_LESSONS[UNIT_KEYS[0]][0]);
+  useEffect(() => {
+    const lessons = UNIT_LESSONS[csvUnit] || [];
+    setCsvLesson((prev) => (lessons.includes(prev) ? prev : (lessons[0] || "")));
+  }, [csvUnit]);
+
+  const DEFAULT_META = {
+    classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
+    homework: { durationSec: null, allowRetake: true, resumeMode: "resume", attemptLimit: null },
+    quiz: { durationSec: 15 * 60, allowRetake: false, resumeMode: "restart", attemptLimit: 1 },
+  };
+
+  const baseMeta = (kind) => {
+    const k = (kind || "classwork").toLowerCase();
+    return { ...(DEFAULT_META[k] || DEFAULT_META.classwork) };
+  };
+
+  const buildMeta = (kind, durationInput) => {
+    const meta = baseMeta(kind);
+    if (meta.resumeMode === "resume") {
+      meta.durationSec = null;
+    } else {
+      const minutes = Number.parseInt(durationInput, 10);
+      if (Number.isFinite(minutes) && minutes > 0) {
+        meta.durationSec = minutes * 60;
+      }
+    }
+    if (meta.resumeMode === "resume") meta.durationSec = null;
+    if (meta.allowRetake === false && meta.attemptLimit == null) meta.attemptLimit = 1;
+    if (!(meta.durationSec > 0) && meta.resumeMode !== "resume") {
+      meta.durationSec = baseMeta(kind).durationSec;
+    }
+    return meta;
+  };
+
+  const formatDuration = (sec) => {
+    const num = Number(sec);
+    if (!Number.isFinite(num) || num <= 0) return "Untimed";
+    const minutes = Math.round(num / 60);
+    if (minutes >= 120) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      if (mins === 0) return `${hours}h`;
+      return `${hours}h ${mins}m`;
+    }
+    return `${minutes} min${minutes === 1 ? "" : "s"}`;
+  };
+
+  const pillStyles = {
+    base: { display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600 },
+    complete: { background: "#ecfdf5", color: "#047857" },
+    info: { background: "#eef2ff", color: "#4338ca" },
+    warn: { background: "#fef3c7", color: "#92400e" },
+  };
+
+  const extractResourceMeta = (resource) => {
+    const meta = baseMeta(resource?.kind);
+    const src = (() => {
+      if (resource?.payload && typeof resource.payload === "object") {
+        if (resource.payload.meta && typeof resource.payload.meta === "object") return resource.payload.meta;
+        if (resource.payload.settings && typeof resource.payload.settings === "object") return resource.payload.settings;
+      }
+      if (resource?.meta && typeof resource.meta === "object") return resource.meta;
+      if (resource?.settings && typeof resource.settings === "object") return resource.settings;
+      if (resource?.url && String(resource.url).startsWith("data:application/json")) {
+        try {
+          const base64 = String(resource.url).split(",")[1] || "";
+          const json = decodeURIComponent(escape(window.atob(base64)));
+          const obj = JSON.parse(json);
+          if (obj && typeof obj.meta === "object") return obj.meta;
+        } catch {}
+      }
+      return null;
+    })();
+    if (src) {
+      if (src.durationSec != null && Number.isFinite(Number(src.durationSec))) {
+        meta.durationSec = Math.max(0, Number(src.durationSec));
+      }
+      if (src.allowRetake != null) meta.allowRetake = !!src.allowRetake;
+      if (src.resumeMode) meta.resumeMode = String(src.resumeMode);
+      if (src.attemptLimit != null) {
+        const lim = Number(src.attemptLimit);
+        meta.attemptLimit = Number.isFinite(lim) && lim > 0 ? lim : null;
+      }
+    }
+    if (resource?.duration_sec != null && Number.isFinite(Number(resource.duration_sec))) {
+      meta.durationSec = Math.max(0, Number(resource.duration_sec));
+    }
+    if (meta.resumeMode === "resume") meta.durationSec = null;
+    if (meta.allowRetake === false && meta.attemptLimit == null) meta.attemptLimit = 1;
+    if (!(meta.durationSec > 0) && meta.resumeMode !== "resume") {
+      meta.durationSec = baseMeta(resource?.kind).durationSec;
+    }
+    return meta;
+  };
+
+  const normalizeResourceItems = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items.map((item, idx) => {
+      const q = item || {};
+      const hasChoices = Array.isArray(q.choices) && q.choices.some((ch) => ch && (ch.label || ch.text || ch.value));
+      const choices = hasChoices
+        ? q.choices
+            .map((ch) => ({
+              value: ch?.value ?? ch?.option ?? ch?.id ?? ch?.label ?? ch?.text ?? "",
+              label: ch?.label ?? ch?.text ?? ch?.value ?? "",
+            }))
+            .filter((ch) => ch.label)
+        : [];
+      return {
+        ...q,
+        id: q.id || `q_${idx + 1}`,
+        choices,
+        answerType: q.answerType || (hasChoices ? "choice" : "numeric"),
+      };
+    });
+  };
+
+  const getResourceQuestions = (resource) => {
+    try {
+      if (Array.isArray(resource?.payload?.items)) return normalizeResourceItems(resource.payload.items);
+      if (resource?.url && String(resource.url).startsWith("data:application/json")) {
+        const base64 = String(resource.url).split(",")[1] || "";
+        const json = decodeURIComponent(escape(window.atob(base64)));
+        const obj = JSON.parse(json);
+        if (Array.isArray(obj.items)) return normalizeResourceItems(obj.items);
+      }
+    } catch (e) {
+      console.warn("read resource questions", e);
+    }
+    return [];
+  };
+
+  const buildAttemptIndex = (rows = []) => {
+    const map = {};
+    (rows || []).forEach((row) => {
+      const data = row || {};
+      const answers = data.answers || {};
+      const resourceId = data.resource_id || answers.resourceId || answers.resource_id;
+      if (!resourceId) return;
+      const status = answers.status || data.status || "completed";
+      const entry = {
+        id: data.id,
+        status,
+        ts: data.ts || data.created_at || null,
+        elapsedSec: Number(data.elapsed_sec || answers.elapsedSec || 0),
+        summary: data.summary || null,
+        meta: answers.meta || null,
+      };
+      if (!map[resourceId]) map[resourceId] = { attempts: [], latest: entry };
+      map[resourceId].attempts.push(entry);
+      const latest = map[resourceId].latest;
+      if (!latest || (entry.ts && (!latest.ts || new Date(entry.ts) > new Date(latest.ts)))) {
+        map[resourceId].latest = entry;
+      }
+      if (entry.status === "completed") map[resourceId].completed = true;
+    });
+    return map;
+  };
 
   // Minimal CSV parser (quoted fields, CRLF)
   function parseCSV(text) {
@@ -144,7 +314,17 @@ export default function SATTraining({ onNavigate }) {
     return { items, count: items.length };
   }
   const [resources, setResources] = useState([]);
-  const [resForm, setResForm] = useState({ title: "", url: "", kind: "classwork" }); // classwork|homework|quiz
+  const handleCsvKindChange = (value) => {
+    const kind = (value || "quiz").toLowerCase();
+    setCsvKind(kind);
+    if (kind === "homework") {
+      setCsvDuration("");
+    } else if (kind === "quiz") {
+      setCsvDuration("15");
+    } else {
+      setCsvDuration("20");
+    }
+  };
 
   // Per-class OneDrive embed override (admin local)
   const classEmbedKey = selectedClass ? `cg_onedrive_class_${selectedClass}` : "";
@@ -152,31 +332,8 @@ export default function SATTraining({ onNavigate }) {
   const classEmbedUrl = useMemo(() => toOneDriveEmbedUrl(classEmbed), [classEmbed]);
 
 
-  function decodeResourceQuestions(r) {
-     const normalize = (items) => {
-      if (!Array.isArray(items)) return null;
-      return items.map((item) => {
-        const hasChoices = Array.isArray(item?.choices) && item.choices.some((ch) => ch && ch.label);
-        return {
-          ...item,
-          choices: hasChoices ? item.choices : [],
-          answerType: item?.answerType || (hasChoices ? 'choice' : 'numeric'),
-        };
-      });
-    };
-    try {
-      if (r?.payload && Array.isArray(r.payload.items)) return normalize(r.payload.items);
-      if (r?.url && r.url.startsWith('data:application/json')) {
-        const base64 = r.url.split(',')[1] || '';
-        const json = decodeURIComponent(escape(window.atob(base64)));
-        const obj = JSON.parse(json);
-         if (Array.isArray(obj.items)) return normalize(obj.items);
-      }
-    } catch (e) { console.warn('decodeResourceQuestions', e); }
-    return null;
-  }
-  function handleCSVFile(e, kindOverride) {
-    const f = e?.target?.files?.[0];
+  function handleCSVFile(event) {
+    const f = event?.target?.files?.[0];
     if (!f) return;
     setCsvInfo({ name: f.name, count: 0, items: null, error: '' });
     const reader = new FileReader();
@@ -188,14 +345,26 @@ export default function SATTraining({ onNavigate }) {
       } catch (err) {
         setCsvInfo({ name: f.name, count: 0, items: null, error: err?.message || 'Could not parse CSV' });
       }
+      if (event?.target) {
+        try { event.target.value = ""; } catch {}
+      }
     };
-    reader.onerror = () => setCsvInfo({ name: f.name, count: 0, items: null, error: 'Failed to read file' });
+    reader.onerror = () => {
+      setCsvInfo({ name: f.name, count: 0, items: null, error: 'Failed to read file' });
+      if (event?.target) {
+        try { event.target.value = ""; } catch {}
+      }
+    };
     reader.readAsText(f);
   }
 
   async function saveCSVAsResource(kind = 'quiz') {
     if (!csvInfo.items || !csvInfo.count) { alert('Pick a CSV file first'); return; }
-    const title = resForm.title?.trim() || (csvInfo.name ? csvInfo.name.replace(/\\.csv$/i,'') : ('Quiz (' + csvInfo.count + ' Qs)'));
+    if (!selectedClass) { alert('Pick a class first'); return; }
+    if (!csvLesson) { alert('Pick a lesson'); return; }
+    const title = (csvTitle || '').trim() || (csvInfo.name ? csvInfo.name.replace(/\\.csv$/i,'') : ('Quiz (' + csvInfo.count + ' Qs)'));
+    const resolvedKind = (kind || 'quiz').toLowerCase();
+    const meta = buildMeta(resolvedKind, csvDuration);
     try {
       const rTable = import.meta.env.VITE_CLASS_RES_TABLE || 'cg_class_resources';
       const { data: me } = await supabase.auth.getUser();
@@ -203,21 +372,28 @@ export default function SATTraining({ onNavigate }) {
       // Prefer inserting payload if the column exists
       let inserted = null;
       try {
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url: '', kind, created_by: by, payload: { items: csvInfo.items } }).select().single();
+        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, unit: csvUnit, lesson: csvLesson, url: '', kind: resolvedKind, created_by: by, payload: { items: csvInfo.items, meta } }).select().single();
         if (error) throw error;
         inserted = data;
       } catch (e) {
         // Fallback: store as data URL JSON in url field if payload column not present
-        const json = JSON.stringify({ items: csvInfo.items });
+        const json = JSON.stringify({ items: csvInfo.items, meta });
         const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url: dataUrl, kind, created_by: by }).select().single();
+        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, unit: csvUnit, lesson: csvLesson, url: dataUrl, kind: resolvedKind, created_by: by }).select().single();
         if (error) throw error;
         inserted = data;
       }
+      if (inserted && (!inserted.payload || typeof inserted.payload !== 'object')) {
+        inserted = { ...inserted, payload: { items: csvInfo.items, meta } };
+      }
+      inserted = { ...inserted, unit: inserted.unit ?? csvUnit, lesson: inserted.lesson ?? csvLesson };
       setResources((list) => [inserted, ...list]);
       setCsvInfo({ name: '', count: 0, items: null, error: '' });
-       setCsvKind('quiz');
-      setResForm({ title: '', url: '', kind: 'classwork' });
+      setCsvTitle('');
+      handleCsvKindChange('quiz');
+      const defaultUnit = UNIT_KEYS[0];
+      setCsvUnit(defaultUnit);
+      setCsvLesson(UNIT_LESSONS[defaultUnit][0]);
       alert('CSV saved.');
     } catch (e) {
       console.error(e);
@@ -249,66 +425,33 @@ export default function SATTraining({ onNavigate }) {
   }, [isAdmin]);
 
 
-  function decodeResourceQuestions(r) {
-    try {
-      if (r?.payload && Array.isArray(r.payload.items)) return r.payload.items;
-      if (r?.url && r.url.startsWith('data:application/json')) {
-        const base64 = r.url.split(',')[1] || '';
-        const json = decodeURIComponent(escape(window.atob(base64)));
-        const obj = JSON.parse(json);
-        if (Array.isArray(obj.items)) return obj.items;
-      }
-    } catch (e) { console.warn('decodeResourceQuestions', e); }
-    return null;
-  }
-  function handleCSVFile(e, kindOverride) {
-    const f = e?.target?.files?.[0];
-    if (!f) return;
-    setCsvInfo({ name: f.name, count: 0, items: null, error: '' });
+  function handleCSVFile(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    setCsvInfo({ name: file.name, count: 0, items: null, error: "" });
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const txt = String(reader.result || '');
-        const { items, count } = parseQuizCSV(txt);
-        setCsvInfo({ name: f.name, count, items, error: '' });
+        const text = String(reader.result || "");
+        const { items, count } = parseQuizCSV(text);
+        setCsvInfo({ name: file.name, count, items, error: "" });
       } catch (err) {
-        setCsvInfo({ name: f.name, count: 0, items: null, error: err?.message || 'Could not parse CSV' });
+        console.warn("parse CSV", err);
+        setCsvInfo({ name: file.name, count: 0, items: null, error: err?.message || "Could not parse CSV" });
+      }
+      if (event?.target) {
+        try { event.target.value = ""; } catch {}
       }
     };
-    reader.onerror = () => setCsvInfo({ name: f.name, count: 0, items: null, error: 'Failed to read file' });
-    reader.readAsText(f);
+    reader.onerror = () => {
+      setCsvInfo({ name: file.name, count: 0, items: null, error: "Failed to read file" });
+      if (event?.target) {
+        try { event.target.value = ""; } catch {}
+      }
+    };
+    reader.readAsText(file);
   }
 
-  async function saveCSVAsResource(kind = 'quiz') {
-    if (!csvInfo.items || !csvInfo.count) { alert('Pick a CSV file first'); return; }
-    const title = resForm.title?.trim() || (csvInfo.name ? csvInfo.name.replace(/\.csv$/i,'') : Quiz ( Qs));
-    try {
-      const rTable = import.meta.env.VITE_CLASS_RES_TABLE || 'cg_class_resources';
-      const { data: me } = await supabase.auth.getUser();
-      const by = me?.user?.email || userEmail || null;
-      // Prefer inserting payload if the column exists
-      let inserted = null;
-      try {
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url: '', kind, created_by: by, payload: { items: csvInfo.items } }).select().single();
-        if (error) throw error;
-        inserted = data;
-      } catch (e) {
-        // Fallback: store as data URL JSON in url field if payload column not present
-        const json = JSON.stringify({ items: csvInfo.items });
-        const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url: dataUrl, kind, created_by: by }).select().single();
-        if (error) throw error;
-        inserted = data;
-      }
-      setResources((list) => [inserted, ...list]);
-      setCsvInfo({ name: '', count: 0, items: null, error: '' });
-      setResForm({ title: '', url: '', kind: 'classwork' });
-      alert('CSV saved.');
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || 'Failed to save CSV resource. You may need to add a payload jsonb column to cg_class_resources.');
-    }
-  }
   useEffect(() => {
     if (!isAdmin || !selectedClass) return;
     (async () => {
@@ -326,7 +469,7 @@ export default function SATTraining({ onNavigate }) {
         try {
           if (emails.length > 0) {
             const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
-            const { data: logs, error: lerr } = await supabase.from(tTable).select("class_name").in("user_email", emails).order("ts", { ascending: false }).limit(500);
+            const { data: logs, error: lerr } = await supabase.from(tTable).select("*").in("user_email", emails).order("ts", { ascending: false }).limit(500);
             if (lerr) throw lerr;
             setClassLogs(logs || []);
           } else {
@@ -342,7 +485,7 @@ export default function SATTraining({ onNavigate }) {
           const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
           const { data: rs, error: rerr } = await supabase
             .from(rTable)
-            .select("class_name")
+            .select("*")
             .eq("class_name", selectedClass)
             .order("ts", { ascending: false })
             .limit(1000);
@@ -363,25 +506,6 @@ export default function SATTraining({ onNavigate }) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, selectedClass]);
-
-  const saveResource = async () => {
-    const title = (resForm.title || "").trim();
-    const url = (resForm.url || "").trim();
-    const kind = (resForm.kind || "classwork").trim();
-    if (!title || !url) { alert("Enter title and URL"); return; }
-    try {
-      const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
-      const { data: me } = await supabase.auth.getUser();
-      const by = me?.user?.email || userEmail || null;
-      const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url, kind, created_by: by }).select().single();
-      if (error) throw error;
-      setResources((list) => [data, ...list]);
-      setResForm({ title: "", url: "", kind: "classwork" });
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || "Failed to save resource. Check Supabase policies.");
-    }
-  };
 
   const deleteResource = async (row) => {
     if (!row) return;
@@ -419,16 +543,7 @@ export default function SATTraining({ onNavigate }) {
 
 
   function decodeResourceQuestions(r) {
-    try {
-      if (r?.payload && Array.isArray(r.payload.items)) return r.payload.items;
-      if (r?.url && r.url.startsWith('data:application/json')) {
-        const base64 = r.url.split(',')[1] || '';
-        const json = decodeURIComponent(escape(window.atob(base64)));
-        const obj = JSON.parse(json);
-        if (Array.isArray(obj.items)) return obj.items;
-      }
-    } catch (e) { console.warn('decodeResourceQuestions', e); }
-    return null;
+    return getResourceQuestions(r);
   }
   function handleCSVFile(e, kindOverride) {
     const f = e?.target?.files?.[0];
@@ -448,36 +563,6 @@ export default function SATTraining({ onNavigate }) {
     reader.readAsText(f);
   }
 
-  async function saveCSVAsResource(kind = 'quiz') {
-    if (!csvInfo.items || !csvInfo.count) { alert('Pick a CSV file first'); return; }
-    const title = resForm.title?.trim() || (csvInfo.name ? csvInfo.name.replace(/\.csv$/i,'') : Quiz ( Qs));
-    try {
-      const rTable = import.meta.env.VITE_CLASS_RES_TABLE || 'cg_class_resources';
-      const { data: me } = await supabase.auth.getUser();
-      const by = me?.user?.email || userEmail || null;
-      // Prefer inserting payload if the column exists
-      let inserted = null;
-      try {
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url: '', kind, created_by: by, payload: { items: csvInfo.items } }).select().single();
-        if (error) throw error;
-        inserted = data;
-      } catch (e) {
-        // Fallback: store as data URL JSON in url field if payload column not present
-        const json = JSON.stringify({ items: csvInfo.items });
-        const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
-        const { data, error } = await supabase.from(rTable).insert({ class_name: selectedClass, title, url: dataUrl, kind, created_by: by }).select().single();
-        if (error) throw error;
-        inserted = data;
-      }
-      setResources((list) => [inserted, ...list]);
-      setCsvInfo({ name: '', count: 0, items: null, error: '' });
-      setResForm({ title: '', url: '', kind: 'classwork' });
-      alert('CSV saved.');
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || 'Failed to save CSV resource. You may need to add a payload jsonb column to cg_class_resources.');
-    }
-  }
   useEffect(() => {
     (async () => {
       try {
@@ -501,15 +586,54 @@ export default function SATTraining({ onNavigate }) {
             try {
               setStudentResLoading(true);
               const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
-              const rs = await supabase
+              const { data: resData, error: resError } = await supabase
                 .from(rTable)
                 .select("*")
                 .eq("class_name", cls)
                 .order("ts", { ascending: false })
                 .limit(1000);
-              setStudentResources(rs.error ? [] : (rs.data || []));
-            } catch (e) { console.warn(e); setStudentResources([]); }
-            finally { setStudentResLoading(false); }
+              if (resError) throw resError;
+              const resources = resData || [];
+              setStudentResources(resources);
+              try {
+                const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+                let attemptsData = [];
+                if (email) {
+                  const baseQuery = supabase
+                    .from(tTable)
+                    .select("*")
+                    .eq("user_email", email)
+                    .order("ts", { ascending: false })
+                    .limit(500);
+                  let resp;
+                  if (cls) {
+                    resp = await baseQuery.eq("class_name", cls);
+                    if (resp.error && (resp.error.code === "42703" || /column .* does not exist/i.test(resp.error.message || ""))) {
+                      resp = await supabase
+                        .from(tTable)
+                        .select("*")
+                        .eq("user_email", email)
+                        .order("ts", { ascending: false })
+                        .limit(500);
+                    }
+                  } else {
+                    resp = await baseQuery;
+                  }
+                  if (resp.error) throw resp.error;
+                  attemptsData = resp.data || [];
+                }
+                setStudentAttempts(buildAttemptIndex(attemptsData));
+              } catch (attemptErr) {
+                console.warn(attemptErr);
+                setStudentAttempts(buildAttemptIndex([]));
+              }
+            } catch (e) {
+              console.warn(e);
+              setStudentResources([]);
+              setStudentAttempts(buildAttemptIndex([]));
+            } finally {
+              setStudentResLoading(false);
+            }
           }
         }
       } catch (e) {
@@ -556,6 +680,271 @@ export default function SATTraining({ onNavigate }) {
             <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
           </div>
         </Card>
+      </PageWrap>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <PageWrap>
+        <HeaderBar title="SAT Training" right={null} />
+        <div style={{ display: 'grid', gap: 16 }}>
+          {!selectedClass ? (
+            <Card>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <h3 style={{ marginTop: 0 }}>Your Classes</h3>
+                <div style={{ color: '#6b7280', fontSize: 12 }}>{classesLoading ? 'Loading…' : `${classes.length} class${classes.length === 1 ? '' : 'es'}`}</div>
+              </div>
+              {classes.length === 0 ? (
+                <p style={{ color: '#6b7280' }}>No classes found. Assign students to classes in the Admin dashboard first.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  {classes.map((c) => (
+                    <div key={c.name} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                      <div style={{ fontWeight: 700, color: '#111827' }}>{c.name}</div>
+                      <div style={{ color: '#6b7280', fontSize: 13 }}>{c.count} student{c.count === 1 ? '' : 's'}</div>
+                      <div style={{ marginTop: 10 }}>
+                        <Btn variant="secondary" onClick={() => setSelectedClass(c.name)}>Open</Btn>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ marginTop: 16 }}>
+                <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <h3 style={{ marginTop: 0 }}>Class: {selectedClass}</h3>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Btn variant="back" onClick={() => { setSelectedClass(""); setClassLogs([]); setClassEmails([]); }}>Back to Classes</Btn>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  {['classwork', 'analytics'].map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => setClassTab(id)}
+                      style={{
+                        border: 'none',
+                        borderRadius: 999,
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        background: classTab === id ? '#111827' : '#fff',
+                        color: classTab === id ? '#fff' : '#374151',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {id === 'classwork' ? 'Classwork' : 'Analysis'}
+                    </button>
+                  ))}
+                </div>
+
+                {classTab === 'classwork' && (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Materials (OneDrive)</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          placeholder="OneDrive share or embed URL"
+                          value={classEmbed}
+                          onChange={(e) => setClassEmbed(e.target.value)}
+                          style={{ flex: 1, padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                        />
+                        <Btn variant="secondary" onClick={() => { try { localStorage.setItem(classEmbedKey, classEmbed || ''); alert('Saved locally.'); } catch {} }}>Save</Btn>
+                        <Btn variant="back" onClick={() => { setClassEmbed(''); try { localStorage.removeItem(classEmbedKey); } catch {} }}>Clear</Btn>
+                      </div>
+                      {classEmbedUrl && (
+                        <div style={{ marginTop: 10, height: 320, border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+                          <iframe title={`Materials ${selectedClass}`} src={classEmbedUrl} style={{ width: '100%', height: '100%', border: 0 }} allow="fullscreen" />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Upload CSV Assignment</div>
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        <input
+                          type="text"
+                          placeholder="Title (optional - defaults to file name)"
+                          value={csvTitle}
+                          onChange={(e) => setCsvTitle(e.target.value)}
+                          style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                        />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          <select value={csvKind} onChange={(e) => handleCsvKindChange(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}>
+                            <option value="classwork">Classwork</option>
+                            <option value="homework">Homework</option>
+                            <option value="quiz">Quiz</option>
+                          </select>
+                          <select value={csvUnit} onChange={(e) => setCsvUnit(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}>
+                            {UNIT_KEYS.map((unit) => (
+                              <option key={unit} value={unit}>{unit}</option>
+                            ))}
+                          </select>
+                          <select value={csvLesson} onChange={(e) => setCsvLesson(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}>
+                            {(UNIT_LESSONS[csvUnit] || []).map((lesson) => (
+                              <option key={lesson} value={lesson}>{lesson}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder={csvKind === "homework" ? "Untimed" : "Duration (min)"}
+                            value={csvKind === "homework" ? "" : csvDuration}
+                            onChange={(e) => setCsvDuration(e.target.value)}
+                            disabled={csvKind === "homework"}
+                            style={{
+                              padding: '10px 12px',
+                              border: '1px solid #d1d5db',
+                              borderRadius: 8,
+                              background: csvKind === "homework" ? '#f9fafb' : '#ffffff',
+                              color: csvKind === "homework" ? '#9ca3af' : '#111827',
+                            }}
+                          />
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>
+                          {csvKind === "homework"
+                            ? "Homework is untimed and lets students resume where they left off."
+                            : "Set a time limit in minutes for classwork and quizzes (students restart each attempt)."}
+                        </div>
+                        <input type="file" accept=".csv" onChange={(e) => handleCSVFile(e)} />
+                        {csvInfo.name && (
+                          <div style={{ color: csvInfo.error ? '#dc2626' : '#6b7280', fontSize: 13 }}>
+                            {csvInfo.error ? csvInfo.error : `Picked ${csvInfo.name} - ${csvInfo.count} questions detected`}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <Btn variant="secondary" onClick={() => saveCSVAsResource(csvKind)} disabled={!csvInfo.items || !csvInfo.count}>
+                            Save CSV
+                          </Btn>
+                          <Btn
+                            variant="back"
+                            onClick={() => {
+                              setCsvInfo({ name: '', count: 0, items: null, error: '' });
+                              setCsvTitle('');
+                              const defaultUnit = UNIT_KEYS[0];
+                              setCsvUnit(defaultUnit);
+                              setCsvLesson(UNIT_LESSONS[defaultUnit][0]);
+                              handleCsvKindChange('quiz');
+                            }}
+                          >
+                            Clear
+                          </Btn>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources</div>
+                      {resLoading ? (
+                        <div style={{ color: '#6b7280' }}>Loading…</div>
+                      ) : resources.length === 0 ? (
+                        <div style={{ color: '#6b7280' }}>No resources yet.</div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
+                          {resources.map((r) => {
+                            const key = r.id || `${r.title}_${r.url}`;
+                            const meta = extractResourceMeta(r);
+                            const questions = decodeResourceQuestions(r) || [];
+                            return (
+                                <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ fontWeight: 700 }}>{r.title || 'Untitled Resource'}</div>
+                                    <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{r.kind || 'classwork'}</span>
+                                  </div>
+                                  {(r.unit || r.lesson) && (
+                                    <div style={{ color: '#6b7280', fontSize: 12 }}>
+                                      {[r.unit, r.lesson].filter(Boolean).join(' - ')}
+                                    </div>
+                                  )}
+                                  {r.url && (
+                                    <div style={{ wordBreak: 'break-word', fontSize: 12 }}>
+                                      <a href={r.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{r.url}</a>
+                                    </div>
+                                  )}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11 }}>
+                                  {questions.length > 0 && <span style={{ ...pillStyles.base, ...pillStyles.info }}>Questions: {questions.length}</span>}
+                                  <span style={{ ...pillStyles.base, ...pillStyles.info }}>Time: {formatDuration(meta?.durationSec)}</span>
+                                  <span style={{ ...pillStyles.base, ...(meta?.allowRetake === false ? pillStyles.warn : pillStyles.info) }}>
+                                    {meta?.allowRetake === false ? 'Single attempt' : 'Retakes allowed'}
+                                  </span>
+                                  <span style={{ ...pillStyles.base, ...(meta?.resumeMode === 'resume' ? pillStyles.complete : pillStyles.info) }}>
+                                    {meta?.resumeMode === 'resume' ? 'Resume enabled' : 'Restart each time'}
+                                  </span>
+                                </div>
+                                <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
+                                  {r.url && <Btn variant="secondary" onClick={() => window.open(r.url, '_blank')}>Open</Btn>}
+                                  {questions.length > 0 && (
+                                    <Btn variant="secondary" onClick={() => onNavigate('sat-exam', { practice: { kind: r.kind, resourceId: r.id, className: selectedClass, unit: r.unit || null, lesson: r.lesson || null, meta, custom: { questions, title: r.title, durationSec: meta?.durationSec, meta } } })}>
+                                      Preview
+                                    </Btn>
+                                  )}
+                                  <Btn variant="back" onClick={() => deleteResource(r)}>Delete</Btn>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {classTab === 'analytics' && (
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <div style={{ fontWeight: 700 }}>Recent Training Results</div>
+                      <div style={{ color: '#6b7280', fontSize: 12 }}>{logsLoading ? 'Loading…' : `${classLogs.length} record${classLogs.length === 1 ? '' : 's'}`}</div>
+                    </div>
+                    {classLogs.length === 0 ? (
+                      <div style={{ color: '#6b7280', marginTop: 6 }}>No activity yet.</div>
+                    ) : (
+                      <div style={{ overflowX: 'auto', marginTop: 6 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                          <thead>
+                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Date</th>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Time</th>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Student</th>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Section</th>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Unit/Lesson</th>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Score</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {classLogs.map((r) => {
+                              const fmtDate = (iso, time = false) =>
+                                !iso ? '—' : (time ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date(iso).toLocaleDateString());
+                              const rw = r.summary?.rw;
+                              const m = r.summary?.math;
+                              let score = '—';
+                              if (rw?.total || rw?.correct) score = `${rw.correct || 0}/${rw.total || 0}`;
+                              if (m?.total || m?.correct) score = `${m.correct || 0}/${m.total || 0}`;
+                              return (
+                                <tr key={`${r.id || ''}_${r.ts}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                                  <td style={{ padding: 10 }}>{fmtDate(r.ts)}</td>
+                                  <td style={{ padding: 10 }}>{fmtDate(r.ts, true)}</td>
+                                  <td style={{ padding: 10 }}>{r.user_email || '—'}</td>
+                                  <td style={{ padding: 10 }}>{r.section || '—'}</td>
+                                  <td style={{ padding: 10 }}>{r.unit || r.lesson || '—'}</td>
+                                  <td style={{ padding: 10 }}>{score}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            </>
+          )}
+        </div>
       </PageWrap>
     );
   }
@@ -651,29 +1040,101 @@ export default function SATTraining({ onNavigate }) {
                  <p style={{ color: '#6b7280' }}>Loading…</p>
               ) : (studentResources && studentResources.length > 0 ? (
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-                  {studentResources.map(r => (
-                    <div key={r.id || `${r.title}_${r.url}`} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12 }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                        <div style={{ fontWeight:700 }}>{r.title}</div>
-                        <span style={{ fontSize:12, color:'#6b7280', textTransform:'capitalize' }}>{r.kind}</span>
-                      </div>
-                      {(r.url && !r.payload) && (
-                        <div style={{ marginTop:6, wordBreak:'break-all' }}>
-                          <a href={r.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb' }}>{r.url}</a>
+                  {studentResources.map((r) => {
+                    const key = r.id || `${r.title || "resource"}_${r.url || "link"}`;
+                    const items = decodeResourceQuestions(r) || [];
+                    const meta = extractResourceMeta(r);
+                    const attemptInfo = r?.id ? (studentAttempts[r.id] || null) : null;
+                    const attemptCount = attemptInfo?.attempts?.length || 0;
+                    const latestStatus = attemptInfo?.latest?.status || null;
+                    const completed = attemptInfo?.completed ?? (latestStatus === "completed");
+                    const attemptLimit = meta?.attemptLimit != null ? meta.attemptLimit : null;
+                    const allowRetake = meta?.allowRetake !== false;
+                    const limitReached = items.length > 0 && completed && ((!allowRetake && attemptLimit == null) || (attemptLimit != null && attemptCount >= attemptLimit));
+                    const canStart = items.length > 0 && !limitReached;
+                    const kindLabel = (r.kind || "classwork").toLowerCase();
+                    const prettyKind = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
+                    const durationLabel = items.length > 0 ? formatDuration(meta?.durationSec) : null;
+                    const attemptLabel = attemptCount > 0 ? `Attempts: ${attemptCount}${attemptLimit ? `/${attemptLimit}` : ""}` : null;
+                    let hasResume = false;
+                    if (meta?.resumeMode === "resume" && r?.id) {
+                      try { hasResume = Boolean(localStorage.getItem(`cg_sat_resume_${r.id}`)); } catch {}
+                    }
+                    const startLabel = limitReached
+                      ? "Completed"
+                      : (meta?.resumeMode === "resume" && hasResume ? "Resume" : `Start ${prettyKind}`);
+                    const startAttemptIndex = attemptCount + 1;
+                    const launchPractice = () => {
+                      if (!canStart) return;
+                      const practiceMeta = { ...meta };
+                      const durationSec = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0) ? practiceMeta.durationSec : null;
+                      onNavigate("sat-exam", {
+                        practice: {
+                          kind: r.kind || "classwork",
+                          resourceId: r.id || null,
+                          className: studentClass || null,
+                          section: r.section || null,
+                          unit: r.unit || null,
+                          lesson: r.lesson || null,
+                          meta: practiceMeta,
+                          attemptIndex: startAttemptIndex,
+                          custom: {
+                            questions: items,
+                            durationSec,
+                            title: r.title || prettyKind,
+                            meta: practiceMeta,
+                          },
+                        },
+                      });
+                    };
+                    const pill = (variant, text) => (
+                      <span key={`${key}_${variant}_${text}`} style={{ ...pillStyles.base, ...(pillStyles[variant] || {}) }}>{text}</span>
+                    );
+                    return (
+                      <div key={key} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12, display:'grid', gap:8 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <div style={{ fontWeight:700 }}>{r.title || "Untitled Resource"}</div>
+                          <span style={{ fontSize:12, color:'#6b7280', textTransform:'capitalize' }}>{prettyKind}</span>
                         </div>
-                      )}
-                      <div style={{ marginTop:8, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                        {r.url && <Btn variant="secondary" onClick={()=>window.open(r.url, '_blank')}>Open</Btn>}
-                         {(decodeResourceQuestions(r)?.length > 0) && (
-                          <Btn variant="primary" onClick={()=>{
-                            const items = decodeResourceQuestions(r) || [];
-                            const minutes = 15;
-                            onNavigate('sat-exam', { practice: { kind: r.kind, resourceId: r.id, custom: { questions: items, durationSec: minutes*60, title: r.title } } });
-                           }}>{`Start ${r.kind ? r.kind.charAt(0).toUpperCase() + r.kind.slice(1) : 'Quiz'}`}</Btn>
+                        {(r.unit || r.lesson) && (
+                          <div style={{ color:'#6b7280', fontSize:12 }}>
+                            {[r.unit, r.lesson].filter(Boolean).join(' - ')}
+                          </div>
+                        )}
+                        {(r.url && (!r.payload || !items.length)) && (
+                          <div style={{ marginTop:4, wordBreak:'break-word' }}>
+                            <a href={r.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb' }}>{r.url}</a>
+                          </div>
+                        )}
+                        {items.length > 0 && (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                            {completed && pill("complete", "Completed")}
+                            {!completed && !attemptCount && pill("info", "Not started")}
+                            {attemptLabel && pill("info", attemptLabel)}
+                            {durationLabel && pill("info", `Time: ${durationLabel}`)}
+                            {limitReached && pill("warn", "Retake locked")}
+                          </div>
+                        )}
+                        <div style={{ marginTop:4, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                          {r.url && <Btn variant="secondary" onClick={() => window.open(r.url, "_blank")}>Open</Btn>}
+                          {items.length > 0 && (
+                            <Btn
+                              variant="primary"
+                              disabled={!canStart}
+                              onClick={launchPractice}
+                            >
+                              {startLabel}
+                            </Btn>
+                          )}
+                        </div>
+                        {limitReached && (
+                          <div style={{ color:'#ef4444', fontSize:12 }}>
+                            You have completed this {prettyKind.toLowerCase()}. Ask your teacher if you need another attempt.
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p style={{ color: '#6b7280' }}>No resources yet.</p>
@@ -702,202 +1163,6 @@ export default function SATTraining({ onNavigate }) {
         </Card>
       )}
 
-      {/* ADMIN: Classes management */}
-      {isAdmin && tab === "admin" && (
-        <div style={{ display: 'grid', gap: 16 }}>
-          {!selectedClass ? (
-            <Card>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <h3 style={{ marginTop: 0 }}>Your Classes</h3>
-                <div style={{ color: '#6b7280', fontSize: 12 }}>{classesLoading ? 'Loading…' : `${classes.length} class${classes.length===1?'':'es'}`}</div>
-              </div>
-              {classes.length === 0 ? (
-                <p style={{ color: '#6b7280' }}>No classes found. Assign students to classes in the Admin dashboard first.</p>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                  {classes.map(c => (
-                    <div key={c.name} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, color: '#111827' }}>{c.name}</div>
-                      <div style={{ color: '#6b7280', fontSize: 13 }}>{c.count} student{c.count===1?'':'s'}</div>
-                      <div style={{ marginTop: 10 }}>
-                        <Btn variant="secondary" onClick={() => setSelectedClass(c.name)}>Open</Btn>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          ) : (
-            <>
-              <Card>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <h3 style={{ marginTop: 0 }}>Class: {selectedClass}</h3>
-                  <Btn variant="back" onClick={() => { setSelectedClass(""); setClassLogs([]); setClassEmails([]); }}>Back to Classes</Btn>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  {['stream','classwork','analytics'].map(id => (
-                    <button key={id} onClick={() => setClassTab(id)} style={{
-                      border: 'none', borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
-                      background: classTab===id ? '#111827' : '#fff', color: classTab===id ? '#fff' : '#374151'
-                    }}>{id.charAt(0).toUpperCase()+id.slice(1)}</button>
-                  ))}
-                </div>
-
-                {/* STREAM */}
-                {classTab === 'stream' && (
-                  <div style={{ display: 'grid', gap: 12 }}>
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Post to Stream</div>
-                      <StreamPostComposer className={selectedClass} userEmail={userEmail} onPosted={(p)=>{/* reload posts below */}} />
-                    </div>
-                    <ClassStreamList className={selectedClass} />
-                  </div>
-                )}
-
-                {/* CLASSWORK */}
-                {classTab === 'classwork' && (
-                  <div style={{ display: 'grid', gap: 12 }}>
-                    {/* OneDrive materials for class */}
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Materials (OneDrive)</div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input type="text" placeholder="OneDrive share or embed URL"
-                          value={classEmbed}
-                          onChange={(e) => setClassEmbed(e.target.value)}
-                          style={{ flex: 1, padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }} />
-                        <Btn variant="secondary" onClick={() => { try { localStorage.setItem(classEmbedKey, classEmbed || ''); alert('Saved locally.'); } catch {} }}>Save</Btn>
-                        <Btn variant="back" onClick={() => { setClassEmbed(''); try { localStorage.removeItem(classEmbedKey); } catch {} }}>Clear</Btn>
-                      </div>
-                      {classEmbedUrl && (
-                        <div style={{ marginTop: 10, height: 320, border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-                          <iframe title={`Materials ${selectedClass}`} src={classEmbedUrl} style={{ width: '100%', height: '100%', border: 0 }} allow="fullscreen" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Managed resources: classwork / homework / quiz */}
-                                        <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Add Resource</div>
-                    <div style={{ display:'flex', gap:8, alignItems:'center', margin: '4px 0 8px' }}>
-                      <label style={{ color:'#6b7280', fontSize:12 }}>CSV kind:</label>
-                      <select onChange={(e)=>setCsvInfo((c)=>({ ...c, _kind: e.target.value }))} defaultValue={csvInfo._kind || 'quiz'} style={{ padding:'6px 10px', border:'1px solid #d1d5db', borderRadius:8 }}>
-                        <option value='classwork'>Classwork</option>
-                        <option value='homework'>Homework</option>
-                        <option value='quiz'>Quiz</option>
-                      </select>
-                    </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 160px auto', gap: 8, alignItems: 'center' }}>
-                        <input type="text" placeholder="Title" value={resForm.title} onChange={(e)=>setResForm(f=>({...f, title:e.target.value}))} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }} />
-                        <input type="url" placeholder="URL (PDF/OneDrive/Link)" value={resForm.url} onChange={(e)=>setResForm(f=>({...f, url:e.target.value}))} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }} />
-                        <select value={resForm.kind} onChange={(e)=>setResForm(f=>({...f, kind:e.target.value}))} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }}>
-                          <option value="classwork">Classwork</option>
-                          <option value="homework">Homework</option>
-                          <option value="quiz">Quiz</option>
-                        </select>
-                        <Btn variant="primary" onClick={saveResource}>Add</Btn>
-                      </div>
-                      <div style={{ marginTop: 10 }}>
-                        <div style={{ fontWeight:700, marginBottom: 6 }}>Or upload CSV (like SAT diagnostic format)</div>
-                        <input type="file" accept=".csv" onChange={(e)=>handleCSVFile(e)} />
-                        {csvInfo.name && (
-                          <div style={{ marginTop: 6, color: '#6b7280' }}>
-                            {csvInfo.error ? (
-                              <span style={{ color:'#dc2626' }}>{csvInfo.error}</span>
-                            ) : (
-                              <span>Picked {csvInfo.name} - {csvInfo.count} questions detected</span>
-                            )}
-                          </div>
-                        )}
-                         <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                          <select value={csvKind} onChange={(e)=>setCsvKind(e.target.value)} style={{ padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8 }}>
-                            <option value="classwork">Classwork</option>
-                            <option value="homework">Homework</option>
-                            <option value="quiz">Quiz</option>
-                          </select>
-                          <Btn variant="secondary" onClick={()=>saveCSVAsResource(csvKind)} disabled={!csvInfo.items || !csvInfo.count}>Save CSV</Btn>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources</div>
-                      {resLoading ? (
-                        <div style={{ color:'#6b7280' }}>Loading…</div>
-                      ) : resources.length === 0 ? (
-                        <div style={{ color:'#6b7280' }}>No resources yet.</div>
-                      ) : (
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-                          {resources.map(r => (
-                            <div key={r.id || `${r.title}_${r.url}`} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12 }}>
-                              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                                <div style={{ fontWeight:700 }}>{r.title}</div>
-                                <span style={{ fontSize:12, color:'#6b7280', textTransform:'capitalize' }}>{r.kind}</span>
-                              </div>
-                              <div style={{ marginTop:6, wordBreak:'break-all' }}>
-                                <a href={r.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb' }}>{r.url}</a>
-                              </div>
-                              <div style={{ marginTop:8, display:'flex', gap:8 }}>
-                                <Btn variant="secondary" onClick={()=>window.open(r.url, '_blank')}>Open</Btn>
-                                <Btn variant="back" onClick={()=>deleteResource(r)}>Delete</Btn>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ANALYTICS */}
-                {classTab === 'analytics' && (
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <div style={{ fontWeight: 700 }}>Recent Training Results</div>
-                      <div style={{ color: '#6b7280', fontSize: 12 }}>{logsLoading ? 'Loading…' : `${classLogs.length} record${classLogs.length===1?'':'s'}`}</div>
-                    </div>
-                    {classLogs.length === 0 ? (
-                      <div style={{ color: '#6b7280', marginTop: 6 }}>No activity yet.</div>
-                    ) : (
-                      <div style={{ overflowX: 'auto', marginTop: 6 }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                          <thead>
-                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Date</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Time</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Student</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Section</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Unit/Lesson</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Score</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {classLogs.map(r => {
-                              const fmtDate = (iso, time=false) => !iso ? '—' : (time ? new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : new Date(iso).toLocaleDateString());
-                              const rw = r.summary?.rw; const m = r.summary?.math; let score = '—';
-                              if (rw?.total || rw?.correct) score = `${rw.correct||0}/${rw.total||0}`;
-                              if (m?.total || m?.correct) score = `${m.correct||0}/${m.total||0}`;
-                              return (
-                                <tr key={`${r.id || ''}_${r.ts}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                  <td style={{ padding: 10 }}>{fmtDate(r.ts)}</td>
-                                  <td style={{ padding: 10 }}>{fmtDate(r.ts, true)}</td>
-                                  <td style={{ padding: 10 }}>{r.user_email || '—'}</td>
-                                  <td style={{ padding: 10 }}>{r.section || '—'}</td>
-                                  <td style={{ padding: 10 }}>{r.unit || r.lesson || '—'}</td>
-                                  <td style={{ padding: 10 }}>{score}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Card>
-            </>
-          )}
-        </div>
-      )}
     </PageWrap>
   );
 }
@@ -956,3 +1221,11 @@ function StreamPostComposer({ className, userEmail, onPosted }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+

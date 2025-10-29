@@ -72,13 +72,19 @@ export async function saveSatResult({ summary, answers, modules, elapsedSec }) {
 
 // Save SAT training activity (lecture/classwork/homework)
 export async function saveSatTraining({
-  kind = "classwork",         // 'lecture' | 'classwork' | 'homework'
+  kind = "classwork",         // 'lecture' | 'classwork' | 'homework' | 'quiz'
   section = null,             // 'RW' | 'MATH'
   unit = null,                // e.g., 'algebra'
   lesson = null,              // e.g., 'linear_equations'
   summary = null,             // { rw: {correct,total}, math: {correct,total} } or custom
   answers = null,
   elapsedSec = 0,
+  resourceId = null,
+  className = null,
+  status = "completed",
+  meta = null,
+  attempt = null,
+  durationSec = null,
 }) {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -87,7 +93,7 @@ export async function saveSatTraining({
   const ts = new Date().toISOString();
   let userEmail = null;
   try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
-  const row = {
+  const baseRow = {
     ts,
     user_email: userEmail,
     kind,
@@ -98,7 +104,31 @@ export async function saveSatTraining({
     answers: answers || null,
     elapsed_sec: elapsedSec || 0,
   };
-  const { error } = await supabase.from(table).insert([row]);
-  if (error) throw error;
-  return { ok: true, ts };
+  const fullRow = {
+    ...baseRow,
+    resource_id: resourceId || answers?.resourceId || null,
+    class_name: className || answers?.className || null,
+    status: status || answers?.status || null,
+    meta: meta || answers?.meta || null,
+    duration_sec: (typeof durationSec === "number" ? durationSec : null) ?? (answers?.durationSec ?? null),
+    attempt_index: attempt ?? answers?.attempt ?? null,
+  };
+  const tryRows = [fullRow, baseRow];
+  let lastError = null;
+  for (let i = 0; i < tryRows.length; i++) {
+    const row = tryRows[i];
+    try {
+      const { error } = await supabase.from(table).insert([row]);
+      if (!error) return { ok: true, ts };
+      lastError = error;
+      const code = error?.code || "";
+      const msg = error?.message || "";
+      const isMissingColumn = code === "42703" || /column .* does not exist/i.test(msg);
+      if (!isMissingColumn) break;
+    } catch (err) {
+      lastError = err;
+      break;
+    }
+  }
+  throw lastError;
 }

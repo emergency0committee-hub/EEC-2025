@@ -28,25 +28,31 @@ function SatPlaceholder() { return null; }
 export default function App() {
   // Route state with localStorage persistence
   const [route, setRoute] = useState(() => {
-    // Check for redirected path from 404.html
+    // Check for redirected path from 404.html (GitHub Pages fallback)
     const urlParams = new URLSearchParams(window.location.search);
-    const path = urlParams.get('/');
-    if (path) {
-      const route = path.startsWith('/') ? path.slice(1) : path;
-      // Clear the URL
-      window.history.replaceState(null, null, window.location.pathname);
-      return route || "home";
+    const redirected = urlParams.get("/");
+    if (redirected) {
+      const next = redirected.startsWith("/") ? redirected.slice(1) : redirected;
+      window.history.replaceState(null, "", window.location.pathname);
+      return next || "home";
     }
+
+    // Derive from current pathname (supports direct linking to nested routes)
+    const base = import.meta.env.BASE_URL || "/";
+    let path = window.location.pathname || "/";
+    if (path.startsWith(base)) path = path.slice(base.length);
+    const normalizedPath = String(path).replace(/^\/+/, "").trim();
+    if (normalizedPath) return normalizedPath;
+
+    // Fallback to saved route (excluding sensitive routes)
     try {
       const savedRoute = localStorage.getItem("cg_current_route");
-      // Don't persist test or results routes for security/UX reasons
-      if (savedRoute && !["test", "results"].includes(savedRoute)) {
+      if (savedRoute && !["test", "results", "sat-exam", "sat-results"].includes(savedRoute)) {
         return savedRoute;
       }
-      return "home";
-    } catch {
-      return "home";
-    }
+    } catch {}
+
+    return "home";
   });
   
   const [resultsPayload, setResultsPayload] = useState(null);
@@ -103,7 +109,7 @@ export default function App() {
 
   const onNavigate = (to, data = null) => {
     const normalized = String(to || "").replace(/^\/+/, "").trim();
-    if (data) setResultsPayload(data);
+    setResultsPayload(data);
     setRoute(normalized);
     window.scrollTo(0, 0);
     // Update URL for navigation
@@ -126,7 +132,7 @@ export default function App() {
   if (route === "about")  return <About onNavigate={onNavigate} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  if (route === "sat-training") return <SATTraining onNavigate={onNavigate} />;
+  if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "ai-educator") return <AIEducator onNavigate={onNavigate} />;
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;

@@ -1,5 +1,5 @@
 // src/pages/sat/SATExam.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, ProgressBar } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
@@ -43,7 +43,62 @@ export default function SATExam({ onNavigate, practice = null }) {
   // Build modules [RW1, RW2, M1, M2]
   const [rwMods, setRwMods] = useState([[], []]);
   useEffect(() => { (async () => { const rw = await loadRWModules(); setRwMods(rw); })(); }, []);
-  const [loadedCustom, setLoadedCustom] = useState(null); // { questions, durationSec, title }
+  const [loadedCustom, setLoadedCustom] = useState(null); // { questions, durationSec, title, meta, kind }
+
+  const defaultPracticeMeta = (kind) => {
+    const k = (kind || "classwork").toLowerCase();
+    const base = {
+      durationSec: k === "homework" ? null : 15 * 60,
+      allowRetake: k !== "quiz",
+      resumeMode: k === "homework" ? "resume" : "restart",
+      attemptLimit: k === "quiz" ? 1 : null,
+    };
+    return base;
+  };
+
+  const mergePracticeMeta = (kind, sourceMeta = null, fallbackDuration = null) => {
+    const meta = { ...defaultPracticeMeta(kind) };
+    if (typeof fallbackDuration === "number" && fallbackDuration > 0 && meta.durationSec !== null) {
+      meta.durationSec = fallbackDuration;
+    }
+    if (sourceMeta && typeof sourceMeta === "object") {
+      if (sourceMeta.durationSec != null) {
+        const dur = Number(sourceMeta.durationSec);
+        meta.durationSec = Number.isFinite(dur) && dur > 0 ? dur : null;
+      }
+      if (sourceMeta.allowRetake != null) meta.allowRetake = !!sourceMeta.allowRetake;
+      if (sourceMeta.resumeMode) meta.resumeMode = String(sourceMeta.resumeMode);
+      if (sourceMeta.attemptLimit != null) {
+        const lim = Number(sourceMeta.attemptLimit);
+        meta.attemptLimit = Number.isFinite(lim) && lim > 0 ? lim : null;
+      }
+    }
+    if (meta.resumeMode === "resume") meta.durationSec = null;
+    if (meta.allowRetake === false && meta.attemptLimit == null) meta.attemptLimit = 1;
+    return meta;
+  };
+
+  const normalizeQuestions = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items.map((item, idx) => {
+      const q = item || {};
+      const hasChoices = Array.isArray(q.choices) && q.choices.some((ch) => ch && (ch.label || ch.text || ch.value));
+      const choices = hasChoices
+        ? q.choices
+            .map((ch) => ({
+              value: ch?.value ?? ch?.option ?? ch?.id ?? ch?.label ?? ch?.text ?? "",
+              label: ch?.label ?? ch?.text ?? ch?.value ?? "",
+            }))
+            .filter((ch) => ch.label)
+        : [];
+      return {
+        ...q,
+        id: q.id || `q_${idx + 1}`,
+        choices,
+        answerType: q.answerType || (hasChoices ? "choice" : "numeric"),
+      };
+    });
+  };
 
   // If practice came only with a resourceId, fetch questions from Supabase
   useEffect(() => {
@@ -67,9 +122,16 @@ export default function SATExam({ onNavigate, practice = null }) {
           } catch {}
         }
         if (items.length) {
+          const normalized = normalizeQuestions(items);
+          const kind = practice.kind || data?.kind || "classwork";
+          const metaSource = practice.meta || data?.payload?.meta || data?.payload?.settings || null;
+          const fallbackDuration = practice.custom?.durationSec != null ? Number(practice.custom.durationSec) : null;
+          const meta = mergePracticeMeta(kind, metaSource, fallbackDuration);
           setLoadedCustom({
-            questions: items,
-            durationSec: Number(practice.custom?.durationSec || 15 * 60),
+            questions: normalized,
+            durationSec: meta.durationSec,
+            meta,
+            kind,
             title: data?.title || practice.custom?.title || "Custom Quiz",
           });
         }
@@ -80,19 +142,29 @@ export default function SATExam({ onNavigate, practice = null }) {
   const modules = useMemo(() => {
     if (practice) {
       // Custom quiz (from Classwork/Homework/Quiz CSV) or loaded by id
-      const custom = (practice.custom && Array.isArray(practice.custom.questions)) ? practice.custom : loadedCustom;
-      if (custom && Array.isArray(custom.questions)) {
-        const qs = custom.questions || [];
-        const dur = Number(custom.durationSec || 15 * 60);
-        const title = custom.title || 'Custom Quiz';
-        return [{ key: 'custom', title, durationSec: dur, questions: qs }];
+      const customSource = (practice.custom && Array.isArray(practice.custom.questions)) ? practice.custom : loadedCustom;
+      if (customSource && Array.isArray(customSource.questions)) {
+        const qs = normalizeQuestions(customSource.questions || []);
+        const kind = practice.kind || customSource.kind || "classwork";
+        const meta = mergePracticeMeta(kind, practice.meta || customSource.meta, customSource.durationSec);
+        const title = customSource.title || 'Custom Quiz';
+        return [{
+          key: 'custom',
+          title,
+          durationSec: meta.durationSec,
+          questions: qs,
+          meta,
+          kind,
+        }];
       }
       // Simple practice: one module per selection
       if (practice.section === 'MATH') {
         const m = MATH_MODULES[0] || [];
-        return [{ key: 'pm', title: 'Math Practice', durationSec: 15 * 60, questions: m }];
+        const meta = mergePracticeMeta(practice.kind || 'classwork', practice.meta, 15 * 60);
+        return [{ key: 'pm', title: 'Math Practice', durationSec: meta.durationSec, questions: m, meta, kind: practice.kind || 'classwork' }];
       }
-      return [{ key: 'prw', title: 'Reading & Writing Practice', durationSec: 15 * 60, questions: (rwMods[0] || []).slice(0, 10) }];
+      const meta = mergePracticeMeta(practice.kind || 'classwork', practice.meta, 15 * 60);
+      return [{ key: 'prw', title: 'Reading & Writing Practice', durationSec: meta.durationSec, questions: (rwMods[0] || []).slice(0, 10), meta, kind: practice.kind || 'classwork' }];
     }
     return [
       { key: "rw1", title: "Reading & Writing — Module 1", durationSec: 32 * 60, questions: rwMods[0] || [] },
@@ -105,31 +177,68 @@ export default function SATExam({ onNavigate, practice = null }) {
   const [modIdx, setModIdx] = useState(0);
   const mod = modules[modIdx];
   const totalMods = modules.length;
+  const isTimed = Number.isFinite(mod?.durationSec) && mod.durationSec > 0;
+  const resumeEnabled = Boolean(practice?.meta?.resumeMode === "resume" && practice?.resourceId);
+  const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
+  const [resumeLoaded, setResumeLoaded] = useState(!resumeEnabled);
   const [answers, setAnswers] = useState({}); // { modKey: { qid: value } }
   const [flags, setFlags] = useState({}); // { modKey: { qid: true } }
   const [showPalette, setShowPalette] = useState(false);
   const [page, setPage] = useState(1);
   const qCount = mod?.questions?.length || 0;
-  const cd = useCountdown(mod?.durationSec || 60);
+  const cd = useCountdown(isTimed ? mod?.durationSec : 60);
   const startedAtRef = useRef(Date.now());
   const questionStartRef = useRef(Date.now());
   const prevPageRef = useRef(1);
   const timesRef = useRef({}); // { qid: seconds }
   const pendingResultRef = useRef(null);
+  useEffect(() => {
+    if (!resumeEnabled || resumeLoaded || !resumeKey || !mod || !Array.isArray(mod.questions)) return;
+    try {
+      const raw = localStorage.getItem(resumeKey);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && typeof saved === "object") {
+          if (saved.answers && typeof saved.answers === "object") setAnswers(saved.answers);
+          if (saved.flags && typeof saved.flags === "object") setFlags(saved.flags);
+          if (Number.isFinite(saved.page)) {
+            const maxPage = mod.questions.length || 1;
+            setPage(Math.min(maxPage, Math.max(1, saved.page)));
+          }
+          if (saved.times && typeof saved.times === "object") timesRef.current = saved.times;
+        }
+      }
+    } catch (e) {
+      console.warn("resume load", e);
+    } finally {
+      setResumeLoaded(true);
+    }
+  }, [resumeEnabled, resumeLoaded, resumeKey, mod]);
+
+  useEffect(() => {
+    persistProgress();
+  }, [answers, flags, page, persistProgress]);
+
 
   useEffect(() => { // reset timer and page on module change
-    cd.reset(mod?.durationSec || 60); cd.start();
+    const duration = isTimed ? (mod?.durationSec || 60) : 60;
+    cd.reset(duration);
+    if (isTimed) cd.start();
+    else cd.stop();
+    setShowTimer(isTimed);
     setPage(1);
     questionStartRef.current = Date.now();
     prevPageRef.current = 1;
     timesRef.current = {};
-  }, [modIdx]);
+    persistProgress();
+  }, [modIdx, isTimed, mod?.durationSec]);
 
   useEffect(() => { // auto-advance on timer end
+    if (!isTimed) return;
     if (cd.remaining <= 0) {
       handleNextModule();
     }
-  }, [cd.remaining]);
+  }, [cd.remaining, isTimed]);
 
   // Track time spent per question
   useEffect(() => {
@@ -143,6 +252,7 @@ export default function SATExam({ onNavigate, practice = null }) {
         const t = timesRef.current;
         t[prevQ.id] = (t[prevQ.id] || 0) + deltaSec;
         questionStartRef.current = now;
+        persistProgress();
       }
       prevPageRef.current = page;
     } else if (!questionStartRef.current) {
@@ -246,8 +356,22 @@ export default function SATExam({ onNavigate, practice = null }) {
     return summary;
   };
 
-  const captureCurrentQuestionTime = () => {
+  const persistProgress = useCallback(() => {
+    if (!resumeEnabled || !resumeKey || !resumeLoaded) return;
+    try {
+      const payload = {
+        answers,
+        flags,
+        page,
+        times: timesRef.current,
+      };
+      localStorage.setItem(resumeKey, JSON.stringify(payload));
+    } catch (e) {
+      console.warn("resume save", e);
+    }
+  }, [answers, flags, page, resumeEnabled, resumeKey, resumeLoaded]);
 
+  const captureCurrentQuestionTime = () => {
     try {
       if (mod && Array.isArray(mod.questions)) {
         const curQ = mod.questions[Math.max(0, page - 1)];
@@ -255,11 +379,13 @@ export default function SATExam({ onNavigate, practice = null }) {
           const now = Date.now();
           const deltaSec = Math.max(0, Math.round((now - (questionStartRef.current || now)) / 1000));
           timesRef.current[curQ.id] = (timesRef.current[curQ.id] || 0) + deltaSec;
-            questionStartRef.current = now;
+          questionStartRef.current = now;
+          persistProgress();
         }
       }
-    } catch {}
-    };
+    }
+    catch {}
+  };
 
   const prepareSubmit = () => {
     if (summaryModal.open) return;
@@ -303,17 +429,46 @@ export default function SATExam({ onNavigate, practice = null }) {
             }
           });
         } catch {}
+        const practiceKind = practice.kind || mod?.kind || 'classwork';
+        const practiceMeta = mergePracticeMeta(practiceKind, practice.meta || mod?.meta || loadedCustom?.meta, mod?.durationSec);
         await saveSatTraining({
-          kind: practice.kind || 'classwork',
+          kind: practiceKind,
           section: practice.section || null,
           unit: practice.unit || null,
           lesson: practice.lesson || null,
           summary,
-          answers: { choices: ansMap, times: timesRef.current || {}, correct: correctMap, resourceId: practice.resourceId || null },
+          answers: {
+            choices: ansMap,
+            times: timesRef.current || {},
+            correct: correctMap,
+            resourceId: practice.resourceId || null,
+            className: practice.className || null,
+            meta: practiceMeta,
+            status: "completed",
+            durationSec: practiceMeta.durationSec,
+            elapsedSec,
+            attempt: practice.attemptIndex ?? null,
+          },
+          elapsedSec,
+          resourceId: practice.resourceId || null,
+          className: practice.className || null,
+          status: "completed",
+          meta: practiceMeta,
+          durationSec: practiceMeta.durationSec,
+          attempt: practice.attemptIndex ?? null,
         });
 
-        if (practice.custom && Array.isArray(practice.custom.questions)) {
-          const qs = practice.custom.questions || [];
+        if (resumeKey) {
+          try { localStorage.removeItem(resumeKey); } catch {}
+        }
+
+        const isResourceAttempt = Boolean(practice.resourceId || (practice.custom && Array.isArray(practice.custom.questions)));
+        const sourceQuestions = isResourceAttempt
+          ? ((practice.custom && Array.isArray(practice.custom.questions)) ? practice.custom.questions : (modules[0]?.questions || []))
+          : [];
+
+        if (isResourceAttempt && Array.isArray(sourceQuestions) && sourceQuestions.length) {
+          const qs = sourceQuestions;
           const bySkill = new Map();
           const a = answers[modules[0]?.key || "custom"] || {};
           qs.forEach((q) => {
@@ -332,12 +487,18 @@ export default function SATExam({ onNavigate, practice = null }) {
           const count = qs.length;
           setSummaryModal({ open: false, stats: null });
           pendingResultRef.current = null;
+          const moduleTitle = modules[0]?.title || practice.custom?.title || mod.title || 'Custom Quiz';
           onNavigate('sat-results', {
             submission: {
               ts: new Date().toISOString(),
               pillar_agg: { summary },
-              pillar_counts: { modules: [{ key: 'custom', title: practice.custom.title || 'Custom Quiz', count }], elapsedSec, avgSec: stats?.avgSec ?? (count ? Math.round(elapsedSec / count) : 0) },
+              pillar_counts: {
+                modules: [{ key: 'custom', title: moduleTitle, count }],
+                elapsedSec,
+                avgSec: stats?.avgSec ?? (count ? Math.round(elapsedSec / count) : 0),
+              },
               customSkills,
+              meta: practiceMeta,
             },
           });
           return;
@@ -390,7 +551,7 @@ export default function SATExam({ onNavigate, practice = null }) {
   const letter = (i) => String.fromCharCode(65 + i); // 0 -> A
 
   const [showPassage, setShowPassage] = useState(true);
-  const [showTimer, setShowTimer] = useState(true);
+  const [showTimer, setShowTimer] = useState(() => isTimed);
   const [overlay, setOverlay] = useState({ open: false, title: "", message: "" });
   const [summaryModal, setSummaryModal] = useState({ open: false, stats: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -424,16 +585,20 @@ export default function SATExam({ onNavigate, practice = null }) {
           {/* Center: Timer + Hide */}
           <div style={{ textAlign: "center" }}>
             <div style={{ fontWeight: 800, fontSize: 20, color: "#111827", minHeight: 24 }}>
-              {showTimer ? cd.fmt(cd.remaining) : ""}
+              {isTimed ? (showTimer ? cd.fmt(cd.remaining) : "—") : "Untimed"}
             </div>
             <div style={{ marginTop: 6 }}>
-              <button
-                type="button"
-                onClick={() => setShowTimer((v) => !v)}
-                style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: 999, padding: "4px 12px", cursor: "pointer", fontSize: 12 }}
-              >
-                {showTimer ? "Hide" : "Show"}
-              </button>
+              {isTimed ? (
+                <button
+                  type="button"
+                  onClick={() => setShowTimer((v) => !v)}
+                  style={{ border: "1px solid #d1d5db", background: "#fff", borderRadius: 999, padding: "4px 12px", cursor: "pointer", fontSize: 12 }}
+                >
+                  {showTimer ? "Hide" : "Show"}
+                </button>
+              ) : (
+                <span style={{ color: "#6b7280", fontSize: 12 }}>No timer</span>
+              )}
             </div>
           </div>
 
@@ -645,3 +810,9 @@ export default function SATExam({ onNavigate, practice = null }) {
     </PageWrap>
   );
 }
+
+
+
+
+
+
