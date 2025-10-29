@@ -193,6 +193,15 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       area: "Area:",
       rateHint: "{ui.rateHint}",
       tipKeys: "{ui.tipKeys}",
+      participantTitle: "Participant information",
+      participantDesc: "Please complete the following details before starting the test.",
+      participantName: "Full Name",
+      participantEmail: "Email",
+      participantSchool: "School / Organization",
+      participantNamePlaceholder: "Enter your full name",
+      participantEmailPlaceholder: "Enter your email address",
+      participantSchoolPlaceholder: "Enter your school or organization",
+      participantError: "Please enter your name, a valid email, and your school or organization to continue.",
     },
     AR: {
       chooseLang: "اختر لغة هذا الاختبار",
@@ -207,6 +216,15 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       area: "المجال:",
       rateHint: "قيّم (1 = لا يناسبني إطلاقًا، 5 = مناسب جدًا)",
       tipKeys: "نصيحة: يمكنك الضغط على الأرقام 1–5 للإجابة",
+      participantTitle: "معلومات المشارك",
+      participantDesc: "يرجى إكمال التفاصيل التالية قبل بدء الاختبار.",
+      participantName: "الاسم الكامل",
+      participantEmail: "البريد الإلكتروني",
+      participantSchool: "المدرسة / المؤسسة",
+      participantNamePlaceholder: "أدخل اسمك الكامل",
+      participantEmailPlaceholder: "أدخل بريدك الإلكتروني",
+      participantSchoolPlaceholder: "أدخل مدرستك أو مؤسستك",
+      participantError: "يرجى إدخال اسمك وبريد إلكتروني صالح ومدرستك أو مؤسستك للمتابعة.",
     },
     FR: {
       chooseLang: "Sélectionnez la langue du test",
@@ -221,6 +239,15 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       area: "Domaine :",
       rateHint: "Évaluer (1 = Pas du tout, 5 = Beaucoup)",
       tipKeys: "Astuce : vous pouvez utiliser les touches 1–5",
+      participantTitle: "Informations du participant",
+      participantDesc: "Veuillez compléter les informations suivantes avant de commencer le test.",
+      participantName: "Nom complet",
+      participantEmail: "E-mail",
+      participantSchool: "École / Organisation",
+      participantNamePlaceholder: "Saisissez votre nom complet",
+      participantEmailPlaceholder: "Saisissez votre adresse e-mail",
+      participantSchoolPlaceholder: "Saisissez votre école ou organisation",
+      participantError: "Veuillez saisir votre nom, un e-mail valide et votre école ou organisation pour continuer.",
     },
   };
   const ui = UI[String(lang || "EN").toUpperCase()] || UI.EN;
@@ -273,7 +300,10 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const prev = useCallback(() => setPage((p) => Math.max(p - 1, INTRO)), [INTRO]);
 
   const startTest = async () => {
-    if (!isValidProfile()) return setShowProfileError(true);
+    if (!isValidProfile()) {
+      setShowProfileError(true);
+      return;
+    }
     setShowProfileError(false);
     // Require language selection and lock it for the session
     const chosen = String(examLang || "").trim();
@@ -450,6 +480,68 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                 </div>
               )}
               <p style={{ color:"#475569" }}>{ui.signedInAs} <b>{authUser?.email || profile.email || "user"}</b>. Your account details will be used for the report.</p>
+              <div style={{ marginTop: 16, padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: "#0f172a" }}>{ui.participantTitle}</div>
+                <p style={{ margin: 0, marginBottom: 12, color: "#475569", fontSize: 14 }}>
+                  {ui.participantDesc}
+                </p>
+                <div style={{ display: "grid", gap: 12 }}>
+                  {[
+                    {
+                      key: "name",
+                      label: ui.participantName,
+                      placeholder: ui.participantNamePlaceholder,
+                    },
+                    {
+                      key: "email",
+                      type: "email",
+                      label: ui.participantEmail,
+                      placeholder: ui.participantEmailPlaceholder,
+                    },
+                    {
+                      key: "school",
+                      label: ui.participantSchool,
+                      placeholder: ui.participantSchoolPlaceholder,
+                    },
+                  ].map(({ key, label, placeholder, type = "text" }) => {
+                    const fieldValue = profile[key] || "";
+                    const isFieldValid =
+                      key === "email"
+                        ? isEmail(fieldValue)
+                        : key === "school"
+                          ? isValidSchool(fieldValue)
+                          : isValidName(fieldValue);
+                    return (
+                      <label key={key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <span style={{ fontWeight: 600, color: "#1e293b" }}>{label}</span>
+                        <input
+                          type={type}
+                          value={fieldValue}
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            setProfile((prev) => ({ ...prev, [key]: nextValue }));
+                            if (showProfileError) setShowProfileError(false);
+                          }}
+                          placeholder={placeholder}
+                          autoComplete={key === "email" ? "email" : key === "name" ? "name" : "organization"}
+                          style={{
+                            padding: "10px 12px",
+                            borderRadius: 8,
+                            border: showProfileError && !isFieldValid ? "1px solid #dc2626" : "1px solid #d1d5db",
+                            fontSize: 14,
+                            background: "#ffffff",
+                          }}
+                        />
+                      </label>
+                    );
+                  })}
+                  {showProfileError && (
+                    <p style={{ color: "#dc2626", fontSize: 13, margin: 0 }}>
+                      {ui.participantError}
+                    </p>
+                  )}
+                </div>
+              </div>
               <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
                 <Btn variant="back" onClick={()=>onNavigate("home")}>{ui.backHome}</Btn>
                 <Btn variant="primary" onClick={startTest}>{ui.startTest}</Btn>

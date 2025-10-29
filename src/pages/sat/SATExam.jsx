@@ -314,13 +314,14 @@ export default function SATExam({ onNavigate, practice = null }) {
 
         if (practice.custom && Array.isArray(practice.custom.questions)) {
           const qs = practice.custom.questions || [];
-         const bySkill = new Map();
-          const a = answers[modules[0]?.key || 'custom'] || {};
+          const bySkill = new Map();
+          const a = answers[modules[0]?.key || "custom"] || {};
           qs.forEach((q) => {
-          const label = (q.skill || '').trim() || 'General';
-             if (isAnswerCorrect(q, a[q.id])) rec.correct += 1;
-            const picked = a[q.id];
-            if (picked != null && String(picked) === String(q.correct)) rec.correct += 1;
+            const label = (q.skill || "").trim() || "General";
+            const rec = bySkill.get(label) || { label, correct: 0, total: 0 };
+            rec.total += 1;
+            if (isAnswerCorrect(q, a[q.id])) rec.correct += 1;
+            bySkill.set(label, rec);
           });
           const customSkills = Array.from(bySkill.values()).map((r) => ({
             label: r.label,
