@@ -45,9 +45,13 @@ export default function Account({ onNavigate }) {
     let h = 2166136261;
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24); }
     const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 1/0/I/O
-    let out = ""; let v = Math.abs(h);
-    for (let i = 0; i < 6; i++) { out += alphabet[v % alphabet.length]; v = Math.floor(v / alphabet.length) ^ (v << 1); }
-    return out;
+    const chars = [];
+    let v = Math.abs(h);
+    for (let i = 0; i < 12; i++) {
+      chars.push(alphabet[v % alphabet.length]);
+      v = Math.floor(v / alphabet.length) ^ (v << 1);
+    }
+    return `${chars.slice(0, 4).join("")}-${chars.slice(4, 8).join("")}-${chars.slice(8, 12).join("")}`;
   }
   const satCode = genCode("SAT");
   const cgCode = genCode("CG");
