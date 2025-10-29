@@ -155,6 +155,11 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   });
   const [cgCode, setCgCode] = useState("");
   const [cgErr, setCgErr] = useState("");
+  // Exam language selection (locked once test starts)
+  const [examLang, setExamLang] = useState(() => {
+    try { return localStorage.getItem("cg_exam_lang") || ""; } catch { return ""; }
+  });
+  const [examLocked, setExamLocked] = useState(false);
   const [profile, setProfile] = useState(() => ({ name: "", email: "", school: "" }));
   const [showProfileError, setShowProfileError] = useState(false);
   const [ansTF, setAnsTF] = useState({});
@@ -172,6 +177,54 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const [startTs, setStartTs] = useState(null);
 
   const [shuffledRIASEC, setShuffledRIASEC] = useState([]);
+
+  // Local minimal i18n for the new language selector copy
+  const UI = {
+    EN: {
+      chooseLang: "Select the language for this test",
+      lockedNote: "This choice will be locked during the exam.",
+      accessTitle: "Access Code Required",
+      accessDesc: "Enter the access code provided by your instructor to start the Career Guidance test.",
+      placeholderCode: "Enter access code",
+      invalidCode: "Invalid access code",
+      backHome: "Back Home",
+      signedInAs: "You are signed in as",
+      startTest: "Start Test",
+      area: "Area:",
+      rateHint: "{ui.rateHint}",
+      tipKeys: "{ui.tipKeys}",
+    },
+    AR: {
+      chooseLang: "اختر لغة هذا الاختبار",
+      lockedNote: "سيتم قفل الاختيار أثناء الامتحان.",
+      accessTitle: "رمز الدخول مطلوب",
+      accessDesc: "أدخل رمز الوصول الذي قدمه المعلّم لبدء اختبار التوجيه المهني.",
+      placeholderCode: "أدخل رمز الوصول",
+      invalidCode: "رمز غير صحيح",
+      backHome: "العودة للصفحة الرئيسية",
+      signedInAs: "أنت مسجّل الدخول باسم",
+      startTest: "بدء الاختبار",
+      area: "المجال:",
+      rateHint: "قيّم (1 = لا يناسبني إطلاقًا، 5 = مناسب جدًا)",
+      tipKeys: "نصيحة: يمكنك الضغط على الأرقام 1–5 للإجابة",
+    },
+    FR: {
+      chooseLang: "Sélectionnez la langue du test",
+      lockedNote: "Ce choix sera verrouillé pendant l'examen.",
+      accessTitle: "Code d'accès requis",
+      accessDesc: "Entrez le code d'accès fourni par votre enseignant pour commencer le test d'orientation.",
+      placeholderCode: "Saisir le code d'accès",
+      invalidCode: "Code d'accès invalide",
+      backHome: "Retour à l'accueil",
+      signedInAs: "Connecté en tant que",
+      startTest: "Commencer le test",
+      area: "Domaine :",
+      rateHint: "Évaluer (1 = Pas du tout, 5 = Beaucoup)",
+      tipKeys: "Astuce : vous pouvez utiliser les touches 1–5",
+    },
+  };
+  const ui = UI[String(lang || "EN").toUpperCase()] || UI.EN;
+  const LANG_LABELS = { EN: "English", AR: "العربية", FR: "Français" };
 
   useEffect(() => {
     try {
@@ -222,6 +275,15 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const startTest = async () => {
     if (!isValidProfile()) return setShowProfileError(true);
     setShowProfileError(false);
+    // Require language selection and lock it for the session
+    const chosen = String(examLang || "").trim();
+    if (!chosen) {
+      alert("Please select the test language before starting.");
+      return;
+    }
+    try { localStorage.setItem("cg_exam_lang", chosen); } catch {}
+    if (typeof setLang === "function") setLang(chosen);
+    setExamLocked(true);
     // Shuffle questions each time the test starts
     setShuffledRIASEC(shuffleArray(Q_RIASEC));
     cd.reset(); cd.start();
@@ -298,10 +360,29 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   /* ---------- Pages ---------- */
   const Timer = (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
+      {!examLocked && (
+        <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
+      )}
       <TimerHeader label={`Time ${cd.fmt(cd.remaining)}`} />
     </div>
   );
+
+  // Localized getters for question content
+  const pickLocalized = (obj, baseKey, activeLang) => {
+    if (!obj) return "";
+    const L = String(activeLang || "EN").toUpperCase();
+    const candidates = [
+      `${baseKey}${L}`, // e.g., textEN
+      `${baseKey}_${L}`, // e.g., text_EN
+      `${baseKey}${L.toLowerCase()}`, // e.g., texten
+      `${baseKey}_${L.toLowerCase()}`, // e.g., text_en
+      baseKey, // fallback
+    ];
+    for (const k of candidates) {
+      if (obj[k] != null && String(obj[k]).trim() !== "") return obj[k];
+    }
+    return "";
+  };
 
   // Intro
   if (page === INTRO) {
@@ -312,30 +393,55 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         <Card>
           {!cgUnlocked ? (
             <>
-              <h3 style={{ marginTop: 0 }}>Access Code Required</h3>
-              <p style={{ color: "#6b7280" }}>Enter the access code provided by your instructor to start the Career Guidance test.</p>
+              <h3 style={{ marginTop: 0 }}>{ui.accessTitle}</h3>
+              <p style={{ color: "#6b7280" }}>{ui.accessDesc}</p>
               <div style={{ display: "flex", gap: 8, alignItems: "center", maxWidth: 420 }}>
                 <input
                   type="text"
                   value={cgCode}
                   onChange={(e)=>{ setCgCode(e.target.value); setCgErr(""); }}
-                  placeholder="Enter access code"
+                  placeholder={ui.placeholderCode}
                   style={{ flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
                 />
                 <Btn variant="primary" onClick={() => {
                   const expected = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
-                  if (expected && cgCode.trim() !== expected) { setCgErr("Invalid access code"); return; }
+                  if (expected && cgCode.trim() !== expected) { setCgErr(ui.invalidCode); return; }
                   try { localStorage.setItem("cg_access_ok_v1", "1"); } catch {}
                   setCgUnlocked(true);
                 }}>Unlock</Btn>
               </div>
               {cgErr && <p style={{ color: "#dc2626", fontSize: 13, marginTop: 6 }}>{cgErr}</p>}
               <div style={{ marginTop: 12 }}>
-                <Btn variant="back" onClick={()=>onNavigate("home")}>Back Home</Btn>
+                <Btn variant="back" onClick={()=>onNavigate("home")}>{ui.backHome}</Btn>
               </div>
             </>
           ) : (
             <>
+              {/* Language selection (locked after start) */}
+              <div style={{ marginBottom: 12, padding: 12, border: "1px solid #e5e7eb", borderRadius: 10, background: "#fafafa" }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>{ui.chooseLang}</div>
+                <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 10 }}>{ui.lockedNote}</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {LANGS.map((l) => (
+                    <button
+                      key={l.code}
+                      onClick={() => setExamLang(l.code)}
+                      aria-pressed={examLang === l.code}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: examLang === l.code ? "2px solid #2563eb" : "1px solid #d1d5db",
+                        background: examLang === l.code ? "#eff6ff" : "#fff",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        minWidth: 80,
+                      }}
+                    >
+                      {LANG_LABELS[l.code] || l.code} ({l.code})
+                    </button>
+                  ))}
+                </div>
+              </div>
               {isAdmin && (
                 <div style={{ marginBottom: 12, padding: 12, border: "1px dashed #cbd5e1", borderRadius: 10, background: "#f8fafc", display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ fontWeight: 600 }}>Timer (minutes):</div>
@@ -343,10 +449,10 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                   <div style={{ marginLeft: "auto", color: "#475569" }}>Current: <b>{timerMin} min</b></div>
                 </div>
               )}
-              <p style={{ color:"#475569" }}>You are signed in as <b>{authUser?.email || profile.email || "user"}</b>. Your account details will be used for the report.</p>
+              <p style={{ color:"#475569" }}>{ui.signedInAs} <b>{authUser?.email || profile.email || "user"}</b>. Your account details will be used for the report.</p>
               <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
-                <Btn variant="back" onClick={()=>onNavigate("home")}>Back Home</Btn>
-                <Btn variant="primary" onClick={startTest}>Start Test</Btn>
+                <Btn variant="back" onClick={()=>onNavigate("home")}>{ui.backHome}</Btn>
+                <Btn variant="primary" onClick={startTest}>{ui.startTest}</Btn>
               </div>
             </>
           )}
@@ -368,14 +474,23 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         <Card>
           <ProgressBar value={Math.round((indexFromPage(page)/totalQuestions)*100)} />
           <div style={{ marginTop: 18 }}>
-            <h3 style={{ margin: 0, color: "#111827" }}>{cleanText(q.text)}</h3>
-            {q.area && (
-              <div style={{ marginTop: 8, fontSize: 13, color: "#374151" }}>
-                <b>Area:</b> {cleanText(q.area)}
-              </div>
-            )}
-            <p style={{ color: "#6b7280", marginTop: 8 }}>Rate (1 = Not at all, 5 = Very much)</p>
-            <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>Tip: you can press keys 1-5 to answer</div>
+            {(() => {
+              const activeLang = examLocked ? (examLang || lang) : lang;
+              const qText = cleanText(pickLocalized(q, "text", activeLang));
+              const qArea = pickLocalized(q, "area", activeLang);
+              return (
+                <>
+                  <h3 style={{ margin: 0, color: "#111827" }}>{qText}</h3>
+                  {qArea && (
+                    <div style={{ marginTop: 8, fontSize: 13, color: "#374151" }}>
+                      <b>{ui.area}</b> {cleanText(qArea)}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+            <p style={{ color: "#6b7280", marginTop: 8 }}>{ui.rateHint}</p>
+            <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>{ui.tipKeys}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
               {[1,2,3,4,5].map(v=>(
                 <Btn key={v} variant="secondary" selected={current===v}  onClick={()=>setAnsTF(s=>({...s,[q.id]:v}))} style={{minWidth:48}} onMouseEnter={() => setHoverVal(v)} onMouseLeave={() => setHoverVal(null)} onFocus={() => setHoverVal(v)} onBlur={() => setHoverVal(null)}>{v}</Btn>
