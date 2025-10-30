@@ -1,4 +1,4 @@
-// src/pages/Career.jsx
+﻿// src/pages/Career.jsx
 import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
@@ -30,11 +30,12 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
   return (
     <PageWrap>
       <HeaderBar
+        lang={lang}
         // Left: Logo + Title
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img
-              src="/logo.png" // put your logo in /public/logo.png
+              src="/EEC_Logo.png" // file stored under public/
               alt="Logo"
               style={{ height: 40, width: "auto" }}
             />
@@ -46,8 +47,19 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
         // Right: Language button + Admin button
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <nav style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Btn variant="link" to="home" onClick={(e) => onNavigate("home", null, e)}>
+                {t.navHome}
+              </Btn>
+              <Btn variant="link" to="about" onClick={(e) => onNavigate("about", null, e)}>
+                {t.navAbout}
+              </Btn>
+              <Btn variant="link" to="blogs" onClick={(e) => onNavigate("blogs", null, e)}>
+                {t.navBlogs}
+              </Btn>
+            </nav>
             <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-            <UserMenu onNavigate={onNavigate} />
+            <UserMenu onNavigate={onNavigate} lang={lang} />
           </div>
         }
       />
@@ -80,15 +92,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
               >
                 {t.takeTest}
               </Btn>
-              <Btn
-                variant="secondary"
-                onClick={() => {
-                  onNavigate("login");
-                }}
-                style={{ padding: "12px 18px" }}
-              >
-                {t.adminLogin}
-              </Btn>
+
             </div>
           </div>
 
@@ -258,7 +262,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
 
 const rowStyle = {
   display: "flex",
-  alignItems: "center",
+  alignItems: "flex-start",
   gap: 10,
   margin: "6px 0",
 };
@@ -268,4 +272,6 @@ const dot = (c) => ({
   borderRadius: 999,
   background: c,
   border: "1px solid rgba(0,0,0,0.06)",
+  marginTop: 4,
 });
+

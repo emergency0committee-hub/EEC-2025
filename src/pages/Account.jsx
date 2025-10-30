@@ -11,6 +11,8 @@ export default function Account({ onNavigate }) {
     onNavigate: PropTypes.func.isRequired,
   };
 
+  const navTo = (route, data = null) => (event) => onNavigate(route, data, event);
+
   const LS_CURRENT_USER = "cg_current_user_v1";
   const saveCurrent = (u) => { try { localStorage.setItem(LS_CURRENT_USER, JSON.stringify(u)); } catch {} };
 
@@ -123,7 +125,7 @@ export default function Account({ onNavigate }) {
         <HeaderBar title="Account" right={null} />
         <Card>
           <p style={{ color: "#6b7280" }}>You are not signed in.</p>
-          <Btn variant="primary" onClick={() => onNavigate("login")}>Go to Login</Btn>
+          <Btn variant="primary" to="login" onClick={navTo("login")}>Go to Login</Btn>
         </Card>
       </PageWrap>
     );
@@ -266,7 +268,7 @@ export default function Account({ onNavigate }) {
         {errors.confirmNewPassword && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.confirmNewPassword}</p>}
       </Card>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <Btn variant="secondary" onClick={() => onNavigate("home")}>Cancel</Btn>
+        <Btn variant="secondary" to="home" onClick={navTo("home")}>Cancel</Btn>
         <Btn variant="primary" onClick={onSave} disabled={saving}>Save Changes</Btn>
         <Btn variant="back" onClick={onSignOut}>Sign out</Btn>
       </div>

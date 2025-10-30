@@ -21,6 +21,7 @@ import SATTraining from "./pages/sat/SATTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
 import Btn from "./components/Btn.jsx";
+import { normalizeRoute, routeHref, isModifiedEvent } from "./lib/routes.js";
 // import { testSupabaseConnection } from "./lib/supabase.js";
 
 function SatPlaceholder() { return null; }
@@ -56,6 +57,7 @@ export default function App() {
   });
   
   const [resultsPayload, setResultsPayload] = useState(null);
+  const BASE_TITLE = "EEC";
 
   // Global language state with localStorage persistence
   const [lang, setLang] = useState(() => {
@@ -100,21 +102,114 @@ export default function App() {
       const base = import.meta.env.BASE_URL || "/";
       let path = window.location.pathname || "/";
       if (path.startsWith(base)) path = path.slice(base.length);
-      const normalized = String(path).replace(/^\/+/, "").trim() || "home";
+      const normalized = normalizeRoute(path) || "home";
       setRoute(normalized);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
-  const onNavigate = (to, data = null) => {
-    const normalized = String(to || "").replace(/^\/+/, "").trim();
+  useEffect(() => {
+    let pageTitle = null;
+    const participant =
+      resultsPayload?.participant ||
+      resultsPayload?.submission?.participant ||
+      resultsPayload?.submission?.profile ||
+      null;
+
+    switch (route) {
+      case "home":
+        pageTitle = "Home";
+        break;
+      case "career":
+        pageTitle = "Career Guidance";
+        break;
+      case "blogs":
+        pageTitle = "Blogs";
+        break;
+      case "about":
+        pageTitle = "About";
+        break;
+      case "test":
+        pageTitle = "Career Guidance Test";
+        break;
+      case "thanks":
+        pageTitle = "Thank You";
+        break;
+      case "login":
+        pageTitle = "Sign In";
+        break;
+      case "account":
+        pageTitle = "Account";
+        break;
+      case "admin-dashboard":
+        pageTitle = "Career Dashboard";
+        break;
+      case "admin-sat":
+        pageTitle = "SAT Dashboard";
+        break;
+      case "admin-sat-training":
+        pageTitle = "SAT Training Analytics";
+        break;
+      case "sat":
+        pageTitle = "SAT Diagnostic";
+        break;
+      case "sat-exam":
+        pageTitle =
+          resultsPayload?.practice?.title ||
+          (resultsPayload?.practice?.kind
+            ? `SAT ${String(resultsPayload.practice.kind).toUpperCase()}`
+            : "SAT Exam");
+        break;
+      case "sat-training":
+        pageTitle = "SAT Training";
+        break;
+      case "sat-results": {
+        const name =
+          participant?.name ||
+          participant?.fullName ||
+          resultsPayload?.submission?.title ||
+          null;
+        pageTitle = name ? `SAT Results (${name})` : "SAT Results";
+        break;
+      }
+      case "results": {
+        const name =
+          participant?.name ||
+          participant?.fullName ||
+          resultsPayload?.submission?.title ||
+          null;
+        pageTitle = name ? `Career Results (${name})` : "Career Results";
+        break;
+      }
+      case "select-results":
+        pageTitle = "Results Directory";
+        break;
+      case "ai-educator":
+        pageTitle = "AI Educator";
+        break;
+      default:
+        pageTitle = route && route !== "home" ? route.replace(/-/g, " ") : null;
+    }
+
+    document.title = pageTitle ? `${BASE_TITLE} | ${pageTitle}` : BASE_TITLE;
+  }, [route, resultsPayload]);
+
+  const onNavigate = (to, data = null, event = null) => {
+    const normalized = normalizeRoute(to);
+
+    if (event && !event.defaultPrevented) {
+      if (isModifiedEvent(event)) {
+        return;
+      }
+      event.preventDefault?.();
+    }
+
     setResultsPayload(data);
     setRoute(normalized);
     window.scrollTo(0, 0);
     // Update URL for navigation
-    const base = import.meta.env.BASE_URL || "/";
-    const newUrl = normalized === "home" ? base : `${base}${normalized}`;
+    const newUrl = routeHref(normalized);
     window.history.pushState(null, "", newUrl);
   };
 
@@ -128,8 +223,8 @@ export default function App() {
 
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "blogs")  return <Blogs onNavigate={onNavigate} />;
-  if (route === "about")  return <About onNavigate={onNavigate} />;
+  if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
+  if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
@@ -151,7 +246,13 @@ export default function App() {
             <p style={{ color: "#6b7280" }}>
               Results are visible to administrators only.
             </p>
-            <Btn variant="primary" onClick={() => onNavigate("home")}>Back to Home</Btn>
+            <Btn
+              variant="primary"
+              to="home"
+              onClick={(e) => onNavigate("home", null, e)}
+            >
+              Back to Home
+            </Btn>
           </Card>
         </PageWrap>
       );
@@ -167,7 +268,13 @@ export default function App() {
             <p style={{ color: "#6b7280" }}>
               SAT results are visible to administrators only.
             </p>
-            <Btn variant="primary" onClick={() => onNavigate("home")}>Back to Home</Btn>
+            <Btn
+              variant="primary"
+              to="home"
+              onClick={(e) => onNavigate("home", null, e)}
+            >
+              Back to Home
+            </Btn>
           </Card>
         </PageWrap>
       );
@@ -182,7 +289,13 @@ export default function App() {
       <HeaderBar title="Not Found" right={null} />
       <Card>
         <p>Page not found.</p>
-        <Btn variant="primary" onClick={() => onNavigate("home")}>Back Home</Btn>
+        <Btn
+          variant="primary"
+          to="home"
+          onClick={(e) => onNavigate("home", null, e)}
+        >
+          Back Home
+        </Btn>
       </Card>
     </PageWrap>
   );

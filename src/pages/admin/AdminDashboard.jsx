@@ -1,11 +1,12 @@
 // src/pages/admin/AdminDashboard.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import AdminTable from "./AdminTable2.jsx";
 import AdminLegend from "./AdminLegend.jsx";
 import { supabase } from "../../lib/supabase.js";
+import Results from "../Results.jsx";
 
 export default function AdminDashboard({ onNavigate }) {
   AdminDashboard.propTypes = {
@@ -14,6 +15,87 @@ export default function AdminDashboard({ onNavigate }) {
 
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedSchool, setSelectedSchool] = useState("");
+  const [bulkSet, setBulkSet] = useState(null);
+
+  const realSubmissions = useMemo(
+    () => submissions.filter((s) => !s?._demo),
+    [submissions]
+  );
+
+  const schoolOptions = useMemo(() => {
+    const unique = new Set();
+    realSubmissions.forEach((sub) => {
+      const p = sub?.participant || sub?.profile || {};
+      const school = (p.school || "").trim();
+      if (school) {
+        unique.add(school);
+      }
+    });
+    return Array.from(unique).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [realSubmissions]);
+
+  const getSchool = (submission) => {
+    if (!submission) return "";
+    const p = submission.participant || submission.profile || {};
+    return (p.school || "").trim();
+  };
+
+  const bulkEntries = bulkSet?.entries || [];
+  const bulkActive = bulkEntries.length > 0;
+
+  const handleBulkExport = () => {
+    if (!selectedSchool) return;
+    const target = selectedSchool.trim().toLowerCase();
+    const entries = realSubmissions.filter(
+      (sub) => getSchool(sub).trim().toLowerCase() === target
+    );
+    if (!entries.length) {
+      alert("No submissions found for the selected school yet.");
+      return;
+    }
+    setBulkSet({ school: selectedSchool, entries });
+  };
+
+  useEffect(() => {
+    if (!bulkActive) {
+      return;
+    }
+
+    const fireResize = () => {
+      try {
+        window.dispatchEvent(new Event("resize"));
+      } catch (err) {
+        console.warn("Bulk export resize dispatch failed", err);
+      }
+    };
+
+    fireResize();
+    const resizeTimer = setTimeout(fireResize, 150);
+    const printTimer = setTimeout(() => {
+      fireResize();
+      try {
+        window.print();
+      } catch (err) {
+        console.error("Failed to start bulk print", err);
+      }
+    }, 700);
+
+    return () => {
+      clearTimeout(resizeTimer);
+      clearTimeout(printTimer);
+    };
+  }, [bulkActive]);
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      setBulkSet(null);
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
 
   useEffect(() => {
     const fetchSubmissions = async () => {
@@ -128,21 +210,165 @@ export default function AdminDashboard({ onNavigate }) {
   };
 
 
+  const printContainerStyle = bulkActive
+    ? {
+        position: "fixed",
+        inset: 0,
+        width: "100vw",
+        minHeight: "100vh",
+        padding: "20px 0",
+        background: "#ffffff",
+        overflowY: "auto",
+        visibility: "hidden",
+        opacity: 0,
+        pointerEvents: "none",
+        zIndex: -1,
+      }
+    : { display: "none" };
+
   return (
     <PageWrap>
-      <HeaderBar title="Test Submissions" right={null} />
-      <Card>
-        <h3 style={{ marginTop: 0 }}>Recent Test Submissions</h3>
-        <AdminLegend />
-        {loading ? (
-          <p style={{ color: "#6b7280" }}>Loading test submissions...</p>
-        ) : (
-          <AdminTable submissions={submissions} onViewSubmission={handleViewSubmission} onDeleteSubmission={handleDeleteSubmission} />
-        )}
-        <div style={{ marginTop: 16 }}>
-          <Btn variant="back" onClick={() => onNavigate("home")}>Back to Home</Btn>
-        </div>
-      </Card>
+      <style>
+        {`
+          @media print {
+            .bulk-hide-print { display: none !important; }
+            .bulk-print-wrap {
+              visibility: visible !important;
+              opacity: 1 !important;
+              pointer-events: auto !important;
+              position: static !important;
+              inset: auto !important;
+              width: 100% !important;
+              min-height: auto !important;
+              overflow: visible !important;
+              z-index: auto !important;
+            }
+          }
+        `}
+      </style>
+
+      <div className={`admin-bulk-screen${bulkActive ? " bulk-hide-print" : ""}`}>
+        <HeaderBar title="Test Submissions" right={null} />
+        <Card>
+          <h3 style={{ marginTop: 0 }}>Recent Test Submissions</h3>
+          <AdminLegend />
+
+          {schoolOptions.length > 0 && (
+            <div
+              className="no-print"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 16,
+                background: "#f9fafb",
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                padding: "12px 16px",
+              }}
+            >
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                <label htmlFor="bulk-school" style={{ fontWeight: 600, color: "#374151" }}>
+                  Bulk export by school
+                </label>
+                <select
+                  id="bulk-school"
+                  value={selectedSchool}
+                  onChange={(e) => setSelectedSchool(e.target.value)}
+                  style={{
+                    minWidth: 220,
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    fontSize: 14,
+                  }}
+                >
+                  <option value="">Select a school…</option>
+                  {schoolOptions.map((school) => (
+                    <option key={school} value={school}>
+                      {school}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Btn
+                variant="primary"
+                onClick={handleBulkExport}
+                disabled={!selectedSchool || bulkActive}
+                style={
+                  !selectedSchool || bulkActive
+                    ? { opacity: 0.6, cursor: "not-allowed" }
+                    : undefined
+                }
+              >
+                {bulkActive ? "Preparing..." : "Export PDF"}
+              </Btn>
+            </div>
+          )}
+
+          {bulkSet?.school && bulkEntries.length > 0 && (
+            <div
+              className="no-print"
+              style={{
+                marginBottom: 12,
+                padding: "10px 12px",
+                background: "#ecfdf5",
+                border: "1px solid #bbf7d0",
+                borderRadius: 8,
+                color: "#065f46",
+                fontSize: 13,
+              }}
+            >
+              Preparing PDF for {bulkEntries.length}{" "}
+              {bulkEntries.length === 1 ? "submission" : "submissions"} from{" "}
+              <strong>{bulkSet.school}</strong>. The print dialog will open shortly.
+            </div>
+          )}
+
+          {loading ? (
+            <p style={{ color: "#6b7280" }}>Loading test submissions...</p>
+          ) : (
+            <AdminTable
+              submissions={submissions}
+              onViewSubmission={handleViewSubmission}
+              onDeleteSubmission={handleDeleteSubmission}
+            />
+          )}
+          <div style={{ marginTop: 16 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>
+              Back to Home
+            </Btn>
+          </div>
+        </Card>
+      </div>
+
+      <div
+        className="bulk-print-wrap"
+        aria-hidden="true"
+        style={printContainerStyle}
+      >
+        {bulkEntries.map((submission, index) => {
+          const isLast = index === bulkEntries.length - 1;
+          return (
+            <div
+              key={submission.id || index}
+              style={{
+                marginBottom: isLast ? 0 : 32,
+                pageBreakAfter: isLast ? "auto" : "always",
+                breakAfter: isLast ? "auto" : "page",
+              }}
+            >
+              <Results
+                submission={submission}
+                fromAdmin
+                onNavigate={() => {}}
+              />
+            </div>
+          );
+        })}
+      </div>
     </PageWrap>
   );
 }

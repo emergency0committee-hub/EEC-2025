@@ -7,7 +7,7 @@ import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
 import TimerHeader from "../components/TimerHeader.jsx";
 import useCountdown from "../hooks/useCountdown.js";
-import { LANGS } from "../i18n/strings.js";
+import { LANGS, STR } from "../i18n/strings.js";
 import PaletteOverlay from "./test/PaletteOverlay.jsx";
 
 import {
@@ -27,7 +27,6 @@ import {
   Q_UNIFIED_CLEAN as RAW_RIASEC,
 } from "../questionBank.js";
 
-
 /* ====================== Validation / Questions ====================== */
 const RAW_APT = [];
 const RAW_WORK = [];
@@ -46,15 +45,30 @@ const PROFILE_KEY = "cg_profile_v1";
 /* ====================== Utils ====================== */
 function cleanText(s) {
   if (!s) return "";
-  // Quick sanitize for common mojibake sequences
-  return String(s)
-    .replace(/â/g, "'")
-    .replace(/â/g, "—")
-    .replace(/â/g, "–")
-    .replace(/A�A\?A"/g, " — ")
-    .replace(/A�A\?ATs/g, "'s")
-    .replace(/A�A\?ATre/g, "'re")
-    .replace(/A�A\?ATt/g, "'t");
+  let out = String(s);
+  const replacements = [
+    ["\ufeff", ""],
+    ["\ufffd", ""],
+    ["\u00c3\u00a2\u00c2\u20ac\u00c2\u2122", "'"],
+    ["\u00c3\u00a2\u00c2\u20ac\u00c2\u0153", "\""],
+    ["\u00c3\u00a2\u00c2\u20ac\u00c2\ufffd", "\""],
+    ["\u00c3\u00a2\u00c2\u20ac\u00c2\u201d", "\u2014"],
+    ["\u00c3\u00a2\u00c2\u20ac\u00c2\u201c", "\u2013"],
+    ["\u00e2\u20ac\u2122", "'"],
+    ["\u00e2\u20ac\u0153", "\""],
+    ["\u00e2\u20ac\u009d", "\""],
+    ["\u00e2\u20ac\u201c", "\u2013"],
+    ["\u00e2\u20ac\u201d", "\u2014"],
+  ];
+  for (const [needle, value] of replacements) {
+    if (out.includes(needle)) {
+      out = out.split(needle).join(value);
+    }
+  }
+  return out
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .trim();
 }
 function shuffleArray(arr) {
   const a = [...(arr || [])];
@@ -132,23 +146,6 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
   }, []);
 
-  if (!authLoading && !authUser) {
-    return (
-      <PageWrap>
-        <HeaderBar title="Sign In Required" right={null} />
-        <Card>
-          <p style={{ color: "#6b7280" }}>
-            Please sign in to start the test.
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="primary" onClick={() => onNavigate("login")}>Go to Login</Btn>
-            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-          </div>
-        </Card>
-      </PageWrap>
-    );
-  }
-
   const [page, setPage] = useState(INTRO);
   const [cgUnlocked, setCgUnlocked] = useState(() => {
     try { return localStorage.getItem("cg_access_ok_v1") === "1"; } catch { return false; }
@@ -160,7 +157,13 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     try { return localStorage.getItem("cg_exam_lang") || ""; } catch { return ""; }
   });
   const [examLocked, setExamLocked] = useState(false);
-  const [profile, setProfile] = useState(() => ({ name: "", email: "", school: "" }));
+  const [profile, setProfile] = useState(() => ({
+    name: "",
+    email: "",
+    school: "",
+    className: "",
+    phone: "",
+  }));
   const [showProfileError, setShowProfileError] = useState(false);
   const [ansTF, setAnsTF] = useState({});
   const [showPalette, setShowPalette] = useState(false);
@@ -179,91 +182,138 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const [shuffledRIASEC, setShuffledRIASEC] = useState([]);
 
   // Local minimal i18n for the new language selector copy
+  const localeKey = String(lang || "EN").toUpperCase();
+  const strings = STR[localeKey] || STR.EN;
+  const loginLabel = strings.signIn || "Sign In";
   const UI = {
     EN: {
       chooseLang: "Select the language for this test",
       lockedNote: "This choice will be locked during the exam.",
       accessTitle: "Access Code Required",
       accessDesc: "Enter the access code provided by your instructor to start the Career Guidance test.",
+      loadingTitle: "Loading",
+      checkingSession: "Please wait while we confirm your session.",
       placeholderCode: "Enter access code",
       invalidCode: "Invalid access code",
       backHome: "Back Home",
       signedInAs: "You are signed in as",
       startTest: "Start Test",
       area: "Area:",
-      rateHint: "{ui.rateHint}",
-      tipKeys: "{ui.tipKeys}",
+      rateHint: "Rate (1 = Not at all, 5 = Strongly)",
+      tipKeys: "Tip: use the number keys 1-5",
       participantTitle: "Participant information",
       participantDesc: "Please complete the following details before starting the test.",
       participantName: "Full Name",
       participantEmail: "Email",
       participantSchool: "School / Organization",
+      participantClass: "Class / Grade",
+      participantPhone: "Phone Number",
       participantNamePlaceholder: "Enter your full name",
       participantEmailPlaceholder: "Enter your email address",
       participantSchoolPlaceholder: "Enter your school or organization",
-      participantError: "Please enter your name, a valid email, and your school or organization to continue.",
+      participantClassPlaceholder: "Enter your class or grade",
+      participantPhonePlaceholder: "Enter your phone number",
+      participantError: "Please enter your name, school, class, phone number, and a valid email to continue.",
     },
     AR: {
       chooseLang: "اختر لغة هذا الاختبار",
-      lockedNote: "سيتم قفل الاختيار أثناء الامتحان.",
+      lockedNote: "سيتم تثبيت هذا الاختيار أثناء الامتحان.",
       accessTitle: "رمز الدخول مطلوب",
-      accessDesc: "أدخل رمز الوصول الذي قدمه المعلّم لبدء اختبار التوجيه المهني.",
-      placeholderCode: "أدخل رمز الوصول",
-      invalidCode: "رمز غير صحيح",
-      backHome: "العودة للصفحة الرئيسية",
-      signedInAs: "أنت مسجّل الدخول باسم",
+      accessDesc: "أدخل رمز الدخول الذي زوّدك به المعلّم لبدء اختبار التوجيه المهني.",
+      loadingTitle: "جارٍ التحميل",
+      checkingSession: "يرجى الانتظار بينما نتحقق من جلسة تسجيل الدخول.",
+      placeholderCode: "أدخل رمز الدخول",
+      invalidCode: "رمز الدخول غير صحيح",
+      backHome: "العودة إلى الرئيسية",
+      signedInAs: "تم تسجيل الدخول باسم",
       startTest: "بدء الاختبار",
       area: "المجال:",
-      rateHint: "قيّم (1 = لا يناسبني إطلاقًا، 5 = مناسب جدًا)",
-      tipKeys: "نصيحة: يمكنك الضغط على الأرقام 1–5 للإجابة",
-      participantTitle: "معلومات المشارك",
-      participantDesc: "يرجى إكمال التفاصيل التالية قبل بدء الاختبار.",
+      rateHint: "قيّم (1 = غير مناسب، 5 = مناسب جدًا)",
+      tipKeys: "تلميح: يمكنك استخدام الأرقام من 1 إلى 5",
+      participantTitle: "بيانات المشارك",
+      participantDesc: "يرجى إكمال البيانات التالية قبل بدء الاختبار.",
       participantName: "الاسم الكامل",
       participantEmail: "البريد الإلكتروني",
       participantSchool: "المدرسة / المؤسسة",
+      participantClass: "الصف / المرحلة",
+      participantPhone: "رقم الهاتف",
       participantNamePlaceholder: "أدخل اسمك الكامل",
       participantEmailPlaceholder: "أدخل بريدك الإلكتروني",
-      participantSchoolPlaceholder: "أدخل مدرستك أو مؤسستك",
-      participantError: "يرجى إدخال اسمك وبريد إلكتروني صالح ومدرستك أو مؤسستك للمتابعة.",
+      participantSchoolPlaceholder: "أدخل اسم المدرسة أو المؤسسة",
+      participantClassPlaceholder: "أدخل الصف أو المرحلة",
+      participantPhonePlaceholder: "أدخل رقم الهاتف",
+      participantError: "يجب إدخال الاسم والمدرسة والصف ورقم الهاتف وبريد إلكتروني صالح للمتابعة.",
     },
     FR: {
-      chooseLang: "Sélectionnez la langue du test",
+      chooseLang: "Sélectionnez la langue de ce test",
       lockedNote: "Ce choix sera verrouillé pendant l'examen.",
       accessTitle: "Code d'accès requis",
-      accessDesc: "Entrez le code d'accès fourni par votre enseignant pour commencer le test d'orientation.",
+      accessDesc: "Saisissez le code fourni par votre enseignant pour démarrer le test d'orientation.",
+      loadingTitle: "Chargement",
+      checkingSession: "Merci de patienter pendant la vérification de votre session.",
       placeholderCode: "Saisir le code d'accès",
       invalidCode: "Code d'accès invalide",
       backHome: "Retour à l'accueil",
       signedInAs: "Connecté en tant que",
       startTest: "Commencer le test",
       area: "Domaine :",
-      rateHint: "Évaluer (1 = Pas du tout, 5 = Beaucoup)",
-      tipKeys: "Astuce : vous pouvez utiliser les touches 1–5",
+      rateHint: "Évaluez (1 = Pas du tout, 5 = Beaucoup)",
+      tipKeys: "Astuce : utilisez les touches 1 à 5",
       participantTitle: "Informations du participant",
       participantDesc: "Veuillez compléter les informations suivantes avant de commencer le test.",
       participantName: "Nom complet",
-      participantEmail: "E-mail",
+      participantEmail: "Adresse e-mail",
       participantSchool: "École / Organisation",
+      participantClass: "Classe / Niveau",
+      participantPhone: "Numéro de téléphone",
       participantNamePlaceholder: "Saisissez votre nom complet",
       participantEmailPlaceholder: "Saisissez votre adresse e-mail",
       participantSchoolPlaceholder: "Saisissez votre école ou organisation",
-      participantError: "Veuillez saisir votre nom, un e-mail valide et votre école ou organisation pour continuer.",
+      participantClassPlaceholder: "Saisissez votre classe ou votre niveau",
+      participantPhonePlaceholder: "Saisissez votre numéro de téléphone",
+      participantError: "Veuillez saisir votre nom, votre école, votre classe, votre numéro de téléphone et une adresse e-mail valide pour continuer.",
     },
   };
-  const ui = UI[String(lang || "EN").toUpperCase()] || UI.EN;
+  const ui = UI[localeKey] || UI.EN;
   const LANG_LABELS = { EN: "English", AR: "العربية", FR: "Français" };
+  const signInTitle = strings.signInTitle || loginLabel;
+  const signInPrompt = strings.signInSubtitle || ui.accessDesc || "Please sign in to continue.";
+  const backHomeLabel = ui.backHome || strings.backToHome || "Back Home";
 
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-      const initName = saved?.name || authUser?.user_metadata?.name || authUser?.user_metadata?.username || (authUser?.email ? authUser.email.split("@")[0] : "");
-      const initEmail = saved?.email || authUser?.email || "";
-      const initSchool = saved?.school || "";
+      const meta = authUser?.user_metadata || {};
+      const initName =
+        saved?.name ||
+        meta?.name ||
+        meta?.username ||
+        (authUser?.email ? authUser.email.split("@")[0] : "");
+      const initEmail = saved?.email || authUser?.email || meta?.email || "";
+      const initSchool = saved?.school || meta?.school || meta?.organization || "";
+      const initClass =
+        saved?.className ||
+        saved?.class ||
+        saved?.grade ||
+        meta?.className ||
+        meta?.class ||
+        meta?.grade ||
+        "";
+      const initPhone =
+        saved?.phone ||
+        saved?.tel ||
+        saved?.phoneNumber ||
+        meta?.phone ||
+        meta?.phoneNumber ||
+        meta?.tel ||
+        "";
       setProfile((prev) => ({
         ...prev,
         name: initName || prev.name,
         email: initEmail || prev.email,
         school: initSchool || prev.school,
+        className: initClass || prev.className,
+        phone: initPhone || prev.phone,
       }));
     } catch {}
   }, [authUser]);
@@ -272,7 +322,17 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const isEmail = (s) => /^\S+@\S+\.\S+$/.test(String(s || "").trim());
   const isValidName = (s) => String(s || "").trim().length > 1;
   const isValidSchool = (s) => String(s || "").trim().length > 1;
-  const isValidProfile = () => isValidName(profile.name) && isEmail(profile.email) && isValidSchool(profile.school);
+  const isValidClass = (s) => String(s || "").trim().length > 0;
+  const isValidPhone = (s) => {
+    const digits = String(s || "").replace(/[^\d]/g, "");
+    return digits.length >= 6;
+  };
+  const isValidProfile = () =>
+    isValidName(profile.name) &&
+    isValidSchool(profile.school) &&
+    isValidClass(profile.className) &&
+    isValidPhone(profile.phone) &&
+    isEmail(profile.email);
 
   // Derived results
   const riasecSums = useMemo(() => riasecFromAnswers(Q_RIASEC || [], ansTF), [ansTF]);
@@ -387,6 +447,34 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [page, R_START, LAST, shuffledRIASEC, next, prev, endTest]);
 
+  if (authLoading) {
+    return (
+      <PageWrap>
+        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={lang} />
+        <Card>
+          <p style={{ color: "#6b7280" }}>
+            {ui.checkingSession || "Please wait while we verify your session."}
+          </p>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <PageWrap>
+        <HeaderBar title={signInTitle} right={null} lang={lang} />
+        <Card>
+          <p style={{ color: "#6b7280" }}>{signInPrompt}</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="primary" onClick={() => onNavigate("login")}>{loginLabel}</Btn>
+            <Btn variant="back" onClick={() => onNavigate("home")}>{backHomeLabel}</Btn>
+          </div>
+        </Card>
+      </PageWrap>
+    );
+  }
+
   /* ---------- Pages ---------- */
   const Timer = (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -419,7 +507,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1";
     return (
       <PageWrap>
-        <HeaderBar title="Career Guidance Test" />
+        <HeaderBar title="Career Guidance Test" lang={lang} />
         <Card>
           {!cgUnlocked ? (
             <>
@@ -493,24 +581,58 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                       placeholder: ui.participantNamePlaceholder,
                     },
                     {
+                      key: "school",
+                      label: ui.participantSchool,
+                      placeholder: ui.participantSchoolPlaceholder,
+                    },
+                    {
+                      key: "className",
+                      label: ui.participantClass,
+                      placeholder: ui.participantClassPlaceholder,
+                    },
+                    {
+                      key: "phone",
+                      type: "tel",
+                      label: ui.participantPhone,
+                      placeholder: ui.participantPhonePlaceholder,
+                    },
+                    {
                       key: "email",
                       type: "email",
                       label: ui.participantEmail,
                       placeholder: ui.participantEmailPlaceholder,
                     },
-                    {
-                      key: "school",
-                      label: ui.participantSchool,
-                      placeholder: ui.participantSchoolPlaceholder,
-                    },
                   ].map(({ key, label, placeholder, type = "text" }) => {
                     const fieldValue = profile[key] || "";
-                    const isFieldValid =
+                    let isFieldValid = true;
+                    switch (key) {
+                      case "email":
+                        isFieldValid = isEmail(fieldValue);
+                        break;
+                      case "school":
+                        isFieldValid = isValidSchool(fieldValue);
+                        break;
+                      case "className":
+                        isFieldValid = isValidClass(fieldValue);
+                        break;
+                      case "phone":
+                        isFieldValid = isValidPhone(fieldValue);
+                        break;
+                      default:
+                        isFieldValid = isValidName(fieldValue);
+                    }
+                    const autoCompleteAttr =
                       key === "email"
-                        ? isEmail(fieldValue)
-                        : key === "school"
-                          ? isValidSchool(fieldValue)
-                          : isValidName(fieldValue);
+                        ? "email"
+                        : key === "name"
+                          ? "name"
+                          : key === "school"
+                            ? "organization"
+                            : key === "className"
+                              ? "section"
+                              : key === "phone"
+                                ? "tel"
+                                : "off";
                     return (
                       <label key={key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         <span style={{ fontWeight: 600, color: "#1e293b" }}>{label}</span>
@@ -523,7 +645,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                             if (showProfileError) setShowProfileError(false);
                           }}
                           placeholder={placeholder}
-                          autoComplete={key === "email" ? "email" : key === "name" ? "name" : "organization"}
+                          autoComplete={autoCompleteAttr}
                           style={{
                             padding: "10px 12px",
                             borderRadius: 8,
@@ -562,7 +684,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     const isLast = page === LAST;
     return (
       <PageWrap>
-        <HeaderBar title="Career Guidance Test" right={Timer} />
+        <HeaderBar title="Career Guidance Test" right={Timer} lang={lang} />
         <Card>
           <ProgressBar value={Math.round((indexFromPage(page)/totalQuestions)*100)} />
           <div style={{ marginTop: 18 }}>
@@ -614,9 +736,3 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
   return null;
 }
-
-
-
-
-
-

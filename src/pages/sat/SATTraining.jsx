@@ -57,8 +57,29 @@ export default function SATTraining({ onNavigate }) {
   const [classEmails, setClassEmails] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [classLogs, setClassLogs] = useState([]);
+  const [viewClassLog, setViewClassLog] = useState(null);
   // Class sub-tabs (admin view)
   const [classTab, setClassTab] = useState("classwork"); // classwork | analytics
+
+  const fmtDate = (iso, time = false) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      if (time) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return d.toLocaleDateString();
+    } catch {
+      return "—";
+    }
+  };
+
+  const fmtDuration = (sec) => {
+    const n = Number(sec);
+    if (!Number.isFinite(n) || n < 0) return "—";
+    const mm = Math.floor(n / 60).toString().padStart(2, "0");
+    const ss = Math.floor(n % 60).toString().padStart(2, "0");
+    return `${mm}:${ss}`;
+  };
 
   // Classwork resources
   const [resLoading, setResLoading] = useState(false);
@@ -77,6 +98,9 @@ export default function SATTraining({ onNavigate }) {
     const lessons = UNIT_LESSONS[csvUnit] || [];
     setCsvLesson((prev) => (lessons.includes(prev) ? prev : (lessons[0] || "")));
   }, [csvUnit]);
+
+  const openClassLog = (row) => setViewClassLog(row);
+  const closeClassLog = () => setViewClassLog(null);
 
   const DEFAULT_META = {
     classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
@@ -949,25 +973,33 @@ export default function SATTraining({ onNavigate }) {
                               <th style={{ padding: 10, textAlign: 'left' }}>Section</th>
                               <th style={{ padding: 10, textAlign: 'left' }}>Unit/Lesson</th>
                               <th style={{ padding: 10, textAlign: 'left' }}>Score</th>
+                              <th style={{ padding: 10, textAlign: 'left' }}>Manage</th>
                             </tr>
                           </thead>
                           <tbody>
                             {classLogs.map((r) => {
-                              const fmtDate = (iso, time = false) =>
-                                !iso ? '—' : (time ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date(iso).toLocaleDateString());
                               const rw = r.summary?.rw;
                               const m = r.summary?.math;
-                              let score = '—';
+                              let score = '-';
                               if (rw?.total || rw?.correct) score = `${rw.correct || 0}/${rw.total || 0}`;
                               if (m?.total || m?.correct) score = `${m.correct || 0}/${m.total || 0}`;
                               return (
                                 <tr key={`${r.id || ''}_${r.ts}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
                                   <td style={{ padding: 10 }}>{fmtDate(r.ts)}</td>
                                   <td style={{ padding: 10 }}>{fmtDate(r.ts, true)}</td>
-                                  <td style={{ padding: 10 }}>{r.user_email || '—'}</td>
-                                  <td style={{ padding: 10 }}>{r.section || '—'}</td>
-                                  <td style={{ padding: 10 }}>{r.unit || r.lesson || '—'}</td>
+                                  <td style={{ padding: 10 }}>{r.user_email || '-'}</td>
+                                  <td style={{ padding: 10 }}>{r.section || '-'}</td>
+                                  <td style={{ padding: 10 }}>{r.unit || r.lesson || '-'}</td>
                                   <td style={{ padding: 10 }}>{score}</td>
+                                  <td style={{ padding: 10 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => openClassLog(r)}
+                                      style={{ border: '1px solid #d1d5db', background: '#ffffff', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                                    >
+                                      View
+                                    </button>
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -1183,11 +1215,11 @@ export default function SATTraining({ onNavigate }) {
         </div>
       )}{/* PEOPLE */}
       {tab === "people" && (
-        <Card>
-          <h3 style={{ marginTop: 0 }}>People</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            {people.map((p, i) => (
-              <div key={i} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+      <Card>
+        <h3 style={{ marginTop: 0 }}>People</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+          {people.map((p, i) => (
+            <div key={i} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
                 <div style={{ fontWeight: 700 }}>{p.name}</div>
                 <div style={{ color: "#6b7280" }}>{p.role}</div>
               </div>
@@ -1195,12 +1227,150 @@ export default function SATTraining({ onNavigate }) {
           </div>
           <div style={{ marginTop: 12 }}>
             <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+        </div>
+      </Card>
+    )}
+
+      {viewClassLog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={closeClassLog}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 12, width: 'min(820px, 94vw)', maxHeight: '85vh', overflowY: 'auto', padding: 20 }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <h3 style={{ margin: 0 }}>Submission Details</h3>
+              <button
+                type="button"
+                onClick={closeClassLog}
+                style={{ border: '1px solid #d1d5db', background: '#ffffff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ marginTop: 10, color: '#6b7280', display: 'grid', gap: 4 }}>
+              <div><strong>Student:</strong> {viewClassLog.user_email || '—'}</div>
+              <div>
+                <strong>Section:</strong> {viewClassLog.section || '—'} &nbsp;·&nbsp;
+                <strong>Unit:</strong> {viewClassLog.unit || '—'} &nbsp;·&nbsp;
+                <strong>Lesson:</strong> {viewClassLog.lesson || '—'}
+              </div>
+              <div>
+                <strong>Date:</strong> {fmtDate(viewClassLog.ts)} &nbsp;·&nbsp;
+                <strong>Time:</strong> {fmtDate(viewClassLog.ts, true)}
+              </div>
+              <div><strong>Duration:</strong> {fmtDuration(Number(viewClassLog.elapsed_sec || 0))}</div>
+            </div>
+
+            {(() => {
+              const cards = [];
+              const addCard = (label, data) => {
+                if (!data) return;
+                const total = data.total || 0;
+                const correct = data.correct || 0;
+                const percent = total ? Math.round((correct / total) * 100) : null;
+                cards.push(
+                  <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#f9fafb' }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{correct}/{total}</div>
+                    <div style={{ color: '#6b7280', marginTop: 2 }}>{percent != null ? `${percent}% correct` : 'No data'}</div>
+                  </div>
+                );
+              };
+              addCard('Reading & Writing', viewClassLog.summary?.rw);
+              addCard('Math', viewClassLog.summary?.math);
+              if (!cards.length) return null;
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 16 }}>
+                  {cards}
+                </div>
+              );
+            })()}
+
+            {viewClassLog.metrics && Object.keys(viewClassLog.metrics).length > 0 && (
+              <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
+                <h4 style={{ marginTop: 0 }}>Metrics</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, color: '#6b7280' }}>
+                  {Object.entries(viewClassLog.metrics).map(([key, val]) => (
+                    <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '8px 12px', background: '#f9fafb' }}>
+                      <strong style={{ textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</strong>: {typeof val === 'number' ? Math.round(val * 100) / 100 : String(val)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 18 }}>
+              <h4 style={{ margin: '0 0 8px 0' }}>Question Breakdown</h4>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                      <th style={{ padding: 8, textAlign: 'left' }}>Question</th>
+                      <th style={{ padding: 8, textAlign: 'left' }}>Selected</th>
+                      <th style={{ padding: 8, textAlign: 'left' }}>Correct</th>
+                      <th style={{ padding: 8, textAlign: 'left' }}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const answers = viewClassLog.answers || {};
+                      const choices =
+                        answers.choices ||
+                        answers.custom ||
+                        (viewClassLog.unit ? answers[viewClassLog.unit] : null) ||
+                        answers[Object.keys(answers)[0] || ''] ||
+                        {};
+                      const times = answers.times || {};
+                      const correct = answers.correct || {};
+                      const keys = Object.keys(choices || {});
+                      keys.sort((a, b) => {
+                        const na = parseInt(String(a).replace(/\D+/g, ''), 10);
+                        const nb = parseInt(String(b).replace(/\D+/g, ''), 10);
+                        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+                        return String(a).localeCompare(String(b));
+                      });
+                      if (!keys.length) {
+                        return (
+                          <tr>
+                            <td style={{ padding: 8, color: '#6b7280' }} colSpan={4}>No per-question data available.</td>
+                          </tr>
+                        );
+                      }
+                      return keys.map((key) => {
+                        const chosen = choices[key];
+                        const answer = correct[key];
+                        const isCorrect =
+                          chosen != null &&
+                          answer != null &&
+                          String(chosen).trim().toLowerCase() === String(answer).trim().toLowerCase();
+                        return (
+                          <tr key={key} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                            <td style={{ padding: 8 }}>{key}</td>
+                            <td style={{ padding: 8 }}>{chosen ?? '—'}</td>
+                            <td style={{ padding: 8, color: chosen == null || answer == null ? '#6b7280' : isCorrect ? '#16a34a' : '#ef4444' }}>
+                              {chosen == null || answer == null ? '—' : isCorrect ? 'Correct' : `Wrong (Ans: ${answer})`}
+                            </td>
+                            <td style={{ padding: 8 }}>{fmtDuration(Number(times[key] || 0))}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-        </Card>
+        </div>
       )}
 
-    </PageWrap>
-  );
+  </PageWrap>
+);
 }
 
 // Lightweight components for class stream (admin)

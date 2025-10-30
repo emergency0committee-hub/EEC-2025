@@ -2,10 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "./Btn.jsx";
 import { supabase } from "../lib/supabase.js";
+import { routeHref, isModifiedEvent } from "../lib/routes.js";
+import { STR } from "../i18n/strings.js";
 
-export default function UserMenu({ onNavigate }) {
+export default function UserMenu({ onNavigate, lang = "EN" }) {
   UserMenu.propTypes = {
     onNavigate: PropTypes.func.isRequired,
+    lang: PropTypes.string,
   };
 
   const [open, setOpen] = useState(false);
@@ -29,10 +32,15 @@ export default function UserMenu({ onNavigate }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
+  const navTo = (route, data = null) => (event) => onNavigate(route, data, event);
+
+  const strings = STR[lang] || STR.EN;
+  const loginLabel = strings.signIn || "Login";
+
   if (!currentUser) {
     return (
-      <Btn variant="primary" onClick={() => onNavigate("login")}>
-        Login
+      <Btn variant="primary" to="login" onClick={navTo("login")}>
+        {loginLabel}
       </Btn>
     );
   }
@@ -90,49 +98,105 @@ export default function UserMenu({ onNavigate }) {
             zIndex: 50,
           }}
         >
-          <MenuItem onClick={() => { setOpen(false); onNavigate("account"); }}>
+          <MenuItem
+            to="account"
+            onSelect={(event) => {
+              setOpen(false);
+              onNavigate("account", null, event);
+            }}
+          >
             Profile
           </MenuItem>
           {isAdmin && (
             <>
-              <MenuItem onClick={() => { setOpen(false); onNavigate("admin-dashboard"); }}>
+              <MenuItem
+                to="admin-dashboard"
+                onSelect={(event) => {
+                  setOpen(false);
+                  onNavigate("admin-dashboard", null, event);
+                }}
+              >
                 Career Dashboard
               </MenuItem>
-              <MenuItem onClick={() => { setOpen(false); onNavigate("admin-sat"); }}>
+              <MenuItem
+                to="admin-sat"
+                onSelect={(event) => {
+                  setOpen(false);
+                  onNavigate("admin-sat", null, event);
+                }}
+              >
                 SAT Dashboard
               </MenuItem>
-              <MenuItem onClick={() => { setOpen(false); onNavigate("admin-sat-training"); }}>
+              <MenuItem
+                to="admin-sat-training"
+                onSelect={(event) => {
+                  setOpen(false);
+                  onNavigate("admin-sat-training", null, event);
+                }}
+              >
                 SAT Training Analytics
               </MenuItem>
             </>
           )}
           <div style={{ height: 1, background: "#e5e7eb", margin: "6px 0" }} />
-          <MenuItem onClick={signOut}>Sign out</MenuItem>
+          <MenuItem onClick={signOut}>{strings.signOut || "Sign out"}</MenuItem>
         </div>
       )}
     </div>
   );
 }
 
-function MenuItem({ children, onClick }) {
+function MenuItem({ children, to, onSelect, onClick }) {
   MenuItem.propTypes = {
     children: PropTypes.node.isRequired,
+    to: PropTypes.string,
+    onSelect: PropTypes.func,
     onClick: PropTypes.func,
   };
+
+  const href = to ? routeHref(to) : undefined;
+  const baseStyle = {
+    display: "block",
+    width: "100%",
+    textAlign: "left",
+    padding: "8px 10px",
+    borderRadius: 6,
+    border: "none",
+    background: "transparent",
+    color: "#374151",
+    cursor: "pointer",
+  };
+
+  const handleClick = (event) => {
+    if (href) {
+      if (isModifiedEvent(event)) {
+        return;
+      }
+      event.preventDefault();
+      onSelect?.(event);
+    } else {
+      onClick?.(event);
+    }
+  };
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        onClick={handleClick}
+        style={baseStyle}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
     <button
-      onClick={onClick}
-      style={{
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        padding: "8px 10px",
-        borderRadius: 6,
-        border: "none",
-        background: "transparent",
-        color: "#374151",
-        cursor: "pointer",
-      }}
+      onClick={handleClick}
+      style={baseStyle}
       onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >

@@ -6,7 +6,6 @@ import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import { LANGS, STR } from "../i18n/strings.js";
-import logoUrl from "../assets/logo.png"; // optional
 
 export default function Home({ onNavigate, lang = "EN", setLang }) {
   Home.propTypes = {
@@ -16,101 +15,49 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
   };
   const t = STR[lang] || STR.EN;
 
-  const NavLink = ({ label, to }) => (
-    <button
-      onClick={() => onNavigate(to)}
-      style={{
-        background: "transparent",
-        border: "none",
-        padding: "8px 10px",
-        borderRadius: 6,
-        cursor: "pointer",
-        color: "#374151",
-        fontWeight: 600,
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  const HeaderActions = (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      {/* Left nav: Home / Blogs / About */}
-      <NavLink label="Home" to="home" />
-      <NavLink label="Blogs" to="blogs" />
-      <NavLink label="About Us" to="about" />
-
-      {/* Spacer */}
-      <div style={{ width: 8 }} />
-
-      {/* Language and account (no borders) */}
-      <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-      <UserMenu onNavigate={onNavigate} />
-    </div>
-  );
-
+  const navTo = (route, data = null) => (event) => onNavigate(route, data, event);
 
   return (
     <PageWrap>
       <HeaderBar
+        lang={lang}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Logo"
-                style={{ width: 36, height: 36, borderRadius: 8, objectFit: "contain" }}
-              />
-            ) : (
-              <div
-                aria-hidden
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: "#eef2ff",
-                  color: "#4f46e5",
-                  display: "grid",
-                  placeItems: "center",
-                  fontWeight: 800,
-                  fontSize: 14,
-                }}
-              >
-                GS
-              </div>
-            )}
-            <span>{t.homeTitle}</span>
+            <img
+              src="/EEC_Logo.png"
+              alt="Logo"
+              style={{ height: 40, width: "auto" }}
+            />
+            <span style={{ fontWeight: 600, fontSize: 18 }}>EEC</span>
           </div>
         }
-        right={HeaderActions}
+        right={
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <nav style={{ display: "flex", gap: 12, alignItems: "center" }}>
+              <Btn variant="link" to="home" onClick={(e) => onNavigate("home", null, e)}>
+                {t.navHome}
+              </Btn>
+              <Btn variant="link" to="about" onClick={(e) => onNavigate("about", null, e)}>
+                {t.navAbout}
+              </Btn>
+              <Btn variant="link" to="blogs" onClick={(e) => onNavigate("blogs", null, e)}>
+                {t.navBlogs}
+              </Btn>
+            </nav>
+            <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
+            <UserMenu onNavigate={onNavigate} lang={lang} />
+          </div>
+        }
       />
 
       {/* Hero / Intro */}
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Logo"
-              style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain" }}
-            />
-          ) : (
-            <div
-              aria-hidden
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 8,
-                background: "#eef2ff",
-                color: "#4f46e5",
-                display: "grid",
-                placeItems: "center",
-                fontWeight: 800,
-              }}
-            >
-              GS
-            </div>
-          )}
+          <img
+            src="/EEC_Logo.png"
+            alt="Logo"
+            style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain" }}
+          />
           <div>
             <h2 style={{ margin: 0, color: "#111827" }}>{t.homeWelcome}</h2>
             <p style={{ margin: "6px 0 0", color: "#6b7280" }}>
@@ -133,7 +80,7 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
             <h3 style={{ marginTop: 0, color: "#111827" }}>{t.careerTitle}</h3>
             <p style={{ color: "#6b7280" }}>{t.careerDesc}</p>
             <div style={{ marginTop: "auto" }}>
-              <Btn variant="primary" onClick={() => onNavigate("career")}>Open</Btn>
+              <Btn variant="primary" to="career" onClick={navTo("career")}>Open</Btn>
             </div>
           </div>
         </Card>
@@ -145,7 +92,7 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
               Simulates the Digital SAT with timed modules and a full results report.
             </p>
             <div style={{ marginTop: "auto" }}>
-              <Btn variant="primary" onClick={() => onNavigate("sat")}>Open</Btn>
+              <Btn variant="primary" to="sat" onClick={navTo("sat")}>Open</Btn>
             </div>
           </div>
         </Card>
@@ -157,7 +104,7 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
               Practice Reading & Writing and Math by skill with untimed sets.
             </p>
             <div style={{ marginTop: "auto" }}>
-              <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Open</Btn>
+              <Btn variant="secondary" to="sat-training" onClick={navTo("sat-training")}>Open</Btn>
             </div>
           </div>
         </Card>
@@ -169,7 +116,7 @@ export default function Home({ onNavigate, lang = "EN", setLang }) {
               Adaptive lessons, instant feedback, and personalized study plans.
             </p>
             <div style={{ marginTop: "auto" }}>
-              <Btn variant="secondary" onClick={() => onNavigate("ai-educator")}>Open</Btn>
+              <Btn variant="secondary" to="ai-educator" onClick={navTo("ai-educator")}>Open</Btn>
             </div>
           </div>
         </Card>

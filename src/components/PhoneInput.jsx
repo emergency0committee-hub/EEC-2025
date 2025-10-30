@@ -86,10 +86,10 @@ function FlagIcon({ code }) {
   const src = candidates[srcIdx] || candidates[0];
   const toEmoji = (cc) => {
     const cc2 = (cc || "").toUpperCase();
-    if (!/^[A-Z]{2}$/.test(cc2)) return "🏳️";
+    if (!/^[A-Z]{2}$/.test(cc2)) return "??";
     const cp1 = 127397 + cc2.charCodeAt(0);
     const cp2 = 127397 + cc2.charCodeAt(1);
-    try { return String.fromCodePoint(cp1) + String.fromCodePoint(cp2); } catch { return "🏳️"; }
+    try { return String.fromCodePoint(cp1) + String.fromCodePoint(cp2); } catch { return "??"; }
   };
   return (
     <div style={{ width: 20, height: 14, borderRadius: 2, overflow: "hidden", background: "#f3f4f6", display: "inline-flex", alignItems: "center", justifyContent: "center" }} aria-hidden>
@@ -110,7 +110,19 @@ function FlagIcon({ code }) {
           style={{ display: "block", width: 20, height: 14 }}
         />
       ) : (
-        <div style={{ width: 20, height: 14, background: "#e5e7eb" }} />
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 20,
+            height: 14,
+            fontSize: 12,
+            lineHeight: "14px",
+          }}
+        >
+          {toEmoji(norm)}
+        </span>
       )}
     </div>
   );
@@ -118,13 +130,23 @@ function FlagIcon({ code }) {
 
 FlagIcon.propTypes = { code: PropTypes.string };
 
-export default function PhoneInput({ label = "Phone", region = "", phone = "", onChange, error }) {
+export default function PhoneInput({
+  label = "Phone",
+  placeholder = "e.g., 555 123 4567",
+  region = "",
+  phone = "",
+  onChange,
+  error,
+  dir = "ltr",
+}) {
   PhoneInput.propTypes = {
     label: PropTypes.string,
+    placeholder: PropTypes.string,
     region: PropTypes.string,
     phone: PropTypes.string,
     onChange: PropTypes.func.isRequired,
     error: PropTypes.string,
+    dir: PropTypes.oneOf(["ltr", "rtl"]),
   };
 
   const [open, setOpen] = useState(false);
@@ -145,33 +167,80 @@ export default function PhoneInput({ label = "Phone", region = "", phone = "", o
 
   const dial = (r) => DIAL[r] || "+";
   const pick = (r) => { setOpen(false); onChange({ region: r, phone }); };
+  const isRTL = dir === "rtl";
 
   return (
     <div style={{ position: "relative" }}>
-      <label style={{ display: "block", fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</label>
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <label
+        style={{
+          display: "block",
+          fontSize: 12,
+          color: "#6b7280",
+          marginBottom: 4,
+          textAlign: isRTL ? "right" : "left",
+        }}
+      >
+        {label}
+      </label>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          flexDirection: isRTL ? "row-reverse" : "row",
+        }}
+      >
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => onChange({ region, phone: e.target.value })}
+          placeholder={placeholder}
+          autoComplete="tel"
+          style={{
+            flex: 1,
+            padding: "10px 12px",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            direction: dir,
+            textAlign: isRTL ? "right" : "left",
+          }}
+        />
         <button
           ref={btnRef}
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-haspopup
           aria-expanded={open}
-          title={region ? `${NAMES[region] || region} ${dial(region)}` : "Select region"}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, background: "#f9fafb", minWidth: 96, cursor: "pointer" }}
+          title={region ? `${NAMES[region] || region} ${dial(region)}` : ""}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "10px 12px",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            background: "#f9fafb",
+            minWidth: 96,
+            cursor: "pointer",
+            flexDirection: isRTL ? "row-reverse" : "row",
+          }}
         >
           <FlagIcon code={region} />
           <span style={{ color: "#111827", fontWeight: 600 }}>{dial(region)}</span>
         </button>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => onChange({ region, phone: e.target.value })}
-          placeholder="e.g., 555 123 4567"
-          autoComplete="tel"
-          style={{ flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
-        />
       </div>
-      {error && (<p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{error}</p>)}
+      {error && (
+        <p
+          style={{
+            color: "#dc2626",
+            fontSize: 14,
+            margin: "4px 0 0",
+            textAlign: isRTL ? "right" : "left",
+          }}
+        >
+          {error}
+        </p>
+      )}
       {open && (
         <div
           ref={menuRef}
@@ -189,6 +258,8 @@ export default function PhoneInput({ label = "Phone", region = "", phone = "", o
             maxHeight: 200, /* ~5 items */
             overflowY: "auto",
             overscrollBehavior: "contain",
+            right: isRTL ? 0 : "auto",
+            left: isRTL ? "auto" : 0,
           }}
         >
           {REGIONS.map((r) => (
@@ -197,7 +268,19 @@ export default function PhoneInput({ label = "Phone", region = "", phone = "", o
               type="button"
               onClick={() => pick(r)}
               title={`${NAMES[r] || r} ${dial(r)}`}
-              style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "none", textAlign: "left", padding: "8px 10px", borderRadius: 6, cursor: "pointer" }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                background: "transparent",
+                border: "none",
+                textAlign: isRTL ? "right" : "left",
+                padding: "8px 10px",
+                borderRadius: 6,
+                cursor: "pointer",
+                flexDirection: isRTL ? "row-reverse" : "row",
+              }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >

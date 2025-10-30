@@ -19,6 +19,15 @@ const THEME_NAME = {
   C: "CONVENTIONAL",
 };
 
+function colorForPct(pct) {
+  const p = Math.max(0, Math.min(100, Number(pct || 0)));
+  if (p < 20) return "#ef4444";
+  if (p < 40) return "#f97316";
+  if (p < 60) return "#facc15";
+  if (p < 80) return "#84cc16";
+  return "#22c55e";
+}
+
 function levelFromPct(p) {
   if (p >= 75) return "Very High";
   if (p >= 55) return "High";
@@ -173,6 +182,44 @@ export default function Results({
   );
   const topFive = sortedAllAreas.slice(0, 5);
   const leastThree = sortedAllAreas.slice(-3).reverse();
+  const dash = "\u2014";
+  const normalizeValue = (value) => {
+    if (value == null) return null;
+    if (typeof value === "number") return String(value);
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed.length ? trimmed : null;
+    }
+    return null;
+  };
+  const displayValue = (...values) => {
+    for (const candidate of values) {
+      const normalized = normalizeValue(candidate);
+      if (normalized) return normalized;
+    }
+    return dash;
+  };
+  const candidateName = displayValue(participant?.name, participant?.fullName, participant?.email);
+  const schoolValue = displayValue(participant?.school);
+  const classValue = displayValue(
+    participant?.className,
+    participant?.class,
+    participant?.grade,
+    participant?.section,
+    participant?.classroom
+  );
+  const phoneValue = displayValue(participant?.phone, participant?.tel, participant?.phoneNumber);
+  const hasParticipantDetails = Boolean(participant || submission);
+  const shouldShowParticipantCard = hasParticipantDetails || showParticipantHeader;
+  const detailRows = useMemo(
+    () => [
+      { label: "Name", value: candidateName },
+      { label: "School", value: schoolValue },
+      { label: "Class", value: classValue },
+      { label: "Phone", value: phoneValue },
+    ],
+    [candidateName, schoolValue, classValue, phoneValue]
+  );
 
   /* ---------------------- Load pillars & counts (partial-safe) ---------------------- */
   const { totals, counts } = useMemo(() => {
@@ -274,37 +321,25 @@ export default function Results({
         </Btn>
       </div>
 
-      {/* Participant header */}
-      {showParticipantHeader && participant && (
+      {/* Candidate Details Card */}
+      {shouldShowParticipantCard && (
         <div className="card avoid-break section" style={{ padding: 16 }}>
-          <h3 style={{ margin: 0, color: "#111827" }}>Participant</h3>
+          <h3 style={{ margin: 0, color: "#111827" }}>Candidate Details</h3>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(180px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 12,
-              marginTop: 8,
+              marginTop: 10,
             }}
             className="avoid-break"
           >
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Name</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.name || "-"}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Email</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.email || "-"}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>School</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>{participant.school || "-"}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Submitted</div>
-              <div style={{ fontWeight: 600, color: "#111827" }}>
-                {participant.ts ? new Date(participant.ts).toLocaleString() : "-"}
+            {detailRows.map((row) => (
+              <div key={row.label}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>{row.label}</div>
+                <div style={{ fontWeight: 600, color: "#111827" }}>{row.value}</div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
@@ -463,6 +498,8 @@ export default function Results({
     </PageWrap>
   );
 }
+
+
 
 
 
