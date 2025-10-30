@@ -27,6 +27,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     region: "",
     school: "",
     className: "",
+    accountType: "student",
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -75,6 +76,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     const phone = (formData.phone || "").trim();
     const region = (formData.region || "").trim();
     const username = formData.username.trim();
+    const accountType = (formData.accountType || "").toLowerCase();
     // Sign-in requires email (works across devices with Supabase Auth)
     if (!isSignUp) {
       if (!loginId) newErrors.loginId = "Email is required";
@@ -86,15 +88,9 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
       if (!email) newErrors.email = t.emailRequired;
       else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = t.emailInvalid;
       if (!username) newErrors.username = "Username is required";
+      if (!/^[a-zA-Z0-9_\-\.]{3,30}$/.test(username)) newErrors.username = "3-30 chars, letters/digits/_-.";
       if (phone && phone.length < 6) newErrors.phone = "Please enter a valid phone";
-      else if (!/^[a-zA-Z0-9_\-\.]{3,30}$/.test(username)) newErrors.username = "3–30 chars, letters/digits/_-.";
-    }
-
-    // Normalize username validation message (override any garbled text)
-    if (isSignUp) {
-      if (!/^[a-zA-Z0-9_\-\.]{3,30}$/.test(username)) {
-        newErrors.username = "3–30 chars, letters/digits/_-.";
-      }
+      if (!["student", "educator"].includes(accountType)) newErrors.accountType = "Please choose Student or Educator";
     }
 
     if (!password) newErrors.password = t.passwordRequired;
@@ -121,6 +117,8 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     const region = (formData.region || "").trim();
     const password = formData.password;
     const name = formData.name.trim();
+    const accountTypeSelection = (formData.accountType || "").toLowerCase();
+    const normalizedAccountType = accountTypeSelection === "educator" ? "educator" : "student";
     try {
       let isAdminUser = false;
       if (isSignUp) {
@@ -128,7 +126,18 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { name: (username || name), username, phone, region, school: formData.school || "", class: formData.className || "" } },
+          options: {
+            data: {
+              name: (username || name),
+              username,
+              phone,
+              region,
+              school: formData.school || "",
+              class: formData.className || "",
+              accountType: normalizedAccountType,
+              role: normalizedAccountType,
+            },
+          },
         });
         if (error) throw error;
 
@@ -141,7 +150,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           return;
         }
         // Upsert profile with default role
-        const role = email.toLowerCase() === "anasitani186@gmail.com" ? "admin" : "user";
+        let role = email.toLowerCase() === "anasitani186@gmail.com" ? "admin" : normalizedAccountType;
         await supabase.from("profiles").upsert({ id: user.id, email, username, name: (username || name), role });
         const current = { email, username, name: (username || name), role };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
@@ -157,11 +166,13 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         const { data: profRows } = await supabase.from("profiles").select("*").eq("id", user.id).limit(1);
         profile = profRows && profRows[0];
         if (!profile) {
-          const role = user.email?.toLowerCase() === "anasitani186@gmail.com" ? "admin" : "user";
+          const metaType = (user.user_metadata?.accountType || user.user_metadata?.role || "").toLowerCase();
+          let inferredRole = metaType === "educator" ? "educator" : "student";
+          if (user.email?.toLowerCase() === "anasitani186@gmail.com") inferredRole = "admin";
           const uname = user.user_metadata?.username || (user.email ? user.email.split("@")[0] : "");
           const nm = user.user_metadata?.name || "";
-          await supabase.from("profiles").insert({ id: user.id, email: user.email, username: uname, name: uname, role });
-          profile = { email: user.email, username: uname, name: uname, role };
+          await supabase.from("profiles").insert({ id: user.id, email: user.email, username: uname, name: nm || uname, role: inferredRole });
+          profile = { email: user.email, username: uname, name: nm || uname, role: inferredRole };
         }
         const current = { email: profile.email, username: profile.username, name: profile.name, role: profile.role };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
@@ -251,6 +262,29 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
               {errors.className && (
                 <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.className}</p>
               )}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontWeight: 600, color: "#374151", marginBottom: 6 }}>Account Type</div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  {[
+                    { value: "student", label: "Student" },
+                    { value: "educator", label: "Educator" },
+                  ].map((option) => (
+                    <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 6, color: "#374151" }}>
+                      <input
+                        type="radio"
+                        name="accountType"
+                        value={option.value}
+                        checked={formData.accountType === option.value}
+                        onChange={(e) => handleInputChange("accountType", e.target.value)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {errors.accountType && (
+                  <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.accountType}</p>
+                )}
+              </div>
               {errors.username && (
                 <p style={{ color: "#dc2626", fontSize: 14, margin: "4px 0 0" }}>{errors.username}</p>
               )}
@@ -366,5 +400,6 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     </PageWrap>
   );
 }
+
 
 

@@ -298,6 +298,9 @@ export default function SATExam({ onNavigate, practice = null }) {
     );
   }
 
+  const q = mod.questions[page - 1] || null;
+  const percent = qCount ? Math.round((page / qCount) * 100) : 0;
+
   const currentAns = answers[mod.key] || {};
   const currentFlags = flags[mod.key] || {};
   const updateAnswer = (qid, val) => {
@@ -543,9 +546,6 @@ export default function SATExam({ onNavigate, practice = null }) {
     if (minutes) return `${minutes}m`;
     return `${seconds}s`;
   };
-
-  const q = mod.questions[page - 1];
-  const percent = qCount ? Math.round((page / qCount) * 100) : 0;
 
   // Helpers
   const letter = (i) => String.fromCharCode(65 + i); // 0 -> A
