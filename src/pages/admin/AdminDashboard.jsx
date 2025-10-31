@@ -17,6 +17,18 @@ export default function AdminDashboard({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [selectedSchool, setSelectedSchool] = useState("");
   const [bulkSet, setBulkSet] = useState(null);
+  const [timerMin, setTimerMin] = useState(() => {
+    const saved = Number(localStorage.getItem("cg_timer_min") || 30);
+    return Number.isFinite(saved) && saved > 0 ? saved : 30;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("cg_timer_min", String(timerMin));
+    } catch (err) {
+      console.warn("Failed to persist timer minutes", err);
+    }
+  }, [timerMin]);
 
   const realSubmissions = useMemo(
     () => submissions.filter((s) => !s?._demo),
@@ -246,6 +258,42 @@ export default function AdminDashboard({ onNavigate }) {
           }
         `}
       </style>
+
+      <div className="no-print">
+        <Card>
+          <h3 style={{ marginTop: 0 }}>Career Guidance Timer</h3>
+          <p style={{ color: "#475569", marginBottom: 16 }}>
+            Set the default duration students see when they begin the Career Guidance test. This applies to new test sessions.
+          </p>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <label htmlFor="cg-timer-min" style={{ fontWeight: 600, color: "#1e293b" }}>
+              Timer (minutes)
+            </label>
+            <input
+              id="cg-timer-min"
+              type="number"
+              min={1}
+              max={180}
+              value={timerMin}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                const clamped = Number.isFinite(next) ? Math.max(1, Math.min(180, Math.round(next))) : timerMin;
+                setTimerMin(clamped);
+              }}
+              style={{
+                width: 100,
+                padding: "8px 10px",
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                fontWeight: 600,
+              }}
+            />
+            <div style={{ color: "#475569" }}>
+              Current: <b>{timerMin} min</b>
+            </div>
+          </div>
+        </Card>
+      </div>
 
       <div className={`admin-bulk-screen${bulkActive ? " bulk-hide-print" : ""}`}>
         <HeaderBar title="Test Submissions" right={null} />

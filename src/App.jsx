@@ -17,6 +17,7 @@ import Thanks from "./pages/Thanks.jsx";
 import Account from "./pages/Account.jsx";
 import SATIntro from "./pages/sat/SATIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
+import SATAssignment from "./pages/sat/SATAssignment.jsx";
 import SATTraining from "./pages/sat/SATTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
@@ -48,7 +49,7 @@ export default function App() {
     // Fallback to saved route (excluding sensitive routes)
     try {
       const savedRoute = localStorage.getItem("cg_current_route");
-      if (savedRoute && !["test", "results", "sat-exam", "sat-results"].includes(savedRoute)) {
+      if (savedRoute && !["test", "results", "sat-exam", "sat-results", "sat-assignment"].includes(savedRoute)) {
         return savedRoute;
       }
     } catch {}
@@ -84,7 +85,7 @@ export default function App() {
   useEffect(() => {
     try {
       // Don't persist test or results routes
-      if (!["test", "results"].includes(route)) {
+      if (!["test", "results", "sat-exam", "sat-assignment"].includes(route)) {
         localStorage.setItem("cg_current_route", route);
       }
     } catch (e) {
@@ -188,6 +189,9 @@ export default function App() {
       case "ai-educator":
         pageTitle = "AI Educator";
         break;
+      case "sat-assignment":
+        pageTitle = "SAT Assignment";
+        break;
       default:
         pageTitle = route && route !== "home" ? route.replace(/-/g, " ") : null;
     }
@@ -227,6 +231,7 @@ export default function App() {
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
+  if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "ai-educator") return <AIEducator onNavigate={onNavigate} />;
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;

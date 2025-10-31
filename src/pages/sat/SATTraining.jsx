@@ -88,6 +88,37 @@ export default function SATTraining({ onNavigate }) {
   const [studentResLoading, setStudentResLoading] = useState(false);
   const [studentResources, setStudentResources] = useState([]);
   const [studentAttempts, setStudentAttempts] = useState({});
+  const groupedStudentResources = useMemo(() => {
+    const groups = {
+      exam: [],
+      quiz: [],
+      classwork: [],
+      homework: [],
+      other: [],
+    };
+    (studentResources || []).forEach((resource) => {
+      const kind = String(resource?.kind || "classwork").toLowerCase();
+      if (["exam", "sat", "test", "practice"].includes(kind)) {
+        groups.exam.push(resource);
+      } else if (kind === "quiz") {
+        groups.quiz.push(resource);
+      } else if (kind === "homework") {
+        groups.homework.push(resource);
+      } else if (kind === "classwork") {
+        groups.classwork.push(resource);
+      } else {
+        groups.other.push(resource);
+      }
+    });
+    return groups;
+  }, [studentResources]);
+  const hasAnyStudentResource = useMemo(
+    () =>
+      ["exam", "quiz", "classwork", "homework", "other"].some(
+        (key) => (groupedStudentResources[key] || []).length > 0,
+      ),
+    [groupedStudentResources],
+  );
   const [csvInfo, setCsvInfo] = useState({ name: "", count: 0, items: null, error: "" });
   const [csvKind, setCsvKind] = useState("quiz");
   const [csvDuration, setCsvDuration] = useState("15");
@@ -605,6 +636,118 @@ export default function SATTraining({ onNavigate }) {
   function decodeResourceQuestions(r) {
     return getResourceQuestions(r);
   }
+
+  const renderStudentResourceCard = (resource) => {
+    if (!resource) return null;
+    const key = resource.id || `${resource.title || "resource"}_${resource.url || "link"}`;
+    const items = decodeResourceQuestions(resource) || [];
+    const meta = extractResourceMeta(resource);
+    const practiceMeta = { ...meta };
+    const kindLower = String(resource.kind || "classwork").toLowerCase();
+    if (kindLower === "homework") {
+      practiceMeta.resumeMode = "restart";
+      practiceMeta.durationSec = null;
+    }
+    const attemptInfo = resource?.id ? studentAttempts[resource.id] || null : null;
+    const attemptCount = attemptInfo?.attempts?.length || 0;
+    const latestStatus = attemptInfo?.latest?.status || null;
+    const completed = attemptInfo?.completed ?? (latestStatus === "completed");
+    const attemptLimit = practiceMeta?.attemptLimit != null ? practiceMeta.attemptLimit : null;
+    const allowRetake = practiceMeta?.allowRetake !== false;
+    const limitReached = items.length > 0 && completed && ((!allowRetake && attemptLimit == null) || (attemptLimit != null && attemptCount >= attemptLimit));
+    const canStart = items.length > 0 && !limitReached;
+    const kindLabel = (resource.kind || "classwork").toLowerCase();
+    const prettyKind = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
+    const durationLabel = items.length > 0 ? formatDuration(practiceMeta?.durationSec) : null;
+    const attemptLabel = attemptCount > 0 ? `Attempts: ${attemptCount}${attemptLimit ? `/${attemptLimit}` : ""}` : null;
+    let hasResume = false;
+    if (practiceMeta?.resumeMode === "resume" && resource?.id) {
+      try { hasResume = Boolean(localStorage.getItem(`cg_sat_resume_${resource.id}`)); } catch {}
+    }
+    const startLabel = limitReached
+      ? "Completed"
+      : (practiceMeta?.resumeMode === "resume" && hasResume ? "Resume" : `Start ${prettyKind}`);
+    const startAttemptIndex = attemptCount + 1;
+    const routeTarget = ["exam", "sat", "diagnostic", "test"].includes(kindLower) ? "sat-exam" : "sat-assignment";
+    const launchPractice = () => {
+      if (!canStart) return;
+      const durationSec = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0) ? practiceMeta.durationSec : null;
+      onNavigate(routeTarget, {
+        practice: {
+          kind: resource.kind || "classwork",
+          resourceId: resource.id || null,
+          className: studentClass || null,
+          section: resource.section || null,
+          unit: resource.unit || null,
+          lesson: resource.lesson || null,
+          meta: practiceMeta,
+          attemptIndex: startAttemptIndex,
+          custom: {
+            questions: items,
+            durationSec,
+            title: resource.title || prettyKind,
+            meta: practiceMeta,
+          },
+        },
+      });
+    };
+    const pill = (variant, text) => (
+      <span key={`${key}_${variant}_${text}`} style={{ ...pillStyles.base, ...(pillStyles[variant] || {}) }}>{text}</span>
+    );
+
+    return (
+      <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontWeight: 700 }}>{resource.title || "Untitled Resource"}</div>
+          <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{prettyKind}</span>
+        </div>
+        {(resource.unit || resource.lesson) && (
+          <div style={{ color: '#6b7280', fontSize: 12 }}>
+            {[resource.unit, resource.lesson].filter(Boolean).join(' - ')}
+          </div>
+        )}
+        {(resource.url && (!resource.payload || !items.length)) && (
+          <div style={{ marginTop: 4, wordBreak: 'break-word' }}>
+            <a href={resource.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{resource.url}</a>
+          </div>
+        )}
+        {items.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {completed && pill("complete", "Completed")}
+            {!completed && !attemptCount && pill("info", "Not started")}
+            {attemptLabel && pill("info", attemptLabel)}
+            {durationLabel && pill("info", `Time: ${durationLabel}`)}
+            {limitReached && pill("warn", "Retake locked")}
+          </div>
+        )}
+        <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {resource.url && <Btn variant="secondary" onClick={() => window.open(resource.url, "_blank")}>Open</Btn>}
+          {items.length > 0 && (
+            <Btn
+              variant="primary"
+              disabled={!canStart}
+              onClick={launchPractice}
+            >
+              {startLabel}
+            </Btn>
+          )}
+        </div>
+        {limitReached && (
+          <div style={{ color: '#ef4444', fontSize: 12 }}>
+            You have completed this {prettyKind.toLowerCase()}. Ask your teacher if you need another attempt.
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const resourceGroupOrder = [
+    { key: "exam", title: "Exams", subtitle: "Full SAT-style tests assigned by your teacher." },
+    { key: "quiz", title: "Quizzes", subtitle: "Quick checks assigned by your teacher." },
+    { key: "classwork", title: "Classwork", subtitle: "Practice sets to work on during class time." },
+    { key: "homework", title: "Homework", subtitle: "Assignments you can resume from home." },
+    { key: "other", title: "Additional Resources", subtitle: "Links and materials shared by your teacher." },
+  ];
   function handleCSVFile(e, kindOverride) {
     const f = e?.target?.files?.[0];
     if (!f) return;
@@ -910,36 +1053,64 @@ export default function SATTraining({ onNavigate }) {
                             const key = r.id || `${r.title}_${r.url}`;
                             const meta = extractResourceMeta(r);
                             const questions = decodeResourceQuestions(r) || [];
+                            const practiceMeta = { ...meta };
+                            const kindLower = String(r.kind || "classwork").toLowerCase();
+                            if (kindLower === "homework") {
+                              practiceMeta.resumeMode = "restart";
+                              practiceMeta.durationSec = null;
+                            }
+                            const practiceDuration = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0)
+                              ? practiceMeta.durationSec
+                              : null;
+                            const previewRoute = ["exam", "sat", "diagnostic", "test"].includes(kindLower) ? "sat-exam" : "sat-assignment";
                             return (
-                                <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div style={{ fontWeight: 700 }}>{r.title || 'Untitled Resource'}</div>
-                                    <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{r.kind || 'classwork'}</span>
+                              <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ fontWeight: 700 }}>{r.title || 'Untitled Resource'}</div>
+                                  <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{r.kind || 'classwork'}</span>
+                                </div>
+                                {(r.unit || r.lesson) && (
+                                  <div style={{ color: '#6b7280', fontSize: 12 }}>
+                                    {[r.unit, r.lesson].filter(Boolean).join(' - ')}
                                   </div>
-                                  {(r.unit || r.lesson) && (
-                                    <div style={{ color: '#6b7280', fontSize: 12 }}>
-                                      {[r.unit, r.lesson].filter(Boolean).join(' - ')}
-                                    </div>
-                                  )}
-                                  {r.url && (
-                                    <div style={{ wordBreak: 'break-word', fontSize: 12 }}>
-                                      <a href={r.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{r.url}</a>
-                                    </div>
-                                  )}
+                                )}
+                                {r.url && (
+                                  <div style={{ wordBreak: 'break-word', fontSize: 12 }}>
+                                    <a href={r.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{r.url}</a>
+                                  </div>
+                                )}
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11 }}>
                                   {questions.length > 0 && <span style={{ ...pillStyles.base, ...pillStyles.info }}>Questions: {questions.length}</span>}
-                                  <span style={{ ...pillStyles.base, ...pillStyles.info }}>Time: {formatDuration(meta?.durationSec)}</span>
-                                  <span style={{ ...pillStyles.base, ...(meta?.allowRetake === false ? pillStyles.warn : pillStyles.info) }}>
-                                    {meta?.allowRetake === false ? 'Single attempt' : 'Retakes allowed'}
+                                  <span style={{ ...pillStyles.base, ...pillStyles.info }}>Time: {formatDuration(practiceMeta?.durationSec)}</span>
+                                  <span style={{ ...pillStyles.base, ...(practiceMeta?.allowRetake === false ? pillStyles.warn : pillStyles.info) }}>
+                                    {practiceMeta?.allowRetake === false ? 'Single attempt' : 'Retakes allowed'}
                                   </span>
-                                  <span style={{ ...pillStyles.base, ...(meta?.resumeMode === 'resume' ? pillStyles.complete : pillStyles.info) }}>
-                                    {meta?.resumeMode === 'resume' ? 'Resume enabled' : 'Restart each time'}
+                                  <span style={{ ...pillStyles.base, ...(practiceMeta?.resumeMode === 'resume' ? pillStyles.complete : pillStyles.info) }}>
+                                    {practiceMeta?.resumeMode === 'resume' ? 'Resume enabled' : 'Restart each time'}
                                   </span>
                                 </div>
                                 <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
                                   {r.url && <Btn variant="secondary" onClick={() => window.open(r.url, '_blank')}>Open</Btn>}
                                   {questions.length > 0 && (
-                                    <Btn variant="secondary" onClick={() => onNavigate('sat-exam', { practice: { kind: r.kind, resourceId: r.id, className: selectedClass, unit: r.unit || null, lesson: r.lesson || null, meta, custom: { questions, title: r.title, durationSec: meta?.durationSec, meta } } })}>
+                                    <Btn
+                                      variant="secondary"
+                                      onClick={() => onNavigate(previewRoute, {
+                                        practice: {
+                                          kind: r.kind,
+                                          resourceId: r.id,
+                                          className: selectedClass,
+                                          unit: r.unit || null,
+                                          lesson: r.lesson || null,
+                                          meta: practiceMeta,
+                                          custom: {
+                                            questions,
+                                            title: r.title,
+                                            durationSec: practiceDuration,
+                                            meta: practiceMeta,
+                                          },
+                                        },
+                                      })}
+                                    >
                                       Preview
                                     </Btn>
                                   )}
@@ -1102,112 +1273,34 @@ export default function SATTraining({ onNavigate }) {
               </Card>
             ))
           ) : (
-            <Card>
-              <h3 style={{ marginTop: 0 }}>Class Resources</h3>
+            <>
               {studentResLoading ? (
-                 <p style={{ color: '#6b7280' }}>Loading…</p>
-              ) : (studentResources && studentResources.length > 0 ? (
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-                  {studentResources.map((r) => {
-                    const key = r.id || `${r.title || "resource"}_${r.url || "link"}`;
-                    const items = decodeResourceQuestions(r) || [];
-                    const meta = extractResourceMeta(r);
-                    const attemptInfo = r?.id ? (studentAttempts[r.id] || null) : null;
-                    const attemptCount = attemptInfo?.attempts?.length || 0;
-                    const latestStatus = attemptInfo?.latest?.status || null;
-                    const completed = attemptInfo?.completed ?? (latestStatus === "completed");
-                    const attemptLimit = meta?.attemptLimit != null ? meta.attemptLimit : null;
-                    const allowRetake = meta?.allowRetake !== false;
-                    const limitReached = items.length > 0 && completed && ((!allowRetake && attemptLimit == null) || (attemptLimit != null && attemptCount >= attemptLimit));
-                    const canStart = items.length > 0 && !limitReached;
-                    const kindLabel = (r.kind || "classwork").toLowerCase();
-                    const prettyKind = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
-                    const durationLabel = items.length > 0 ? formatDuration(meta?.durationSec) : null;
-                    const attemptLabel = attemptCount > 0 ? `Attempts: ${attemptCount}${attemptLimit ? `/${attemptLimit}` : ""}` : null;
-                    let hasResume = false;
-                    if (meta?.resumeMode === "resume" && r?.id) {
-                      try { hasResume = Boolean(localStorage.getItem(`cg_sat_resume_${r.id}`)); } catch {}
-                    }
-                    const startLabel = limitReached
-                      ? "Completed"
-                      : (meta?.resumeMode === "resume" && hasResume ? "Resume" : `Start ${prettyKind}`);
-                    const startAttemptIndex = attemptCount + 1;
-                    const launchPractice = () => {
-                      if (!canStart) return;
-                      const practiceMeta = { ...meta };
-                      const durationSec = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0) ? practiceMeta.durationSec : null;
-                      onNavigate("sat-exam", {
-                        practice: {
-                          kind: r.kind || "classwork",
-                          resourceId: r.id || null,
-                          className: studentClass || null,
-                          section: r.section || null,
-                          unit: r.unit || null,
-                          lesson: r.lesson || null,
-                          meta: practiceMeta,
-                          attemptIndex: startAttemptIndex,
-                          custom: {
-                            questions: items,
-                            durationSec,
-                            title: r.title || prettyKind,
-                            meta: practiceMeta,
-                          },
-                        },
-                      });
-                    };
-                    const pill = (variant, text) => (
-                      <span key={`${key}_${variant}_${text}`} style={{ ...pillStyles.base, ...(pillStyles[variant] || {}) }}>{text}</span>
-                    );
+                <Card>
+                  <p style={{ color: "#6b7280" }}>Loading assignments…</p>
+                </Card>
+              ) : (
+                <>
+                  {resourceGroupOrder.map((group) => {
+                    const list = groupedStudentResources[group.key] || [];
+                    if (!list.length) return null;
                     return (
-                      <div key={key} style={{ border:'1px solid #e5e7eb', borderRadius:12, padding:12, display:'grid', gap:8 }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                          <div style={{ fontWeight:700 }}>{r.title || "Untitled Resource"}</div>
-                          <span style={{ fontSize:12, color:'#6b7280', textTransform:'capitalize' }}>{prettyKind}</span>
+                      <Card key={group.key}>
+                        <h3 style={{ marginTop: 0 }}>{group.title}</h3>
+                        {group.subtitle && <p style={{ color: "#6b7280", marginTop: 4 }}>{group.subtitle}</p>}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+                          {list.map((res) => renderStudentResourceCard(res))}
                         </div>
-                        {(r.unit || r.lesson) && (
-                          <div style={{ color:'#6b7280', fontSize:12 }}>
-                            {[r.unit, r.lesson].filter(Boolean).join(' - ')}
-                          </div>
-                        )}
-                        {(r.url && (!r.payload || !items.length)) && (
-                          <div style={{ marginTop:4, wordBreak:'break-word' }}>
-                            <a href={r.url} target="_blank" rel="noreferrer" style={{ color:'#2563eb' }}>{r.url}</a>
-                          </div>
-                        )}
-                        {items.length > 0 && (
-                          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                            {completed && pill("complete", "Completed")}
-                            {!completed && !attemptCount && pill("info", "Not started")}
-                            {attemptLabel && pill("info", attemptLabel)}
-                            {durationLabel && pill("info", `Time: ${durationLabel}`)}
-                            {limitReached && pill("warn", "Retake locked")}
-                          </div>
-                        )}
-                        <div style={{ marginTop:4, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                          {r.url && <Btn variant="secondary" onClick={() => window.open(r.url, "_blank")}>Open</Btn>}
-                          {items.length > 0 && (
-                            <Btn
-                              variant="primary"
-                              disabled={!canStart}
-                              onClick={launchPractice}
-                            >
-                              {startLabel}
-                            </Btn>
-                          )}
-                        </div>
-                        {limitReached && (
-                          <div style={{ color:'#ef4444', fontSize:12 }}>
-                            You have completed this {prettyKind.toLowerCase()}. Ask your teacher if you need another attempt.
-                          </div>
-                        )}
-                      </div>
+                      </Card>
                     );
                   })}
-                </div>
-              ) : (
-                <p style={{ color: '#6b7280' }}>No resources yet.</p>
-              ))}
-            </Card>
+                  {!hasAnyStudentResource && (
+                    <Card>
+                      <p style={{ color: "#6b7280" }}>No assignments yet. Check back soon!</p>
+                    </Card>
+                  )}
+                </>
+              )}
+            </>
           )}
           <div>
             <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>

@@ -93,6 +93,12 @@ export async function saveSatTraining({
   const ts = new Date().toISOString();
   let userEmail = null;
   try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
+  const sanitizeUuid = (value) => {
+    const str = typeof value === "string" ? value : String(value || "");
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str) ? str : null;
+  };
+
   const baseRow = {
     ts,
     user_email: userEmail,
@@ -102,11 +108,11 @@ export async function saveSatTraining({
     lesson,
     summary: summary || null,
     answers: answers || null,
-    elapsed_sec: elapsedSec || 0,
+    elapsed_sec: Math.max(0, Number.isFinite(elapsedSec) ? Math.round(elapsedSec) : 0),
   };
   const fullRow = {
     ...baseRow,
-    resource_id: resourceId || answers?.resourceId || null,
+    resource_id: sanitizeUuid(resourceId || answers?.resourceId),
     class_name: className || answers?.className || null,
     status: status || answers?.status || null,
     meta: meta || answers?.meta || null,

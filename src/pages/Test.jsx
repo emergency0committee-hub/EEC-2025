@@ -147,9 +147,14 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   }, []);
 
   const [page, setPage] = useState(INTRO);
-  const [cgUnlocked, setCgUnlocked] = useState(() => {
-    try { return localStorage.getItem("cg_access_ok_v1") === "1"; } catch { return false; }
-  });
+  const isAdmin = (() => {
+    try {
+      return localStorage.getItem("cg_admin_ok_v1") === "1";
+    } catch {
+      return false;
+    }
+  })();
+  const [cgUnlocked, setCgUnlocked] = useState(isAdmin);
   const [cgCode, setCgCode] = useState("");
   const [cgErr, setCgErr] = useState("");
   // Exam language selection (locked once test starts)
@@ -176,6 +181,18 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     return Number.isFinite(saved) && saved > 0 ? saved : 30;
   });
   useEffect(() => { localStorage.setItem("cg_timer_min", String(timerMin)); }, [timerMin]);
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key === "cg_timer_min") {
+        const next = Number(event.newValue);
+        if (Number.isFinite(next) && next > 0) {
+          setTimerMin(next);
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
   const cd = useCountdown(timerMin * 60);
   const [startTs, setStartTs] = useState(null);
 
@@ -504,7 +521,6 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
   // Intro
   if (page === INTRO) {
-    const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1";
     return (
       <PageWrap>
         <HeaderBar title="Career Guidance Test" lang={lang} />
@@ -524,7 +540,6 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                 <Btn variant="primary" onClick={() => {
                   const expected = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
                   if (expected && cgCode.trim() !== expected) { setCgErr(ui.invalidCode); return; }
-                  try { localStorage.setItem("cg_access_ok_v1", "1"); } catch {}
                   setCgUnlocked(true);
                 }}>Unlock</Btn>
               </div>
@@ -560,13 +575,6 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                   ))}
                 </div>
               </div>
-              {isAdmin && (
-                <div style={{ marginBottom: 12, padding: 12, border: "1px dashed #cbd5e1", borderRadius: 10, background: "#f8fafc", display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontWeight: 600 }}>Timer (minutes):</div>
-                  <input type="number" min={1} max={180} value={timerMin} onChange={(e)=>setTimerMin(Math.max(1,Math.min(180,Number(e.target.value)||1)))} style={{ width: 80, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontWeight: 600 }} />
-                  <div style={{ marginLeft: "auto", color: "#475569" }}>Current: <b>{timerMin} min</b></div>
-                </div>
-              )}
               <p style={{ color:"#475569" }}>{ui.signedInAs} <b>{authUser?.email || profile.email || "user"}</b>. Your account details will be used for the report.</p>
               <div style={{ marginTop: 16, padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}>
                 <div style={{ fontWeight: 700, marginBottom: 4, color: "#0f172a" }}>{ui.participantTitle}</div>
