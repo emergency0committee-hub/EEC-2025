@@ -24,6 +24,7 @@ import AIEducator from "./pages/AIEducator.jsx";
 import Btn from "./components/Btn.jsx";
 import { normalizeRoute, routeHref, isModifiedEvent } from "./lib/routes.js";
 // import { testSupabaseConnection } from "./lib/supabase.js";
+import { supabase } from "./lib/supabase.js";
 
 function SatPlaceholder() { return null; }
 
@@ -217,6 +218,62 @@ export default function App() {
     window.history.pushState(null, "", newUrl);
   };
 
+  useEffect(() => {
+    if (!sessionTimeoutMs) return undefined;
+
+    let timeoutId = null;
+
+    const clearSession = async () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+      try {
+        localStorage.removeItem("cg_current_user_v1");
+        localStorage.removeItem("cg_admin_ok_v1");
+      } catch {}
+      setResultsPayload(null);
+      setRoute("login");
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("You have been signed out due to inactivity. Please sign in again.");
+      }
+    };
+
+    const resetTimer = () => {
+      const hasUser = (() => {
+        try { return Boolean(localStorage.getItem("cg_current_user_v1")); } catch { return false; }
+      })();
+
+      if (!hasUser) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        return;
+      }
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(clearSession, sessionTimeoutMs);
+    };
+
+    const events = ["mousemove", "keydown", "click", "touchstart", "wheel"];
+    events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    const { data: authSub } = supabase.auth.onAuthStateChange(() => {
+      resetTimer();
+    });
+
+    resetTimer();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach((evt) => window.removeEventListener(evt, resetTimer));
+      authSub?.subscription?.unsubscribe?.();
+    };
+  }, [sessionTimeoutMs]);
+
   const canViewResults = useMemo(() => {
     try {
       return localStorage.getItem("cg_admin_ok_v1") === "1";
@@ -305,3 +362,7 @@ export default function App() {
     </PageWrap>
   );
 }
+  const SESSION_TIMEOUT_MINUTES = Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES || 60);
+  const sessionTimeoutMs = Number.isFinite(SESSION_TIMEOUT_MINUTES) && SESSION_TIMEOUT_MINUTES > 0
+    ? SESSION_TIMEOUT_MINUTES * 60 * 1000
+    : null;
