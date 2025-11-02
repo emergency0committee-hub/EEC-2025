@@ -1,11 +1,11 @@
 // src/pages/sat/SATAssignment.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, ProgressBar } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import useCountdown from "../../hooks/useCountdown.js";
 import { supabase } from "../../lib/supabase.js";
-import { saveSatTraining } from "../../lib/supabaseStorage.js";
+import { beginSatTrainingSession, saveSatTraining, updateSatTrainingSession } from "../../lib/supabaseStorage.js";
 
 const DEFAULT_META = {
   classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
@@ -81,11 +81,28 @@ function SATAssignment({ onNavigate, practice = null }) {
   const [saveError, setSaveError] = useState("");
   const [elapsedSec, setElapsedSec] = useState(0);
   const [showPalette, setShowPalette] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const questionTimers = useRef({});
   const questionStartRef = useRef(null);
   const startedAtRef = useRef(null);
   const resumePayloadRef = useRef(null);
+  const sessionRef = useRef(null);
+  const sessionMetaRef = useRef(null);
+  const submittedRef = useRef(false);
+
+  const practiceKind = String(practice?.kind || "").toLowerCase();
+  const practiceSection = practice?.section || null;
+  const practiceUnit = practice?.unit || null;
+  const practiceLesson = practice?.lesson || null;
+  const practiceResourceId = practice?.resourceId || null;
+  const practiceClassName = practice?.className || null;
+  const practiceAttemptIndex = practice?.attemptIndex ?? null;
+  const metaSignature = JSON.stringify(meta || {});
+
+  useEffect(() => {
+    submittedRef.current = submitted;
+  }, [submitted]);
 
   const resumeEnabled = Boolean(practice?.meta?.resumeMode === "resume" && practice?.resourceId);
   const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
@@ -207,6 +224,118 @@ function SATAssignment({ onNavigate, practice = null }) {
       stopTimer();
     };
   }, [questions, loading, meta.durationSec, resetTimer, startTimer, stopTimer]);
+
+  const computeElapsedSeconds = useCallback(() => {
+    let totalElapsed = Object.values(questionTimers.current || {}).reduce((sum, value) => sum + value, 0);
+    if (questionStartRef.current != null) {
+      const delta = (performance.now() - questionStartRef.current) / 1000;
+      if (Number.isFinite(delta) && delta > 0) totalElapsed += delta;
+    } else if (startedAtRef.current != null) {
+      const delta = (Date.now() - startedAtRef.current) / 1000;
+      if (Number.isFinite(delta) && delta > 0) totalElapsed += delta;
+    }
+    return Math.max(0, Math.round(totalElapsed));
+  }, []);
+
+  useEffect(() => {
+    if (practiceKind !== "homework") return;
+    if (sessionRef.current) return;
+    if (authLoading || loading) return;
+    if (!authUser) return;
+    if (!questions.length) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const nowIso = new Date().toISOString();
+        const baseMeta = {
+          ...(meta ? { ...meta } : {}),
+          session: {
+            startedAt: nowIso,
+            lastHeartbeat: nowIso,
+          },
+        };
+        sessionMetaRef.current = baseMeta;
+        const { sessionId } = await beginSatTrainingSession({
+          kind: practiceKind || "homework",
+          section: practiceSection,
+          unit: practiceUnit,
+          lesson: practiceLesson,
+          resourceId: practiceResourceId,
+          className: practiceClassName,
+          meta: baseMeta,
+          durationSec: meta?.durationSec ?? null,
+          attempt: practiceAttemptIndex,
+          status: "active",
+        });
+        if (!cancelled && sessionId) {
+          sessionRef.current = sessionId;
+          setSessionReady(true);
+        }
+      } catch (err) {
+        console.warn("beginSatTrainingSession", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authLoading,
+    authUser,
+    loading,
+    meta?.durationSec,
+    metaSignature,
+    practiceAttemptIndex,
+    practiceClassName,
+    practiceKind,
+    practiceLesson,
+    practiceResourceId,
+    practiceSection,
+    practiceUnit,
+    questions.length,
+  ]);
+
+  useEffect(() => {
+    if (practiceKind !== "homework") return;
+    if (!sessionRef.current || !sessionReady) return;
+    if (submitted) return;
+
+    let active = true;
+    const heartbeat = async () => {
+      if (!active || !sessionRef.current || submittedRef.current) return;
+      try {
+        const elapsed = computeElapsedSeconds();
+        const nowIso = new Date().toISOString();
+        const baseMeta = {
+          ...(sessionMetaRef.current ? { ...sessionMetaRef.current } : meta ? { ...meta } : {}),
+        };
+        const sessionInfo = {
+          ...(baseMeta.session || {}),
+          lastHeartbeat: nowIso,
+          lastElapsed: elapsed,
+        };
+        if (meta && Number(meta.durationSec) > 0) {
+          sessionInfo.estimatedRemaining = Math.max(0, Math.round(Number(meta.durationSec) - elapsed));
+        }
+        baseMeta.session = sessionInfo;
+        sessionMetaRef.current = baseMeta;
+        await updateSatTrainingSession(sessionRef.current, {
+          status: "active",
+          elapsed_sec: elapsed,
+          meta: baseMeta,
+        });
+      } catch (err) {
+        console.warn("satHomework heartbeat", err);
+      }
+    };
+
+    heartbeat();
+    const interval = setInterval(heartbeat, 30000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [computeElapsedSeconds, metaSignature, practiceKind, sessionReady, submitted]);
 
   const persistResume = (overrides = {}) => {
     if (!resumeKey) return;
@@ -337,17 +466,28 @@ function SATAssignment({ onNavigate, practice = null }) {
     const summary = buildSummary({
       correctCount,
       total: questions.length,
-      section: practice?.section,
+      section: practiceSection,
     });
 
+    const nowIso = new Date().toISOString();
+    const baseMeta = {
+      ...(sessionMetaRef.current ? { ...sessionMetaRef.current } : meta ? { ...meta } : {}),
+    };
+    baseMeta.session = {
+      ...(baseMeta.session || {}),
+      lastHeartbeat: nowIso,
+      finishedAt: nowIso,
+    };
+    sessionMetaRef.current = baseMeta;
+
     const answerRecord = {
-      resourceId: practice?.resourceId || null,
-      className: practice?.className || null,
+      resourceId: practiceResourceId,
+      className: practiceClassName,
       status: "completed",
       kind: practice?.kind || null,
-      unit: practice?.unit || null,
-      lesson: practice?.lesson || null,
-      meta,
+      unit: practiceUnit,
+      lesson: practiceLesson,
+      meta: baseMeta,
       choices: choicesPayload,
       correct: Object.keys(correctPayload).length ? correctPayload : null,
       times: Object.keys(timesPayload).length ? timesPayload : null,
@@ -358,33 +498,61 @@ function SATAssignment({ onNavigate, practice = null }) {
     setSaving(true);
     setSaveError("");
     try {
+      submittedRef.current = true;
       await saveSatTraining({
         kind: practice?.kind || "classwork",
-        section: practice?.section || null,
-        unit: practice?.unit || null,
-        lesson: practice?.lesson || null,
+        section: practiceSection,
+        unit: practiceUnit,
+        lesson: practiceLesson,
         summary,
         answers: answerRecord,
         elapsedSec: elapsedRounded,
-        resourceId: practice?.resourceId || null,
-        className: practice?.className || null,
+        resourceId: practiceResourceId,
+        className: practiceClassName,
         status: "completed",
-        meta,
-        attempt: practice?.attemptIndex ?? null,
+        meta: baseMeta,
+        attempt: practiceAttemptIndex,
         durationSec: meta?.durationSec ?? null,
+        sessionId: sessionRef.current,
       });
       if (resumeKey) {
         try { localStorage.removeItem(resumeKey); } catch {}
       }
       setSubmitted(true);
       setShowPalette(false);
+      setSessionReady(false);
+      sessionRef.current = null;
     } catch (err) {
       console.error(err);
       setSaveError(err?.message || "Failed to save results.");
+      submittedRef.current = false;
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (practiceKind !== "homework") return () => {};
+    return () => {
+      if (!sessionRef.current || submittedRef.current) return;
+      const nowIso = new Date().toISOString();
+      const elapsed = computeElapsedSeconds();
+      const baseMeta = {
+        ...(sessionMetaRef.current ? { ...sessionMetaRef.current } : meta ? { ...meta } : {}),
+      };
+      baseMeta.session = {
+        ...(baseMeta.session || {}),
+        lastHeartbeat: nowIso,
+        abandonedAt: nowIso,
+      };
+      sessionMetaRef.current = baseMeta;
+      updateSatTrainingSession(sessionRef.current, {
+        status: "abandoned",
+        elapsed_sec: elapsed,
+        meta: baseMeta,
+      }).catch((err) => console.warn("satHomework abandon", err));
+    };
+  }, [computeElapsedSeconds, metaSignature, practiceKind]);
 
   if (authLoading || loading) {
     return (

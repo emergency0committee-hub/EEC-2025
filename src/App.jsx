@@ -60,7 +60,10 @@ export default function App() {
   
   const [resultsPayload, setResultsPayload] = useState(null);
   const BASE_TITLE = "EEC";
-
+  const SESSION_TIMEOUT_MINUTES = Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES || 60);
+  const sessionTimeoutMs = Number.isFinite(SESSION_TIMEOUT_MINUTES) && SESSION_TIMEOUT_MINUTES > 0
+    ? SESSION_TIMEOUT_MINUTES * 60 * 1000
+    : null;
   // Global language state with localStorage persistence
   const [lang, setLang] = useState(() => {
     try {
@@ -272,7 +275,7 @@ export default function App() {
       events.forEach((evt) => window.removeEventListener(evt, resetTimer));
       authSub?.subscription?.unsubscribe?.();
     };
-  }, [sessionTimeoutMs]);
+  }, [sessionTimeoutMs, setRoute, setResultsPayload]);
 
   const canViewResults = useMemo(() => {
     try {
@@ -362,7 +365,4 @@ export default function App() {
     </PageWrap>
   );
 }
-  const SESSION_TIMEOUT_MINUTES = Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES || 60);
-  const sessionTimeoutMs = Number.isFinite(SESSION_TIMEOUT_MINUTES) && SESSION_TIMEOUT_MINUTES > 0
-    ? SESSION_TIMEOUT_MINUTES * 60 * 1000
-    : null;
+
