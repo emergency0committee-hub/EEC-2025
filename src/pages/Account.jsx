@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
-import PhoneInput from "../components/PhoneInput.jsx";
 import Btn from "../components/Btn.jsx";
 import { supabase } from "../lib/supabase.js";
 
@@ -14,7 +13,15 @@ export default function Account({ onNavigate }) {
   const navTo = (route, data = null) => (event) => onNavigate(route, data, event);
 
   const LS_CURRENT_USER = "cg_current_user_v1";
-  const saveCurrent = (u) => { try { localStorage.setItem(LS_CURRENT_USER, JSON.stringify(u)); } catch {} };
+  const saveCurrent = (updates) => {
+    try {
+      const raw = localStorage.getItem(LS_CURRENT_USER);
+      const existing = raw ? JSON.parse(raw) : {};
+      const merged = { ...existing, ...updates };
+      delete merged.position;
+      localStorage.setItem(LS_CURRENT_USER, JSON.stringify(merged));
+    } catch {}
+  };
 
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null); // supabase auth user
@@ -24,7 +31,6 @@ export default function Account({ onNavigate }) {
   username: "",
   email: "",
   phone: "",
-  region: "",
   password: "",
   newPassword: "",
   confirmNewPassword: "",
@@ -101,7 +107,6 @@ export default function Account({ onNavigate }) {
           username: prof?.username || user.user_metadata?.username || (user.email ? user.email.split("@")[0] : ""),
           email: user.email || "",
           phone: user.user_metadata?.phone || "",
-          region: user.user_metadata?.region || "",
         }));
       } finally {
         setLoading(false);
@@ -170,7 +175,7 @@ export default function Account({ onNavigate }) {
       // Update user metadata (display name from username; store phone)
       {
         const { error: metaErr } = await supabase.auth.updateUser({
-          data: { name: (username || name), username, phone, region },
+          data: { name: (username || name), username, phone },
         });
         if (metaErr) throw metaErr;
       }
@@ -197,9 +202,10 @@ export default function Account({ onNavigate }) {
         }
         throw updErr;
       }
+      setProfile((prev) => (prev ? { ...prev, name, username, email } : prev));
       // Update local session copy for UI
       const role = profile?.role || (localStorage.getItem("cg_admin_ok_v1") === "1" ? "admin" : "user");
-      saveCurrent({ email, name, username, role });
+      saveCurrent({ id: user.id, email, name, username, role });
       onNavigate("home");
     } catch (e) {
       console.error(e);
@@ -251,12 +257,8 @@ export default function Account({ onNavigate }) {
         {errors.username && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.username}</p>}
         <Field label="Email" value={form.email} onChange={(e) => handleChange("email", e.target.value)} />
         {errors.email && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.email}</p>}
-        <PhoneInput
-          region={form.region}
-          phone={form.phone}
-          onChange={({ region, phone }) => setForm((f) => ({ ...f, region, phone }))}
-          error={errors.phone}
-        />
+        <Field label="Phone" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} />
+        {errors.phone && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.phone}</p>}
       </Card>
       <Card>
         <h3 style={{ marginTop: 0 }}>Change Password (optional)</h3>
@@ -275,6 +277,8 @@ export default function Account({ onNavigate }) {
     </PageWrap>
   );
 }
+
+
 
 
 

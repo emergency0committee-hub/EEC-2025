@@ -10,6 +10,8 @@ import Results from "./pages/Results.jsx";
 import SelectResults from "./pages/SelectResults.jsx";
 import Login from "./pages/Login.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminQuestionBank from "./pages/admin/AdminQuestionBank.jsx";
+import AdminManageUsers from "./pages/admin/AdminManageUsers.jsx";
 import SATAdmin from "./pages/admin/SATDashboard.jsx";
 import SATResults from "./pages/sat/SATResults.jsx";
 import SATTrainingAdmin from "./pages/admin/SATTrainingDashboard.jsx";
@@ -31,7 +33,26 @@ function SatPlaceholder() { return null; }
 export default function App() {
   // Route state with localStorage persistence
   const [route, setRoute] = useState(() => {
-    // Check for redirected path from 404.html (GitHub Pages fallback)
+    // Handle SPA redirect format (/?/route) produced by 404.html fallback
+    const search = window.location.search || "";
+    if (search.startsWith("?/")) {
+      const query = search.slice(2);
+      const [rawRoute, ...rest] = query.split("&");
+      const decodedRoute = decodeURIComponent((rawRoute || "").replace(/~and~/g, "&"));
+      const normalizedRoute = normalizeRoute(decodedRoute || "home");
+
+      const extraQueryRaw = rest.join("&");
+      const extraQuery = extraQueryRaw
+        ? decodeURIComponent(extraQueryRaw.replace(/~and~/g, "&"))
+        : "";
+      const cleanPath = window.location.pathname.split("?")[0] || "/";
+      const hash = window.location.hash || "";
+      const rebuiltSearch = extraQuery ? `?${extraQuery}` : "";
+      window.history.replaceState(null, "", `${cleanPath}${rebuiltSearch}${hash}`);
+      return normalizedRoute || "home";
+    }
+
+    // Check for redirected path from older 404.html behaviour
     const urlParams = new URLSearchParams(window.location.search);
     const redirected = urlParams.get("/");
     if (redirected) {
@@ -277,13 +298,27 @@ export default function App() {
     };
   }, [sessionTimeoutMs, setRoute, setResultsPayload]);
 
+  const currentRole = (() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      if (!raw) return "";
+      const user = JSON.parse(raw);
+      return (user?.role || "").toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+
   const canViewResults = useMemo(() => {
     try {
-      return localStorage.getItem("cg_admin_ok_v1") === "1";
+      if (localStorage.getItem("cg_admin_ok_v1") === "1") return true;
+      return currentRole === "admin" || currentRole === "administrator" || currentRole === "staff";
     } catch {
       return false;
     }
-  }, [route]);
+  }, [route, currentRole]);
+
+  const canAccessQuestionBank = canViewResults;
 
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
@@ -297,6 +332,50 @@ export default function App() {
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "admin-manage-users") {
+    if (!canViewResults) {
+      return (
+        <PageWrap>
+          <HeaderBar title="Not Authorized" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              User management is limited to administrators.
+            </p>
+            <Btn
+              variant="primary"
+              to="home"
+              onClick={(e) => onNavigate("home", null, e)}
+            >
+              Back to Home
+            </Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    return <AdminManageUsers onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  }
+  if (route === "admin-question-bank") {
+    if (!canAccessQuestionBank) {
+      return (
+        <PageWrap>
+          <HeaderBar title="Not Authorized" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              Question management is limited to administrators.
+            </p>
+            <Btn
+              variant="primary"
+              to="home"
+              onClick={(e) => onNavigate("home", null, e)}
+            >
+              Back to Home
+            </Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    return <AdminQuestionBank onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  }
   if (route === "admin-sat") return <SATAdmin onNavigate={onNavigate} />;
   if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "account") return <Account onNavigate={onNavigate} />;

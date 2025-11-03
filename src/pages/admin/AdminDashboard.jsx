@@ -6,7 +6,6 @@ import Btn from "../../components/Btn.jsx";
 import AdminTable from "./AdminTable2.jsx";
 import AdminLegend from "./AdminLegend.jsx";
 import { supabase } from "../../lib/supabase.js";
-import { hashPassword } from "../../lib/hash.js";
 import Results from "../Results.jsx";
 
 export default function AdminDashboard({ onNavigate }) {
@@ -22,10 +21,6 @@ export default function AdminDashboard({ onNavigate }) {
     const saved = Number(localStorage.getItem("cg_timer_min") || 30);
     return Number.isFinite(saved) && saved > 0 ? saved : 30;
   });
-  const [userRows, setUserRows] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [userError, setUserError] = useState("");
-  const [passwordDrafts, setPasswordDrafts] = useState({});
 
   useEffect(() => {
     try {
@@ -34,25 +29,6 @@ export default function AdminDashboard({ onNavigate }) {
       console.warn("Failed to persist timer minutes", err);
     }
   }, [timerMin]);
-
-  useEffect(() => {
-    const loadUsers = async () => {
-      setUsersLoading(true);
-      setUserError("");
-      try {
-        const table = import.meta.env.VITE_USERS_TABLE || "profiles";
-        const { data, error } = await supabase.from(table).select("*").order("created_at", { ascending: false });
-        if (error) throw error;
-        setUserRows(data || []);
-      } catch (err) {
-        console.error("admin load users", err);
-        setUserError(err?.message || "Failed to load users.");
-      } finally {
-        setUsersLoading(false);
-      }
-    };
-    loadUsers();
-  }, []);
 
   const realSubmissions = useMemo(
     () => submissions.filter((s) => !s?._demo),
@@ -77,32 +53,6 @@ export default function AdminDashboard({ onNavigate }) {
     if (!submission) return "";
     const p = submission.participant || submission.profile || {};
     return (p.school || "").trim();
-  };
-
-  const handlePasswordDraft = (userId, value) => {
-    setPasswordDrafts((prev) => ({ ...prev, [userId]: value }));
-  };
-
-  const handlePasswordReset = async (user) => {
-    const rawPassword = (passwordDrafts[user.id] || "").trim();
-    if (rawPassword.length < 6) {
-      alert("Password must be at least 6 characters.");
-      return;
-    }
-    const table = import.meta.env.VITE_USERS_TABLE || "profiles";
-    try {
-      const hashed = await hashPassword(rawPassword);
-      const { error } = await supabase
-        .from(table)
-        .update({ password_hash: hashed })
-        .eq("id", user.id);
-      if (error) throw error;
-      alert(`Password for ${user.email || user.username || "user"} updated.`);
-      setPasswordDrafts((prev) => ({ ...prev, [user.id]: "" }));
-    } catch (err) {
-      console.error("update user password", err);
-      alert(err?.message || "Failed to update password.");
-    }
   };
 
   const bulkEntries = bulkSet?.entries || [];
@@ -342,66 +292,6 @@ export default function AdminDashboard({ onNavigate }) {
               Current: <b>{timerMin} min</b>
             </div>
           </div>
-        </Card>
-      </div>
-
-      <div className="no-print">
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Manage Users</h3>
-          <p style={{ color: "#475569", marginBottom: 16 }}>
-            Reset a user's password directly. New passwords must be at least 6 characters long.
-          </p>
-          {userError && (
-            <div style={{ marginBottom: 12, padding: "10px 12px", background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8, color: "#b91c1c" }}>
-              {userError}
-            </div>
-          )}
-          {usersLoading ? (
-            <p style={{ color: "#6b7280" }}>Loading users…</p>
-          ) : userRows.length === 0 ? (
-            <p style={{ color: "#6b7280" }}>No users found.</p>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-                <thead>
-                  <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: 10, textAlign: "left" }}>Name</th>
-                    <th style={{ padding: 10, textAlign: "left" }}>Email</th>
-                    <th style={{ padding: 10, textAlign: "left" }}>Username</th>
-                    <th style={{ padding: 10, textAlign: "left" }}>New Password</th>
-                    <th style={{ padding: 10, textAlign: "left" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userRows.map((user) => (
-                    <tr key={user.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                      <td style={{ padding: 10 }}>{user.name || "—"}</td>
-                      <td style={{ padding: 10 }}>{user.email || "—"}</td>
-                      <td style={{ padding: 10 }}>{user.username || "—"}</td>
-                      <td style={{ padding: 10 }}>
-                        <input
-                          type="text"
-                          value={passwordDrafts[user.id] || ""}
-                          onChange={(e) => handlePasswordDraft(user.id, e.target.value)}
-                          placeholder="Enter new password"
-                          style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
-                        />
-                      </td>
-                      <td style={{ padding: 10 }}>
-                        <Btn
-                          variant="primary"
-                          disabled={!passwordDrafts[user.id] || passwordDrafts[user.id].length < 6}
-                          onClick={() => handlePasswordReset(user)}
-                        >
-                          Update
-                        </Btn>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </Card>
       </div>
 

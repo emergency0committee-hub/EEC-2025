@@ -16,9 +16,16 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
   const menuRef = useRef(null);
 
   const currentUser = (() => {
-    try { const raw = localStorage.getItem("cg_current_user_v1"); return raw ? JSON.parse(raw) : null; } catch { return null; }
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
   })();
-  const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1";
+  const role = (currentUser?.role || "").toLowerCase();
+  const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1" || role === "admin" || role === "administrator";
+  const canAccessQuestionBank = isAdmin || role === "staff";
 
   useEffect(() => {
     const onDoc = (e) => {
@@ -36,6 +43,16 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
 
   const strings = STR[lang] || STR.EN;
   const loginLabel = strings.signIn || "Login";
+  const menuLabels = {
+    profile: strings.menuProfile || "Profile",
+    careerDashboard: strings.menuCareerDashboard || "Career Dashboard",
+    satDashboard: strings.menuSatDashboard || "SAT Dashboard",
+    satTraining: strings.menuSatTraining || "SAT Training Analytics",
+    manageUsers: strings.menuManageUsers || "Manage Users",
+    questions: strings.menuQuestions || "Question Bank",
+    signOut: strings.menuSignOut || strings.signOut || "Sign Out",
+    title: strings.menuTitle || "Account menu",
+  };
 
   if (!currentUser) {
     return (
@@ -62,7 +79,7 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup
         aria-expanded={open}
-        title="Account menu"
+        title={menuLabels.title}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -105,10 +122,19 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
               onNavigate("account", null, event);
             }}
           >
-            Profile
+            {menuLabels.profile}
           </MenuItem>
           {isAdmin && (
             <>
+              <MenuItem
+                to="admin-manage-users"
+                onSelect={(event) => {
+                  setOpen(false);
+                  onNavigate("admin-manage-users", null, event);
+                }}
+              >
+                {menuLabels.manageUsers}
+              </MenuItem>
               <MenuItem
                 to="admin-dashboard"
                 onSelect={(event) => {
@@ -116,7 +142,7 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                   onNavigate("admin-dashboard", null, event);
                 }}
               >
-                Career Dashboard
+                {menuLabels.careerDashboard}
               </MenuItem>
               <MenuItem
                 to="admin-sat"
@@ -125,7 +151,7 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                   onNavigate("admin-sat", null, event);
                 }}
               >
-                SAT Dashboard
+                {menuLabels.satDashboard}
               </MenuItem>
               <MenuItem
                 to="admin-sat-training"
@@ -134,12 +160,23 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                   onNavigate("admin-sat-training", null, event);
                 }}
               >
-                SAT Training Analytics
+                {menuLabels.satTraining}
               </MenuItem>
             </>
           )}
+          {canAccessQuestionBank && (
+            <MenuItem
+              to="admin-question-bank"
+              onSelect={(event) => {
+                setOpen(false);
+                onNavigate("admin-question-bank", null, event);
+              }}
+            >
+              {menuLabels.questions}
+            </MenuItem>
+          )}
           <div style={{ height: 1, background: "#e5e7eb", margin: "6px 0" }} />
-          <MenuItem onClick={signOut}>{strings.signOut || "Sign out"}</MenuItem>
+          <MenuItem onClick={signOut}>{menuLabels.signOut}</MenuItem>
         </div>
       )}
     </div>
