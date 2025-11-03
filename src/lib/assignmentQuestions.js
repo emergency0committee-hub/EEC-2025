@@ -1,12 +1,14 @@
 // src/lib/assignmentQuestions.js
 import { supabase } from "./supabase.js";
 
-const TABLE = import.meta.env.VITE_ASSIGNMENT_QUESTIONS_TABLE || "assignment_questions";
+const DEFAULT_TABLE = import.meta.env.VITE_ASSIGNMENT_QUESTIONS_TABLE || "assignment_questions";
 const BUCKET = import.meta.env.VITE_ASSIGNMENT_MEDIA_BUCKET || "assignment-media";
 
-export async function listAssignmentQuestions({ limit = 200, signal } = {}) {
+const resolveTable = (table) => table || DEFAULT_TABLE;
+
+export async function listAssignmentQuestions({ table, limit = 200, signal } = {}) {
   const query = supabase
-    .from(TABLE)
+    .from(resolveTable(table))
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -16,22 +18,90 @@ export async function listAssignmentQuestions({ limit = 200, signal } = {}) {
   return data || [];
 }
 
-export async function createAssignmentQuestion(payload) {
-  const { data, error } = await supabase.from(TABLE).insert(payload).select().single();
+export async function createAssignmentQuestion(payload, { table } = {}) {
+  const { data, error } = await supabase.from(resolveTable(table)).insert(payload).select().single();
   if (error) throw error;
   return data;
 }
 
-export async function updateAssignmentQuestion(id, payload) {
-  const { data, error } = await supabase.from(TABLE).update(payload).eq("id", id).select().single();
+export async function updateAssignmentQuestion(id, payload, { table } = {}) {
+  const { data, error } = await supabase.from(resolveTable(table)).update(payload).eq("id", id).select().single();
   if (error) throw error;
   return data;
 }
 
-export async function deleteAssignmentQuestion(id) {
-  const { error } = await supabase.from(TABLE).delete().eq("id", id);
+export async function deleteAssignmentQuestion(id, { table } = {}) {
+  const { error } = await supabase.from(resolveTable(table)).delete().eq("id", id);
   if (error) throw error;
   return true;
+}
+
+const dedupeRows = (rows = []) => {
+  const seen = new Set();
+  const result = [];
+  rows.forEach((row) => {
+    if (!row) return;
+    const key =
+      row.id ||
+      row.uuid ||
+      `${row.question || ""}_${row.subject || ""}_${row.unit || ""}_${row.lesson || ""}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(row);
+    }
+  });
+  return result;
+};
+
+const shuffleRows = (rows = []) => {
+  const array = rows.slice();
+  for (let i = array.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+};
+
+export async function fetchQuestionBankSample({
+  table,
+  subject,
+  unit,
+  lesson,
+  limit = 20,
+} = {}) {
+  const target = resolveTable(table);
+  const fetchLimit = Math.min(Math.max(limit * 5, limit), 500);
+
+  const tryFetch = async (filters = {}) => {
+    let query = supabase.from(target).select("*").limit(fetchLimit);
+    if (filters.subject) query = query.eq("subject", filters.subject);
+    if (filters.unit) query = query.eq("unit", filters.unit);
+    if (filters.lesson) query = query.eq("lesson", filters.lesson);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  };
+
+  let rows = await tryFetch({ subject, unit, lesson });
+
+  if (rows.length < limit && lesson) {
+    const lessonRelaxed = await tryFetch({ subject, unit });
+    rows = rows.concat(lessonRelaxed);
+  }
+
+  if (rows.length < limit && unit) {
+    const unitRelaxed = await tryFetch({ subject });
+    rows = rows.concat(unitRelaxed);
+  }
+
+  if (rows.length < limit && subject) {
+    const subjectRelaxed = await tryFetch({});
+    rows = rows.concat(subjectRelaxed);
+  }
+
+  const deduped = dedupeRows(rows);
+  const shuffled = shuffleRows(deduped);
+  return shuffled.slice(0, limit);
 }
 
 export async function uploadQuestionImage(file, { prefix = "questions" } = {}) {

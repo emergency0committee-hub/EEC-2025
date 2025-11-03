@@ -4,14 +4,54 @@ import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
-import { toOneDriveEmbedUrl } from "../../lib/onedrive.js";
+import { fetchQuestionBankSample } from "../../lib/assignmentQuestions.js";
+import {
+  BANKS,
+  mapBankQuestionToResource,
+  SUBJECT_OPTIONS,
+  MATH_UNIT_OPTIONS,
+  MATH_LESSON_OPTIONS,
+} from "../../lib/questionBanks.js";
 
-const UNIT_LESSONS = {
-  Algebra: ["Fraction and Decimals", "Polynomials", "Solving Equations", "Word Problems"],
-  Arithmetic: ["Percentage", "Average", "Ratio and Proportion", "Probability"],
-  Geometry: ["Lines and Angles", "Triangles", "Quadrilateral", "Solid Geometry", "Coordinate Geometry", "Trigonometry"],
+const FIRST_MATH_UNIT = MATH_UNIT_OPTIONS[0]?.value || "";
+const firstLessonForUnit = (unit) => {
+  const lessons = MATH_LESSON_OPTIONS[unit] || [];
+  return lessons[0]?.value || "";
 };
-const UNIT_KEYS = Object.keys(UNIT_LESSONS);
+const BANK_LABELS = {
+  math: "Math Bank",
+  english: "English Bank",
+  tests: "Test Bank",
+};
+
+const defaultDurationForKind = (kind) => {
+  const value = String(kind || "quiz").toLowerCase();
+  if (value === "homework") return "";
+  if (value === "quiz") return "15";
+  return "20";
+};
+
+const resolveBankConfig = (bankId) => BANKS[bankId] || BANKS.math;
+
+const createDefaultAutoAssign = (bankId = "math") => {
+  const bank = resolveBankConfig(bankId);
+  const subject = bank.subjectLocked
+    ? bank.defaultSubject
+    : bank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
+  const supportsMathUnits = bank.supportsUnitLesson && subject === "math";
+  const unit = supportsMathUnits ? FIRST_MATH_UNIT : "";
+  const lesson = supportsMathUnits ? firstLessonForUnit(unit) : "";
+  return {
+    bank: bank.id,
+    subject,
+    kind: "quiz",
+    questionCount: "10",
+    durationMin: defaultDurationForKind("quiz"),
+    title: "",
+    unit,
+    lesson,
+  };
+};
 
 export default function SATTraining({ onNavigate }) {
   SATTraining.propTypes = { onNavigate: PropTypes.func.isRequired };
@@ -41,14 +81,6 @@ export default function SATTraining({ onNavigate }) {
       ],
     },
   ]), [onNavigate]);
-
-  // OneDrive materials (Math): env or local override for embed URL
-  const [embedOverride, setEmbedOverride] = useState(() => {
-    try { return localStorage.getItem("cg_onedrive_math_embed") || ""; } catch { return ""; }
-  });
-  const envEmbed = (import.meta.env.VITE_ONEDRIVE_MATH_EMBED || "").trim();
-  const rawEmbed = (embedOverride || envEmbed || "").trim();
-  const embedUrl = useMemo(() => toOneDriveEmbedUrl(rawEmbed), [rawEmbed]);
 
   // Admin: classes management
   const [classesLoading, setClassesLoading] = useState(false);
@@ -119,16 +151,8 @@ export default function SATTraining({ onNavigate }) {
       ),
     [groupedStudentResources],
   );
-  const [csvInfo, setCsvInfo] = useState({ name: "", count: 0, items: null, error: "" });
-  const [csvKind, setCsvKind] = useState("quiz");
-  const [csvDuration, setCsvDuration] = useState("15");
-  const [csvTitle, setCsvTitle] = useState("");
-  const [csvUnit, setCsvUnit] = useState(UNIT_KEYS[0]);
-  const [csvLesson, setCsvLesson] = useState(UNIT_LESSONS[UNIT_KEYS[0]][0]);
-  useEffect(() => {
-    const lessons = UNIT_LESSONS[csvUnit] || [];
-    setCsvLesson((prev) => (lessons.includes(prev) ? prev : (lessons[0] || "")));
-  }, [csvUnit]);
+  const [autoAssign, setAutoAssign] = useState(() => createDefaultAutoAssign("math"));
+  const [autoGenerating, setAutoGenerating] = useState(false);
 
   const openClassLog = (row) => setViewClassLog(row);
   const closeClassLog = () => setViewClassLog(null);
@@ -287,210 +311,284 @@ export default function SATTraining({ onNavigate }) {
     return map;
   };
 
-  // Minimal CSV parser (quoted fields, CRLF)
-  function parseCSV(text) {
-    const rows = [];
-    let field = '';
-    let row = [];
-    let inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-      const c = text[i];
-      const next = text[i + 1];
-      if (inQuotes) {
-        if (c === '"' && next === '"') { field += '"'; i++; }
-        else if (c === '"') { inQuotes = false; }
-        else { field += c; }
-      } else {
-        if (c === '"') { inQuotes = true; }
-        else if (c === ',') { row.push(field); field = ''; }
-        else if (c === '\n' || c === '\r') {
-          if (c === '\r' && next === '\n') { i++; }
-          row.push(field); field = '';
-          if (row.length && !(row.length === 1 && row[0] === '')) rows.push(row);
-          row = [];
-        } else { field += c; }
-      }
-    }
-    row.push(field);
-    if (row.length && !(row.length === 1 && row[0] === '')) rows.push(row);
-    return rows;
-  }
-
-  function parseQuizCSV(text) {
-    const rows = parseCSV(text);
-    if (!rows || rows.length < 2) return { items: [], count: 0 };
-    let headerRow = rows[0];
-    if (headerRow && headerRow.length === 1 && String(headerRow[0]).includes('/')) {
-      headerRow = String(headerRow[0]).split('/');
-    }
-    const header = headerRow.map(h => String(h || '').trim().toLowerCase());
-    const col = (name) => header.findIndex(h => h === name);
-    const idx = {
-      num: col('#'),
-      question: col('question'),
-      a: col('answer a'),
-      b: col('answer b'),
-      c: col('answer c'),
-      d: col('answer d'),
-      correct: col('correct answer'),
-      passage: col('passage'),
-      skill: col('skill'),
-    };
-    const items = [];
-    for (let i = 1; i < rows.length; i++) {
-      const r = rows[i]; if (!r) continue;
-      const qtext = (idx.question >= 0 ? r[idx.question] : '').trim();
-      if (!qtext) continue;
-      const num = (idx.num >= 0 ? r[idx.num] : String(i)).trim();
-      const id = 'q_' + (num || i);
-      const rawChoices = [
-        { value: 'A', label: (idx.a>=0? r[idx.a]:'').trim() },
-        { value: 'B', label: (idx.b>=0? r[idx.b]:'').trim() },
-        { value: 'C', label: (idx.c>=0? r[idx.c]:'').trim() },
-        { value: 'D', label: (idx.d>=0? r[idx.d]:'').trim() },
-      ];
-            const hasChoices = rawChoices.some((ch) => ch.label);
-      const correctRaw = (idx.correct>=0? r[idx.correct]: '').trim();
-      const correct = hasChoices
-        ? (correctRaw.replace(/[^A-D]/ig,'').toUpperCase() || null)
-        : (correctRaw || null);
-      const passage = (idx.passage>=0? r[idx.passage]: '').trim() || null;
-      const skill = (idx.skill>=0? r[idx.skill]: '').trim() || null;
-        items.push({
-        id,
-        text: qtext,
-        passage,
-        choices: hasChoices ? rawChoices : [],
-        correct,
-        skill,
-        answerType: hasChoices ? 'choice' : 'numeric',
-      });
-    }
-    return { items, count: items.length };
-  }
   const [resources, setResources] = useState([]);
-  const handleCsvKindChange = (value) => {
-    const kind = (value || "quiz").toLowerCase();
-    setCsvKind(kind);
-    if (kind === "homework") {
-      setCsvDuration("");
-    } else if (kind === "quiz") {
-      setCsvDuration("15");
-    } else {
-      setCsvDuration("20");
-    }
-  };
+  const handleAutoAssignChange = (field, rawValue) => {
+    setAutoAssign((prev) => {
+      let next = { ...prev };
+      let value = rawValue;
 
-  // Per-class OneDrive embed override (admin local)
-  const classEmbedKey = selectedClass ? `cg_onedrive_class_${selectedClass}` : "";
-  const [classEmbed, setClassEmbed] = useState("");
-  const classEmbedUrl = useMemo(() => toOneDriveEmbedUrl(classEmbed), [classEmbed]);
-
-
-  function handleCSVFile(event) {
-    const f = event?.target?.files?.[0];
-    if (!f) return;
-    setCsvInfo({ name: f.name, count: 0, items: null, error: '' });
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const txt = String(reader.result || '');
-        const { items, count } = parseQuizCSV(txt);
-        setCsvInfo({ name: f.name, count, items, error: '' });
-      } catch (err) {
-        setCsvInfo({ name: f.name, count: 0, items: null, error: err?.message || 'Could not parse CSV' });
+      if (field === "questionCount") {
+        value = String(rawValue ?? "").replace(/[^\d]/g, "");
+        next.questionCount = value;
+      } else if (field === "durationMin") {
+        value = String(rawValue ?? "").replace(/[^\d]/g, "");
+        next.durationMin = value;
+      } else if (field === "bank") {
+        const bank = resolveBankConfig(rawValue);
+        next = {
+          ...next,
+          bank: bank.id,
+          subject: bank.subjectLocked
+            ? bank.defaultSubject
+            : next.subject || bank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math",
+        };
+      } else if (field === "subject") {
+        next.subject = String(value || "");
+      } else if (field === "kind") {
+        const kindValue = String(rawValue || "quiz").toLowerCase();
+        next.kind = kindValue;
+        next.durationMin = defaultDurationForKind(kindValue);
+      } else if (field === "title") {
+        next.title = value ?? "";
+      } else if (field === "unit") {
+        next.unit = String(value || "");
+      } else if (field === "lesson") {
+        next.lesson = String(value || "");
       }
-      if (event?.target) {
-        try { event.target.value = ""; } catch {}
-      }
-    };
-    reader.onerror = () => {
-      setCsvInfo({ name: f.name, count: 0, items: null, error: 'Failed to read file' });
-      if (event?.target) {
-        try { event.target.value = ""; } catch {}
-      }
-    };
-    reader.readAsText(f);
-  }
 
-  async function saveCSVAsResource(kind = 'quiz') {
-    if (!csvInfo.items || !csvInfo.count) { alert('Pick a CSV file first'); return; }
-    if (!selectedClass) { alert('Pick a class first'); return; }
-    if (!csvLesson) { alert('Pick a lesson'); return; }
-    const title = (csvTitle || '').trim() || (csvInfo.name ? csvInfo.name.replace(/\\.csv$/i,'') : ('Quiz (' + csvInfo.count + ' Qs)'));
-    const resolvedKind = (kind || 'quiz').toLowerCase();
-    const meta = buildMeta(resolvedKind, csvDuration);
-    const payloadMeta = { ...meta, unit: csvUnit, lesson: csvLesson };
-    try {
-      const rTable = import.meta.env.VITE_CLASS_RES_TABLE || 'cg_class_resources';
-      const { data: me } = await supabase.auth.getUser();
-      const by = me?.user?.email || userEmail || null;
-      // Prefer inserting payload if the column exists
-      let inserted = null;
-      const baseRow = {
-        class_name: selectedClass,
-        title,
-        unit: csvUnit,
-        lesson: csvLesson,
-        url: '',
-        kind: resolvedKind,
-        created_by: by,
-        payload: { items: csvInfo.items, meta: payloadMeta },
-      };
-      try {
-        const { data, error } = await supabase.from(rTable).insert(baseRow).select().single();
-        if (error) throw error;
-        inserted = data;
-      } catch (e) {
-        const missingColumn = e?.code === '42703' || /column .* does not exist/i.test(e?.message || '');
-        if (!missingColumn) throw e;
-        const fallbackPayload = { items: csvInfo.items, meta: payloadMeta };
-        try {
-          const { data, error } = await supabase
-            .from(rTable)
-            .insert({ class_name: selectedClass, title, url: '', kind: resolvedKind, created_by: by, payload: fallbackPayload })
-            .select()
-            .single();
-          if (error) throw error;
-          inserted = data;
-        } catch (inner) {
-          const json = JSON.stringify(fallbackPayload);
-          const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
-          const { data, error } = await supabase
-            .from(rTable)
-            .insert({ class_name: selectedClass, title, url: dataUrl, kind: resolvedKind, created_by: by })
-            .select()
-            .single();
-          if (error) throw error;
-          inserted = data;
+      const activeBank = resolveBankConfig(next.bank);
+      let subjectValue = next.subject;
+      if (activeBank.subjectLocked) {
+        subjectValue = activeBank.defaultSubject;
+        next.subject = subjectValue;
+      } else if (!subjectValue) {
+        subjectValue = activeBank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
+        next.subject = subjectValue;
+      }
+
+      const supportsMathUnits = activeBank.supportsUnitLesson && subjectValue === "math";
+      if (!supportsMathUnits) {
+        next.unit = "";
+        next.lesson = "";
+      } else {
+        const unitValue = MATH_UNIT_OPTIONS.some((opt) => opt.value === next.unit)
+          ? next.unit
+          : FIRST_MATH_UNIT;
+        if (field !== "unit") {
+          next.unit = unitValue;
+        }
+        const lessonsForUnit = MATH_LESSON_OPTIONS[next.unit] || [];
+        if (field === "unit") {
+          const lessonList = MATH_LESSON_OPTIONS[String(value || "")] || [];
+          if (!lessonList.some((opt) => opt.value === next.lesson)) {
+            next.lesson = lessonList[0]?.value || "";
+          }
+        } else if (!lessonsForUnit.some((opt) => opt.value === next.lesson)) {
+          next.lesson = lessonsForUnit[0]?.value || "";
         }
       }
-      if (inserted && (!inserted.payload || typeof inserted.payload !== 'object')) {
-        inserted = { ...inserted, payload: { items: csvInfo.items, meta: payloadMeta } };
-      } else if (inserted?.payload?.meta) {
-        inserted = {
-          ...inserted,
-          payload: { ...inserted.payload, meta: { ...payloadMeta, ...inserted.payload.meta } },
-        };
+
+      if (next.kind === "homework") {
+        next.durationMin = "";
       }
+
+      return next;
+    });
+  };
+
+  async function saveResource({
+    items,
+    kind,
+    title,
+    unit,
+    lesson,
+    durationInput,
+    metaExtras = {},
+  }) {
+    if (!selectedClass) throw new Error("Pick a class first");
+    const questionItems = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (questionItems.length === 0) throw new Error("No questions available to save.");
+    const resolvedKind = (kind || "quiz").toLowerCase();
+    const resolvedTitle =
+      (title || "").trim() ||
+      `${resolvedKind.charAt(0).toUpperCase()}${resolvedKind.slice(1)} (${questionItems.length} Qs)`;
+    const meta = buildMeta(resolvedKind, durationInput);
+    const payloadMeta = {
+      ...meta,
+      unit: unit || null,
+      lesson: lesson || null,
+      questionCount: questionItems.length,
+      ...metaExtras,
+    };
+
+    const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
+    const { data: me } = await supabase.auth.getUser();
+    const by = me?.user?.email || userEmail || null;
+
+    let inserted = null;
+    const baseRow = {
+      class_name: selectedClass,
+      title: resolvedTitle,
+      unit: unit || null,
+      lesson: lesson || null,
+      url: "",
+      kind: resolvedKind,
+      created_by: by,
+      payload: { items: questionItems, meta: payloadMeta },
+    };
+    try {
+      const { data, error } = await supabase.from(rTable).insert(baseRow).select().single();
+      if (error) throw error;
+      inserted = data;
+    } catch (e) {
+      const missingColumn = e?.code === "42703" || /column .* does not exist/i.test(e?.message || "");
+      if (!missingColumn) throw e;
+      const fallbackPayload = { items: questionItems, meta: payloadMeta };
+      try {
+        const { data, error } = await supabase
+          .from(rTable)
+          .insert({
+            class_name: selectedClass,
+            title: resolvedTitle,
+            unit: unit || null,
+            lesson: lesson || null,
+            url: "",
+            kind: resolvedKind,
+            created_by: by,
+            payload: fallbackPayload,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        inserted = data;
+      } catch (inner) {
+        const json = JSON.stringify(fallbackPayload);
+        const dataUrl = `data:application/json;base64,${btoa(unescape(encodeURIComponent(json)))}`;
+        const { data, error } = await supabase
+          .from(rTable)
+          .insert({
+            class_name: selectedClass,
+            title: resolvedTitle,
+            unit: unit || null,
+            lesson: lesson || null,
+            url: dataUrl,
+            kind: resolvedKind,
+            created_by: by,
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        inserted = data;
+      }
+    }
+
+    if (inserted && (!inserted.payload || typeof inserted.payload !== "object")) {
+      inserted = { ...inserted, payload: { items: questionItems, meta: payloadMeta } };
+    } else if (inserted?.payload?.meta) {
       inserted = {
         ...inserted,
-        unit: inserted.unit ?? payloadMeta.unit,
-        lesson: inserted.lesson ?? payloadMeta.lesson,
+        payload: { ...inserted.payload, meta: { ...payloadMeta, ...inserted.payload.meta } },
       };
+    }
+    inserted = {
+      ...inserted,
+      unit: inserted.unit ?? (unit || null),
+      lesson: inserted.lesson ?? (lesson || null),
+    };
+    return inserted;
+  }
+
+  async function handleAutoGenerate() {
+    if (!selectedClass) {
+      alert("Pick a class first");
+      return;
+    }
+    const bank = resolveBankConfig(autoAssign.bank);
+    const subject = bank.subjectLocked
+      ? bank.defaultSubject
+      : autoAssign.subject || bank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
+    const supportsMathUnits = bank.supportsUnitLesson && subject === "math";
+    const unitValue = supportsMathUnits ? autoAssign.unit : "";
+    const lessonValue = supportsMathUnits ? autoAssign.lesson : "";
+    const requestedCount = Number.parseInt(autoAssign.questionCount, 10);
+    if (!Number.isFinite(requestedCount) || requestedCount <= 0) {
+      alert("Enter how many questions you want to include.");
+      return;
+    }
+    if (supportsMathUnits && !unitValue) {
+      alert("Pick a unit.");
+      return;
+    }
+    if (supportsMathUnits && !lessonValue) {
+      alert("Pick a lesson.");
+      return;
+    }
+
+    const questionLimit = Math.min(Math.max(requestedCount, 1), 200);
+    setAutoGenerating(true);
+    try {
+      const rows = await fetchQuestionBankSample({
+        table: bank.table,
+        subject,
+        unit: supportsMathUnits ? unitValue : undefined,
+        lesson: supportsMathUnits ? lessonValue : undefined,
+        limit: questionLimit,
+      });
+      const items = (rows || []).map(mapBankQuestionToResource).filter(Boolean);
+      if (!items.length) {
+        throw new Error("No questions found for the selected filters.");
+      }
+      if (items.length < requestedCount) {
+        const proceed = window.confirm(
+          `Only ${items.length} question${items.length === 1 ? "" : "s"} were found. Continue anyway?`,
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+
+      const subjectLabel =
+        SUBJECT_OPTIONS.find((opt) => opt.value === subject)?.label?.EN || subject || "";
+      const kindLabel = String(autoAssign.kind || "quiz").toLowerCase();
+      const titleBase = (autoAssign.title || "").trim();
+      const defaultTitleParts = [];
+      if (subjectLabel) defaultTitleParts.push(subjectLabel);
+      defaultTitleParts.push(kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1));
+      defaultTitleParts.push(`(${items.length} Qs)`);
+      const title = titleBase || defaultTitleParts.join(" ");
+      const durationInput = kindLabel === "homework" ? "" : autoAssign.durationMin;
+
+      const metaExtras = {
+        questionBank: bank.id,
+        subject,
+        unit: supportsMathUnits ? unitValue : null,
+        lesson: supportsMathUnits ? lessonValue : null,
+        source: "question-bank",
+      };
+
+      const inserted = await saveResource({
+        items,
+        kind: kindLabel,
+        title,
+        unit: supportsMathUnits ? unitValue : null,
+        lesson: supportsMathUnits ? lessonValue : null,
+        durationInput,
+        metaExtras,
+      });
       setResources((list) => [inserted, ...list]);
-      setCsvInfo({ name: '', count: 0, items: null, error: '' });
-      setCsvTitle('');
-      handleCsvKindChange('quiz');
-      const defaultUnit = UNIT_KEYS[0];
-      setCsvUnit(defaultUnit);
-      setCsvLesson(UNIT_LESSONS[defaultUnit][0]);
-      alert('CSV saved.');
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || 'Failed to save CSV resource. You may need to add a payload jsonb column to cg_class_resources.');
+      setAutoAssign((prev) => ({
+        ...prev,
+        title: "",
+        questionCount: String(requestedCount),
+      }));
+      alert(`Assignment created with ${items.length} question${items.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      console.error(error);
+      alert(error?.message || "Failed to build assignment from the question bank.");
+    } finally {
+      setAutoGenerating(false);
     }
   }
+
+  const activeBank = useMemo(() => resolveBankConfig(autoAssign.bank), [autoAssign.bank]);
+  const activeSubject = activeBank.subjectLocked
+    ? activeBank.defaultSubject
+    : autoAssign.subject || activeBank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
+  const showMathSelectors = activeBank.supportsUnitLesson && activeSubject === "math";
+  const activeLessons = MATH_LESSON_OPTIONS[autoAssign.unit] || [];
+  const subjectDisplayLabel =
+    SUBJECT_OPTIONS.find((opt) => opt.value === activeSubject)?.label?.EN || activeSubject;
+  const activeBankLabel = BANK_LABELS[activeBank.id] || "Question Bank";
   useEffect(() => {
     if (!isAdmin) return;
     (async () => {
@@ -516,39 +614,10 @@ export default function SATTraining({ onNavigate }) {
   }, [isAdmin]);
 
 
-  function handleCSVFile(event) {
-    const file = event?.target?.files?.[0];
-    if (!file) return;
-    setCsvInfo({ name: file.name, count: 0, items: null, error: "" });
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = String(reader.result || "");
-        const { items, count } = parseQuizCSV(text);
-        setCsvInfo({ name: file.name, count, items, error: "" });
-      } catch (err) {
-        console.warn("parse CSV", err);
-        setCsvInfo({ name: file.name, count: 0, items: null, error: err?.message || "Could not parse CSV" });
-      }
-      if (event?.target) {
-        try { event.target.value = ""; } catch {}
-      }
-    };
-    reader.onerror = () => {
-      setCsvInfo({ name: file.name, count: 0, items: null, error: "Failed to read file" });
-      if (event?.target) {
-        try { event.target.value = ""; } catch {}
-      }
-    };
-    reader.readAsText(file);
-  }
-
   useEffect(() => {
     if (!isAdmin || !selectedClass) return;
     (async () => {
       try {
-        // Load class embed from local storage
-        try { setClassEmbed(localStorage.getItem(classEmbedKey) || ""); } catch {}
         // Load student emails
         const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
         const { data, error } = await supabase.from(table).select("student_email").eq("class_name", selectedClass).limit(5000);
@@ -748,24 +817,6 @@ export default function SATTraining({ onNavigate }) {
     { key: "homework", title: "Homework", subtitle: "Assignments you can resume from home." },
     { key: "other", title: "Additional Resources", subtitle: "Links and materials shared by your teacher." },
   ];
-  function handleCSVFile(e, kindOverride) {
-    const f = e?.target?.files?.[0];
-    if (!f) return;
-    setCsvInfo({ name: f.name, count: 0, items: null, error: '' });
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const txt = String(reader.result || '');
-        const { items, count } = parseQuizCSV(txt);
-        setCsvInfo({ name: f.name, count, items, error: '' });
-      } catch (err) {
-        setCsvInfo({ name: f.name, count: 0, items: null, error: err?.message || 'Could not parse CSV' });
-      }
-    };
-    reader.onerror = () => setCsvInfo({ name: f.name, count: 0, items: null, error: 'Failed to read file' });
-    reader.readAsText(f);
-  }
-
   useEffect(() => {
     (async () => {
       try {
@@ -949,94 +1000,130 @@ export default function SATTraining({ onNavigate }) {
                 {classTab === 'classwork' && (
                   <div style={{ display: 'grid', gap: 12 }}>
                     <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Materials (OneDrive)</div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder="OneDrive share or embed URL"
-                          value={classEmbed}
-                          onChange={(e) => setClassEmbed(e.target.value)}
-                          style={{ flex: 1, padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                        />
-                        <Btn variant="secondary" onClick={() => { try { localStorage.setItem(classEmbedKey, classEmbed || ''); alert('Saved locally.'); } catch {} }}>Save</Btn>
-                        <Btn variant="back" onClick={() => { setClassEmbed(''); try { localStorage.removeItem(classEmbedKey); } catch {} }}>Clear</Btn>
-                      </div>
-                      {classEmbedUrl && (
-                        <div style={{ marginTop: 10, height: 320, border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-                          <iframe title={`Materials ${selectedClass}`} src={classEmbedUrl} style={{ width: '100%', height: '100%', border: 0 }} allow="fullscreen" />
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Upload CSV Assignment</div>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Build From Question Bank</div>
                       <div style={{ display: 'grid', gap: 10 }}>
-                        <input
-                          type="text"
-                          placeholder="Title (optional - defaults to file name)"
-                          value={csvTitle}
-                          onChange={(e) => setCsvTitle(e.target.value)}
-                          style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                        />
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          <select value={csvKind} onChange={(e) => handleCsvKindChange(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}>
+                          <select
+                            value={activeBank.id}
+                            onChange={(e) => handleAutoAssignChange("bank", e.target.value)}
+                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                          >
+                            {Object.values(BANKS).map((bank) => (
+                              <option key={bank.id} value={bank.id}>
+                                {BANK_LABELS[bank.id] || bank.id}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={autoAssign.kind}
+                            onChange={(e) => handleAutoAssignChange("kind", e.target.value)}
+                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                          >
                             <option value="classwork">Classwork</option>
                             <option value="homework">Homework</option>
                             <option value="quiz">Quiz</option>
                           </select>
-                          <select value={csvUnit} onChange={(e) => setCsvUnit(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}>
-                            {UNIT_KEYS.map((unit) => (
-                              <option key={unit} value={unit}>{unit}</option>
-                            ))}
-                          </select>
-                          <select value={csvLesson} onChange={(e) => setCsvLesson(e.target.value)} style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}>
-                            {(UNIT_LESSONS[csvUnit] || []).map((lesson) => (
-                              <option key={lesson} value={lesson}>{lesson}</option>
-                            ))}
-                          </select>
+                          {activeBank.subjectLocked ? (
+                            <div
+                              style={{
+                                padding: '10px 12px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: 8,
+                                background: '#f9fafb',
+                                color: '#374151',
+                                minWidth: 140,
+                              }}
+                            >
+                              {subjectDisplayLabel}
+                            </div>
+                          ) : (
+                            <select
+                              value={activeSubject}
+                              onChange={(e) => handleAutoAssignChange("subject", e.target.value)}
+                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                            >
+                              {SUBJECT_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label.EN || opt.value}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+
+                        {showMathSelectors && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            <select
+                              value={autoAssign.unit}
+                              onChange={(e) => handleAutoAssignChange("unit", e.target.value)}
+                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                            >
+                              {MATH_UNIT_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label.EN || opt.value}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={autoAssign.lesson}
+                              onChange={(e) => handleAutoAssignChange("lesson", e.target.value)}
+                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                            >
+                              {activeLessons.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label.EN || opt.value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           <input
                             type="number"
                             min="1"
-                            placeholder={csvKind === "homework" ? "Untimed" : "Duration (min)"}
-                            value={csvKind === "homework" ? "" : csvDuration}
-                            onChange={(e) => setCsvDuration(e.target.value)}
-                            disabled={csvKind === "homework"}
+                            placeholder="Questions"
+                            value={autoAssign.questionCount}
+                            onChange={(e) => handleAutoAssignChange("questionCount", e.target.value)}
+                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, minWidth: 140 }}
+                          />
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="Duration (min)"
+                            value={autoAssign.kind === "homework" ? "" : autoAssign.durationMin}
+                            onChange={(e) => handleAutoAssignChange("durationMin", e.target.value)}
+                            disabled={autoAssign.kind === "homework"}
                             style={{
                               padding: '10px 12px',
                               border: '1px solid #d1d5db',
                               borderRadius: 8,
-                              background: csvKind === "homework" ? '#f9fafb' : '#ffffff',
-                              color: csvKind === "homework" ? '#9ca3af' : '#111827',
+                              minWidth: 160,
+                              background: autoAssign.kind === "homework" ? '#f9fafb' : '#ffffff',
+                              color: autoAssign.kind === "homework" ? '#9ca3af' : '#111827',
                             }}
                           />
                         </div>
-                        <div style={{ fontSize: 12, color: '#6b7280' }}>
-                          {csvKind === "homework"
-                            ? "Homework is untimed and lets students resume where they left off."
-                            : "Set a time limit in minutes for classwork and quizzes (students restart each attempt)."}
-                        </div>
-                        <input type="file" accept=".csv" onChange={(e) => handleCSVFile(e)} />
-                        {csvInfo.name && (
-                          <div style={{ color: csvInfo.error ? '#dc2626' : '#6b7280', fontSize: 13 }}>
-                            {csvInfo.error ? csvInfo.error : `Picked ${csvInfo.name} - ${csvInfo.count} questions detected`}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                          <Btn variant="secondary" onClick={() => saveCSVAsResource(csvKind)} disabled={!csvInfo.items || !csvInfo.count}>
-                            Save CSV
-                          </Btn>
+
+                        <input
+                          type="text"
+                          value={autoAssign.title}
+                          onChange={(e) => handleAutoAssignChange("title", e.target.value)}
+                          placeholder="Title (optional)"
+                          style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                        />
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                           <Btn
-                            variant="back"
-                            onClick={() => {
-                              setCsvInfo({ name: '', count: 0, items: null, error: '' });
-                              setCsvTitle('');
-                              const defaultUnit = UNIT_KEYS[0];
-                              setCsvUnit(defaultUnit);
-                              setCsvLesson(UNIT_LESSONS[defaultUnit][0]);
-                              handleCsvKindChange('quiz');
-                            }}
+                            variant="secondary"
+                            onClick={handleAutoGenerate}
+                            disabled={autoGenerating}
                           >
-                            Clear
+                            {autoGenerating ? "Building..." : "Build Assignment"}
                           </Btn>
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>
+                            We will pick random questions from the {activeBankLabel.toLowerCase()} based on your filters.
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1207,34 +1294,6 @@ export default function SATTraining({ onNavigate }) {
           {isAdmin && <TabButton id="admin">Admin</TabButton>}
         </div>
       </div>
-
-      {/* Optional: OneDrive materials for Math */}
-      {isAdmin && embedUrl && (
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Math Materials</h3>
-          <div style={{ height: 380, border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-            <iframe title="OneDrive Math Materials" src={embedUrl} style={{ width: '100%', height: '100%', border: 0 }} allow="fullscreen"></iframe>
-          </div>
-          <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>If content does not load, ensure the OneDrive folder/file share link supports embedding and is accessible.</div>
-        </Card>
-      )}
-
-      {/* Admin-only: set local embed override */}
-      {isAdmin && (
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Configure OneDrive (local override)</h3>
-          <p style={{ color: '#6b7280', marginTop: 0, fontSize: 14 }}>Paste a OneDrive share or embed URL for Math materials. This local override is saved only in your browser. For global config, set VITE_ONEDRIVE_MATH_EMBED and redeploy.</p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input type="text" placeholder="OneDrive share or embed URL"
-              value={embedOverride}
-              onChange={(e) => setEmbedOverride(e.target.value)}
-              style={{ flex: 1, padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }} />
-            <Btn variant="secondary" onClick={() => { try { localStorage.setItem('cg_onedrive_math_embed', embedOverride || ''); } catch {}; alert('Saved locally.'); }}>Save</Btn>
-            <Btn variant="back" onClick={() => { setEmbedOverride(''); try { localStorage.removeItem('cg_onedrive_math_embed'); } catch {}; }}>Clear</Btn>
-          </div>
-          <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>Detected embed URL: {embedUrl ? embedUrl : '—'}</div>
-        </Card>
-      )}
 
       {/* STREAM */}
       {tab === "stream" && (
@@ -1520,11 +1579,5 @@ function StreamPostComposer({ className, userEmail, onPosted }) {
     </div>
   );
 }
-
-
-
-
-
-
 
 

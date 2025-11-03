@@ -6,6 +6,7 @@ import LanguageButton from "../../components/LanguageButton.jsx";
 import UserMenu from "../../components/UserMenu.jsx";
 import { LANGS } from "../../i18n/strings.js";
 import Btn from "../../components/Btn.jsx";
+import { BlockMath, InlineMath } from "react-katex";
 import {
   createAssignmentQuestion,
   deleteAssignmentQuestion,
@@ -13,6 +14,15 @@ import {
   updateAssignmentQuestion,
   uploadQuestionImage,
 } from "../../lib/assignmentQuestions.js";
+import {
+  SUBJECT_OPTIONS,
+  HARDNESS_OPTIONS,
+  MATH_UNIT_OPTIONS,
+  MATH_LESSON_OPTIONS,
+  BANKS,
+  createDefaultForm,
+  normalizeSubjectValue,
+} from "../../lib/questionBanks.js";
 
 const COPY = {
   EN: {
@@ -77,6 +87,9 @@ const COPY = {
     importFinished: "Import completed.",
     importPreviewTitle: "Imported Question Preview",
     importSkipped: "Question skipped.",
+    tabMath: "Math Bank",
+    tabEnglish: "English Bank",
+    tabTests: "Test Bank",
   },
   AR: {
     title: "بنك الأسئلة",
@@ -140,6 +153,9 @@ const COPY = {
     importFinished: "اكتمل الاستيراد.",
     importPreviewTitle: "معاينة السؤال المستورد",
     importSkipped: "تم تخطي السؤال.",
+    tabMath: "بنك الرياضيات",
+    tabEnglish: "بنك اللغة الإنجليزية",
+    tabTests: "بنك الاختبارات",
   },
   FR: {
     title: "Banque de questions",
@@ -203,79 +219,18 @@ const COPY = {
     importFinished: "Import terminé.",
     importPreviewTitle: "Aperçu de la question importée",
     importSkipped: "Question ignorée.",
+    tabMath: "Banque Maths",
+    tabEnglish: "Banque Anglais",
+    tabTests: "Banque Tests",
   },
 };
 
-
-
-const SUBJECT_OPTIONS = [
-  { value: "english", label: { EN: "English", AR: "اللغة الإنجليزية", FR: "Anglais" } },
-  { value: "math", label: { EN: "Math", AR: "الرياضيات", FR: "Mathématiques" } },
-];
-
-
-const HARDNESS_OPTIONS = [
-  { value: "easy", label: { EN: "Easy", AR: "سهل", FR: "Facile" } },
-  { value: "medium", label: { EN: "Medium", AR: "متوسط", FR: "Moyen" } },
-  { value: "hard", label: { EN: "Hard", AR: "صعب", FR: "Difficile" } },
-];
-
-
-const MATH_UNIT_OPTIONS = [
-  { value: "algebra", label: { EN: "Algebra", AR: "الجبر", FR: "Algèbre" } },
-  { value: "arithmetic", label: { EN: "Arithmetic", AR: "الحساب", FR: "Arithmétique" } },
-  { value: "geometry", label: { EN: "Geometry", AR: "الهندسة", FR: "Géométrie" } },
-];
-
-
-const MATH_LESSON_OPTIONS = {
-  algebra: [
-    { value: "fractions-and-decimals", label: { EN: "Fractions and Decimals", AR: "الكسور والأعداد العشرية", FR: "Fractions et décimales" } },
-    { value: "polynomials", label: { EN: "Polynomials", AR: "المتعددات الحدودية", FR: "Polynômes" } },
-    { value: "solving-equations", label: { EN: "Solving Equations", AR: "حل المعادلات", FR: "Résolution d'équations" } },
-    { value: "word-problems", label: { EN: "Word Problems", AR: "مسائل لفظية", FR: "Problèmes rédactionnels" } },
-  ],
-  arithmetic: [
-    { value: "percentage", label: { EN: "Percentage", AR: "النسب المئوية", FR: "Pourcentage" } },
-    { value: "average", label: { EN: "Average", AR: "المتوسط", FR: "Moyenne" } },
-    { value: "ratio", label: { EN: "Ratio", AR: "النسبة", FR: "Ratio" } },
-    { value: "proportion-rate", label: { EN: "Proportions and Rate", AR: "التناسب والمعدلات", FR: "Proportions et taux" } },
-    { value: "counting-probability", label: { EN: "Counting and Probability", AR: "الإحصاء والاحتمالات", FR: "Combinatoire et probabilités" } },
-    { value: "data-interpretation", label: { EN: "Interpretation of Data", AR: "تحليل البيانات", FR: "Interprétation des données" } },
-  ],
-  geometry: [
-    { value: "lines-angles", label: { EN: "Lines and Angles", AR: "الخطوط والزوايا", FR: "Lignes et angles" } },
-    { value: "triangles", label: { EN: "Triangles", AR: "المثلثات", FR: "Triangles" } },
-    { value: "quadrilaterals", label: { EN: "Quadrilaterals", AR: "الأشكال الرباعية", FR: "Quadrilatères" } },
-    { value: "circles", label: { EN: "Circles", AR: "الدوائر", FR: "Cercles" } },
-    { value: "solid-geometry", label: { EN: "Solid Geometry", AR: "الهندسة الفضائية", FR: "Géométrie dans l'espace" } },
-    { value: "coordinate-geometry", label: { EN: "Coordinate Geometry", AR: "الهندسة الإحداثية", FR: "Géométrie analytique" } },
-    { value: "trigonometry", label: { EN: "Trigonometry", AR: "علم المثلثات", FR: "Trigonométrie" } },
-  ],
-};
 
 
 const QUESTION_TYPES = [
   { value: "mcq", labelKey: "mcqLabel" },
   { value: "fill", labelKey: "fillLabel" },
 ];
-
-const DEFAULT_FORM = {
-  questionType: "mcq",
-  question: "",
-  answerA: "",
-  answerB: "",
-  answerC: "",
-  answerD: "",
-  fillAnswer: "",
-  correctAnswer: "A",
-  subject: SUBJECT_OPTIONS[0].value,
-  unit: "",
-  lesson: "",
-  hardness: "",
-  skill: "",
-  imageUrl: "",
-};
 
 export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) {
   AdminQuestionBank.propTypes = {
@@ -286,7 +241,10 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
 
   const copy = COPY[lang] || COPY.EN;
 
-  const [form, setForm] = useState(() => ({ ...DEFAULT_FORM }));
+  const [activeBank, setActiveBank] = useState("math");
+  const bank = BANKS[activeBank] || BANKS.math;
+
+  const [form, setForm] = useState(() => createDefaultForm(bank));
   const [questions, setQuestions] = useState([]);
   const [filters, setFilters] = useState({ type: "all" });
   const [loading, setLoading] = useState(true);
@@ -305,6 +263,18 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const isImporting = importRows.length > 0;
   const isImportingActive = isImporting && !isEditing;
   const currentImportRow = isImportingActive ? importRows[importIndex] : null;
+
+  useEffect(() => {
+    setForm(createDefaultForm(bank));
+    setEditingRow(null);
+    setPreviewRow(null);
+    setImportRows([]);
+    setImportIndex(0);
+    setImportError("");
+    setSuccessMessage("");
+    setFilters({ type: "all" });
+    setQuestions([]);
+  }, [bank]);
   const refreshQuestions = () => setReloadKey((prev) => prev + 1);
 
   useEffect(() => {
@@ -313,7 +283,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       setLoading(true);
       setError("");
       try {
-        const data = await listAssignmentQuestions();
+        const data = await listAssignmentQuestions({ table: bank.table });
         if (!ignore) setQuestions(data);
       } catch (err) {
         console.error("assignment question list", err);
@@ -326,7 +296,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     return () => {
       ignore = true;
     };
-  }, [copy.loadError, reloadKey]);
+  }, [bank.table, copy.loadError, reloadKey]);
 
   const filteredQuestions = useMemo(() => {
     return questions.filter((q) => {
@@ -338,8 +308,10 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const handleChange = (field, value) => {
     setForm((prev) => {
       if (field === "subject") {
-        const next = { ...prev, subject: value };
-        if (value === "math") {
+        if (bank.subjectLocked) return prev;
+        const subjectValue = value;
+        const next = { ...prev, subject: subjectValue };
+        if (bank.supportsUnitLesson && subjectValue === "math") {
           const unit = MATH_UNIT_OPTIONS.some((opt) => opt.value === prev.unit)
             ? prev.unit
             : MATH_UNIT_OPTIONS[0]?.value || "";
@@ -349,13 +321,14 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
             : lessonOptions[0]?.value || "";
           next.unit = unit;
           next.lesson = lesson;
-        } else {
+        } else if (bank.supportsUnitLesson) {
           next.unit = "";
           next.lesson = "";
         }
         return next;
       }
-      if (field === "unit" && prev.subject === "math") {
+      if (field === "unit") {
+        if (!bank.supportsUnitLesson) return prev;
         const unit = value;
         const lessonOptions = MATH_LESSON_OPTIONS[unit] || [];
         const lesson = lessonOptions.some((opt) => opt.value === prev.lesson)
@@ -363,7 +336,8 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
           : lessonOptions[0]?.value || "";
         return { ...prev, unit, lesson };
       }
-      if (field === "lesson" && prev.subject === "math") {
+      if (field === "lesson") {
+        if (!bank.supportsUnitLesson) return prev;
         return { ...prev, lesson: value };
       }
       return { ...prev, [field]: value };
@@ -371,7 +345,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
   const handleReset = () => {
-    setForm({ ...DEFAULT_FORM });
+    setForm(createDefaultForm(bank));
     setSuccessMessage("");
     setEditingRow(null);
   };
@@ -393,7 +367,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
   const applyImportRow = (row) => {
-    setForm(buildFormFromRow(row));
+    setForm(buildFormFromRow(row, bank));
   };
 
   const startImport = (rows) => {
@@ -422,7 +396,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     } else {
       setImportRows([]);
       setImportIndex(0);
-      setForm({ ...DEFAULT_FORM });
+      setForm(createDefaultForm(bank));
       setSuccessMessage(message || copy.importFinished);
     }
   };
@@ -438,7 +412,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setSuccessMessage("");
     setPreviewRow(null);
     setEditingRow(null);
-    setForm({ ...DEFAULT_FORM });
+    setForm(createDefaultForm(bank));
   };
 
   const handleImportFile = async (event) => {
@@ -469,12 +443,16 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     const trimmedQuestion = form.question.trim();
     if (!trimmedQuestion) return "Question is required.";
     if (!form.subject) return "Subject is required.";
-    const unitValue = form.unit ?? "";
-    const unitIsBlank = typeof unitValue === "string" ? unitValue.trim() === "" : !unitValue;
-    if (unitIsBlank) return "Unit is required.";
-    const lessonValue = form.lesson ?? "";
-    const lessonIsBlank = typeof lessonValue === "string" ? lessonValue.trim() === "" : !lessonValue;
-    if (lessonIsBlank) return "Lesson is required.";
+
+    if (bank.supportsUnitLesson && form.subject === "math") {
+      const unitValue = form.unit ?? "";
+      const unitIsBlank = typeof unitValue === "string" ? unitValue.trim() === "" : !unitValue;
+      if (unitIsBlank) return "Unit is required.";
+      const lessonValue = form.lesson ?? "";
+      const lessonIsBlank = typeof lessonValue === "string" ? lessonValue.trim() === "" : !lessonValue;
+      if (lessonIsBlank) return "Lesson is required.";
+    }
+
     if (form.questionType === "mcq") {
       if (!form.answerA.trim() || !form.answerB.trim() || !form.answerC.trim() || !form.answerD.trim()) {
         return "All four answers are required for MCQ.";
@@ -485,8 +463,12 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     return "";
   };
 
-  const buildFormFromRow = (row) => {
+  const buildFormFromRow = (row, targetBank = bank) => {
     const type = row.question_type === "fill" ? "fill" : "mcq";
+    const subjectValue = targetBank.subjectLocked
+      ? targetBank.defaultSubject
+      : row.subject || targetBank.defaultSubject || SUBJECT_OPTIONS[0].value;
+    const includeUnitLesson = targetBank.supportsUnitLesson && subjectValue === "math";
     return {
       questionType: type,
       question: row.question || "",
@@ -496,9 +478,9 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       answerD: row.answer_d || "",
       fillAnswer: type === "fill" ? row.correct_answer || "" : "",
       correctAnswer: type === "mcq" ? row.correct_answer || "A" : "A",
-      subject: row.subject || SUBJECT_OPTIONS[0].value,
-      unit: row.unit || "",
-      lesson: row.lesson || "",
+      subject: subjectValue,
+      unit: includeUnitLesson ? row.unit || "" : "",
+      lesson: includeUnitLesson ? row.lesson || "" : "",
       hardness: row.hardness || "",
       skill: row.skill || "",
       imageUrl: row.image_url || "",
@@ -512,7 +494,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setEditingRow(row);
     setSuccessMessage("");
     setPreviewRow(null);
-    setForm(buildFormFromRow(row));
+    setForm(buildFormFromRow(row, bank));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -531,19 +513,26 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       return;
     }
 
-    const assignmentType = isImportingActive && currentImportRow?.assignment_type ? currentImportRow.assignment_type : editingRow?.assignment_type || "quiz";
+    const assignmentType =
+      (isImportingActive && currentImportRow?.assignment_type ? currentImportRow.assignment_type : null) ||
+      editingRow?.assignment_type ||
+      "quiz";
+    const subjectValue = bank.subjectLocked ? bank.defaultSubject : form.subject || bank.defaultSubject;
 
     const payload = {
       question_type: form.questionType,
       question: form.question.trim(),
       assignment_type: assignmentType,
-      subject: form.subject,
-      unit: form.subject === "math" ? form.unit : form.unit.trim(),
-      lesson: form.subject === "math" ? form.lesson : form.lesson.trim(),
+      subject: subjectValue,
       hardness: form.hardness || null,
       skill: form.skill.trim() || null,
       image_url: form.imageUrl.trim() || null,
     };
+
+    if (bank.supportsUnitLesson && subjectValue === "math") {
+      payload.unit = (form.unit || "").trim();
+      payload.lesson = (form.lesson || "").trim();
+    }
 
     if (form.questionType === "mcq") {
       Object.assign(payload, {
@@ -568,19 +557,19 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       setSubmitting(true);
       let record;
       if (isEditing) {
-        record = await updateAssignmentQuestion(editingRow.id, payload);
+        record = await updateAssignmentQuestion(editingRow.id, payload, { table: bank.table });
         setQuestions((prev) => prev.map((q) => (q.id === record.id ? record : q)));
-        setForm({ ...DEFAULT_FORM });
+        setForm(createDefaultForm(bank));
         setEditingRow(null);
         setSuccessMessage(copy.updateSuccess);
       } else {
-        record = await createAssignmentQuestion(payload);
+        record = await createAssignmentQuestion(payload, { table: bank.table });
         setQuestions((prev) => [record, ...prev]);
         if (isImportingActive) {
           const isLast = importIndex === importRows.length - 1;
           advanceImport(isLast ? copy.importFinished : copy.createSuccess);
         } else {
-          setForm({ ...DEFAULT_FORM });
+          setForm(createDefaultForm(bank));
           setSuccessMessage(copy.createSuccess);
         }
       }
@@ -596,7 +585,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const handleDelete = async (row) => {
     if (!window.confirm(copy.deleteConfirm)) return;
     try {
-      await deleteAssignmentQuestion(row.id);
+      await deleteAssignmentQuestion(row.id, { table: bank.table });
       setQuestions((prev) => prev.filter((q) => q.id !== row.id));
       if (editingRow?.id === row.id) {
         handleReset();
@@ -622,6 +611,19 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
           </div>
         }
       />
+
+      <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {Object.values(BANKS).map((cfg) => (
+          <button
+            key={cfg.id}
+            type="button"
+            onClick={() => setActiveBank(cfg.id)}
+            style={bankTabStyle(cfg.id === bank.id)}
+          >
+            {copy[cfg.labelKey]}
+          </button>
+        ))}
+      </div>
 
       <Card>
         <p style={{ marginTop: 0, color: "#6b7280" }}>{copy.subtitle}</p>
@@ -671,22 +673,26 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
               ))}
             </div>
           </div>
-<div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "grid", gap: 8 }}>
             <label style={{ fontWeight: 600 }}>{copy.subject}</label>
-            <select
-              value={form.subject}
-              onChange={(e) => handleChange("subject", e.target.value)}
-              style={selectStyle}
-            >
-              {SUBJECT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label[lang] || opt.label.EN}
-                </option>
-              ))}
-            </select>
+            {bank.subjectLocked ? (
+              <div style={lockedFieldStyle}>{subjectLabel(form.subject, lang)}</div>
+            ) : (
+              <select
+                value={form.subject}
+                onChange={(e) => handleChange("subject", e.target.value)}
+                style={selectStyle}
+              >
+                {SUBJECT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label[lang] || opt.label.EN}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          <GridInputs copy={copy} form={form} handleChange={handleChange} lang={lang} />
+          <GridInputs copy={copy} form={form} handleChange={handleChange} lang={lang} bank={bank} />
 
           <div style={{ display: "grid", gap: 8 }}>
             <label style={{ fontWeight: 600 }}>{copy.question}</label>
@@ -800,14 +806,14 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
         <Card style={{ marginTop: 16, background: "#f8fafc" }}>
           <h3 style={{ marginTop: 0 }}>{copy.importPreviewTitle}</h3>
           <div style={{ display: "grid", gap: 12 }}>
-            <div>
-              <p style={{ margin: 0, color: "#111827", whiteSpace: "pre-wrap" }}>{currentImportRow.question || "—"}</p>
+            <div style={{ color: "#111827" }}>
+              <MathText value={currentImportRow.question} block />
             </div>
             {currentImportRow.question_type === "mcq" ? (
               <ol style={{ listStyle: "upper-alpha", paddingLeft: 20, margin: 0, display: "grid", gap: 6 }}>
                 {[currentImportRow.answer_a, currentImportRow.answer_b, currentImportRow.answer_c, currentImportRow.answer_d].map((answer, idx) => (
                   <li key={idx} style={{ background: "#e0f2fe", borderRadius: 6, padding: "6px 10px" }}>
-                    {answer || "—"}
+                    <MathText value={answer} />
                   </li>
                 ))}
               </ol>
@@ -876,8 +882,12 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
                 <tr style={tableHeaderRowStyle}>
                   <th style={thStyle}>{copy.tableQuestion}</th>
                   <th style={thStyle}>{copy.tableSubject}</th>
-                  <th style={thStyle}>{copy.tableUnit}</th>
-                  <th style={thStyle}>{copy.tableLesson}</th>
+                  {bank.supportsUnitLesson && (
+                    <>
+                      <th style={thStyle}>{copy.tableUnit}</th>
+                      <th style={thStyle}>{copy.tableLesson}</th>
+                    </>
+                  )}
                   <th style={thStyle}>{copy.tableType}</th>
                   <th style={thStyle}>{copy.tableHardness}</th>
                   <th style={thStyle}>{copy.tableSkill}</th>
@@ -891,8 +901,12 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
                   <tr key={row.id} style={tbodyRowStyle}>
                     <td style={tdStyle}>{firstWords(row.question, 3)}</td>
                     <td style={tdStyle}>{subjectLabel(row.subject, lang)}</td>
-                    <td style={tdStyle}>{unitLabel(row.subject, row.unit, lang)}</td>
-                    <td style={tdStyle}>{lessonLabel(row.subject, row.unit, row.lesson, lang)}</td>
+                    {bank.supportsUnitLesson && (
+                      <>
+                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "—"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "—"}</td>
+                      </>
+                    )}
                     <td style={tdStyle}>{row.question_type === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
                     <td style={tdStyle}>{hardnessLabel(row.hardness, lang)}</td>
                     <td style={tdStyle}>{row.skill || "—"}</td>
@@ -956,8 +970,8 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
             </div>
 
             <div style={{ display: "grid", gap: 16 }}>
-              <div>
-                <p style={{ margin: 0, color: "#374151", whiteSpace: "pre-wrap" }}>{previewRow.question || "—"}</p>
+              <div style={{ color: "#374151" }}>
+                <MathText value={previewRow.question} block />
               </div>
 
               {previewRow.image_url && (
@@ -974,7 +988,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
                 <ol style={{ listStyle: "upper-alpha", paddingLeft: 20, margin: 0, display: "grid", gap: 8 }}>
                   {[previewRow.answer_a, previewRow.answer_b, previewRow.answer_c, previewRow.answer_d].map((answer, index) => (
                     <li key={index} style={{ background: "#f9fafb", borderRadius: 8, padding: "8px 12px" }}>
-                      {answer || "—"}
+                      <MathText value={answer} />
                     </li>
                   ))}
                 </ol>
@@ -1018,17 +1032,20 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   );
 }
 
-function GridInputs({ copy, form, handleChange, lang }) {
+function GridInputs({ copy, form, handleChange, lang, bank }) {
   GridInputs.propTypes = {
     copy: PropTypes.object.isRequired,
     form: PropTypes.object.isRequired,
     handleChange: PropTypes.func.isRequired,
     lang: PropTypes.string.isRequired,
+    bank: PropTypes.object.isRequired,
   };
+
+  const showMathSelectors = bank.supportsUnitLesson && form.subject === "math";
 
   return (
     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-      {form.subject === "math" ? (
+      {showMathSelectors && (
         <label style={{ display: "grid", gap: 6 }}>
           <span style={{ fontWeight: 600 }}>{copy.unit}</span>
           <select
@@ -1043,16 +1060,9 @@ function GridInputs({ copy, form, handleChange, lang }) {
             ))}
           </select>
         </label>
-      ) : (
-        <LabeledInput
-          label={copy.unit}
-          value={form.unit}
-          onChange={(e) => handleChange("unit", e.target.value)}
-          required
-        />
       )}
 
-      {form.subject === "math" ? (
+      {showMathSelectors && (
         <label style={{ display: "grid", gap: 6 }}>
           <span style={{ fontWeight: 600 }}>{copy.lesson}</span>
           <select
@@ -1067,13 +1077,6 @@ function GridInputs({ copy, form, handleChange, lang }) {
             ))}
           </select>
         </label>
-      ) : (
-        <LabeledInput
-          label={copy.lesson}
-          value={form.lesson}
-          onChange={(e) => handleChange("lesson", e.target.value)}
-          required
-        />
       )}
       <label style={{ display: "grid", gap: 6 }}>
         <span style={{ fontWeight: 600 }}>{copy.hardness}</span>
@@ -1132,6 +1135,15 @@ const textareaStyle = {
 const selectStyle = {
   ...inputStyle,
   appearance: "none",
+};
+
+const lockedFieldStyle = {
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: "1px solid #d1d5db",
+  background: "#f9fafb",
+  fontWeight: 600,
+  color: "#111827",
 };
 
 const primaryButtonStyle = (disabled) => ({
@@ -1201,6 +1213,18 @@ const actionButtonStyle = {
   cursor: "pointer",
 };
 
+const bankTabStyle = (active) => ({
+  padding: "6px 14px",
+  borderRadius: 999,
+  border: active ? "1px solid #2563eb" : "1px solid #d1d5db",
+  background: active ? "#2563eb" : "#ffffff",
+  color: active ? "#ffffff" : "#111827",
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow: active ? "0 6px 12px rgba(37, 99, 235, 0.25)" : "none",
+  transition: "background 0.2s ease, color 0.2s ease, border 0.2s ease",
+});
+
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
@@ -1263,6 +1287,90 @@ function TrashIcon() {
     </svg>
   );
 }
+
+const MATH_HINT_REGEX = /\\[a-zA-Z]+|\\frac|\\sqrt|\\sum|\\int|\\left|\\right|\\times|\\div|\\pm|\\pi|\\alpha|\\beta|\\gamma|\^|_|=|\\\(|\\\)|\\\[|\\\]|\$\$/;
+
+function MathText({ value, block = false }) {
+  const raw = value == null ? "" : String(value).trim();
+  if (!raw) return <span>—</span>;
+
+  const decoded = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  const normalized = decoded.replace(/\\\\/g, "\\").replace(/\r\n/g, "\n");
+
+  const componentMatch = normalized.match(/<\s*(BlockMath|InlineMath)[^>]*math\s*=\s*["']([^"']+)["'][^>]*\/?\s*>/i);
+  if (componentMatch) {
+    const [, tagName, mathContent] = componentMatch;
+    const useBlock = block || tagName.toLowerCase() === "blockmath";
+    const Component = useBlock ? BlockMath : InlineMath;
+    return (
+      <Component
+        math={mathContent}
+        errorColor="#dc2626"
+        renderError={() => <span>{normalized}</span>}
+      />
+    );
+  }
+
+  const inlineRegex = /\\\[(.+?)\\\]|\\\((.+?)\\\)|\$\$(.+?)\$\$/gs;
+  let match;
+  let lastIndex = 0;
+  const parts = [];
+  while ((match = inlineRegex.exec(normalized)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", value: normalized.slice(lastIndex, match.index) });
+    }
+    if (match[1] != null) {
+      parts.push({ type: "block", value: match[1] });
+    } else if (match[2] != null) {
+      parts.push({ type: "inline", value: match[2] });
+    } else if (match[3] != null) {
+      parts.push({ type: "block", value: match[3] });
+    }
+    lastIndex = inlineRegex.lastIndex;
+  }
+  if (lastIndex < normalized.length) {
+    parts.push({ type: "text", value: normalized.slice(lastIndex) });
+  }
+  if (parts.some((p) => p.type !== "text")) {
+    return (
+      <>
+        {parts.map((part, idx) => {
+          if (part.type === "text") {
+            return <React.Fragment key={idx}>{part.value}</React.Fragment>;
+          }
+          const Component = part.type === "block" ? BlockMath : InlineMath;
+          return (
+            <Component
+              key={idx}
+              math={part.value}
+              errorColor="#dc2626"
+              renderError={() => <span>{part.value}</span>}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  const looksMath = MATH_HINT_REGEX.test(normalized);
+  if (!looksMath) {
+    return <span>{normalized}</span>;
+  }
+
+  const Component = block ? BlockMath : InlineMath;
+  return (
+    <Component
+      math={normalized}
+      errorColor="#dc2626"
+      renderError={() => <span>{normalized}</span>}
+    />
+  );
+}
+
+MathText.propTypes = {
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  block: PropTypes.bool,
+};
 
 function firstWords(text, count = 3) {
   if (!text) return "—";
@@ -1432,20 +1540,6 @@ function normalizeCSVRow(record = {}) {
     assignment_type: get("assignment_type") || "quiz",
   };
 }
-
-function normalizeSubjectValue(value) {
-  if (!value) return SUBJECT_OPTIONS[0].value;
-  const normalized = value.trim().toLowerCase();
-  const match = SUBJECT_OPTIONS.find((opt) => {
-    const optValue = opt.value.toLowerCase();
-    const optLabels = Object.values(opt.label || {}).map((label) => String(label || "").toLowerCase());
-    return optValue === normalized || optLabels.includes(normalized);
-  });
-  return match ? match.value : SUBJECT_OPTIONS[0].value;
-}
-
-
-
 
 
 
