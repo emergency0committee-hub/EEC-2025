@@ -115,6 +115,11 @@ const COPY = {
     addTable: "Add table",
     addImage: "Add image",
     hideImage: "Hide image tools",
+    tableBuilderMergedCell: "Merged",
+    tableBuilderSelectedCell: (row, col) => `Selected cell: Row ${row + 1}, Column ${col + 1}`,
+    tableBuilderMergeRight: "Merge right",
+    tableBuilderMergeDown: "Merge down",
+    tableBuilderSplitCell: "Split cell",
   },
   AR: {
     title: "بنك الأسئلة",
@@ -200,6 +205,11 @@ const COPY = {
     addTable: "إضافة جدول",
     addImage: "إضافة صورة",
     hideImage: "إخفاء خيارات الصورة",
+    tableBuilderMergedCell: "مُدمج",
+    tableBuilderSelectedCell: (row, col) => `الخلية المحددة: الصف ${row + 1}، العمود ${col + 1}`,
+    tableBuilderMergeRight: "دمج إلى اليمين",
+    tableBuilderMergeDown: "دمج إلى الأسفل",
+    tableBuilderSplitCell: "فصل الخلية",
   },
   FR: {
     title: "Banque de questions",
@@ -285,6 +295,11 @@ const COPY = {
     addTable: "Ajouter un tableau",
     addImage: "Ajouter une image",
     hideImage: "Masquer les options d'image",
+    tableBuilderMergedCell: "Fusionné",
+    tableBuilderSelectedCell: (row, col) => `Cellule sélectionnée : ligne ${row + 1}, colonne ${col + 1}`,
+    tableBuilderMergeRight: "Fusionner vers la droite",
+    tableBuilderMergeDown: "Fusionner vers le bas",
+    tableBuilderSplitCell: "Séparer la cellule",
   },
 };
 
@@ -356,7 +371,8 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   }, [form.questionType]);
 
   useEffect(() => {
-    setForm(createDefaultForm(bank));
+    const defaultForm = createDefaultForm(bank);
+    setForm(defaultForm);
     setEditingRow(null);
     setPreviewRow(null);
     setImportRows([]);
@@ -368,7 +384,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setLocalImages(loadLocalImages());
     setShowImageTools(false);
     setShowTableBuilder(false);
-    setTableBuilder(createInitialTableBuilder());
+    setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
   }, [bank]);
 
   const handleTableDimensionChange = (field, rawValue) => {
@@ -379,20 +395,118 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       const clamped = clamp(Number.isFinite(parsed) ? parsed : fallback, 1, limit);
       const nextRows = field === "rows" ? clamped : prev.rows;
       const nextCols = field === "cols" ? clamped : prev.cols;
+      const nextCells = resizeTableCells(prev.cells, nextRows, nextCols);
+      let nextActive = { ...prev.activeCell };
+      nextActive.row = Math.min(nextActive.row, nextRows - 1);
+      nextActive.col = Math.min(nextActive.col, nextCols - 1);
+      if (nextActive.row < 0 || nextActive.col < 0 || nextCells[nextActive.row][nextActive.col].hidden) {
+        nextActive = { row: 0, col: 0 };
+      }
       return {
         ...prev,
         rows: nextRows,
         cols: nextCols,
-        cells: resizeTableCells(prev.cells, nextRows, nextCols),
+        cells: nextCells,
+        activeCell: nextActive,
       };
     });
   };
 
   const handleTableCellChange = (rowIndex, colIndex, value) => {
     setTableBuilder((prev) => {
-      const cells = prev.cells.map((row, rIdx) =>
-        row.map((cell, cIdx) => (rIdx === rowIndex && cIdx === colIndex ? value : cell))
-      );
+      const target = prev.cells[rowIndex]?.[colIndex];
+      if (!target || target.hidden) return prev;
+      const cells = cloneCells(prev.cells);
+      cells[rowIndex][colIndex].text = value;
+      return { ...prev, cells };
+    });
+  };
+
+  const handleSelectTableCell = (rowIndex, colIndex) => {
+    const cell = tableBuilder.cells[rowIndex]?.[colIndex];
+    if (!cell || cell.hidden) return;
+    setTableBuilder((prev) => ({ ...prev, activeCell: { row: rowIndex, col: colIndex } }));
+  };
+
+  const handleMergeRight = () => {
+    setTableBuilder((prev) => {
+      const { row, col } = prev.activeCell;
+      const master = prev.cells[row]?.[col];
+      if (!master || master.hidden) return prev;
+      const targetCol = col + master.colspan;
+      if (targetCol >= prev.cols) return prev;
+
+      for (let r = row; r < row + master.rowspan; r += 1) {
+        const neighbor = prev.cells[r]?.[targetCol];
+        if (!neighbor || neighbor.hidden || neighbor.rowspan !== 1 || neighbor.colspan !== 1) {
+          return prev;
+        }
+      }
+
+      const cells = cloneCells(prev.cells);
+      const masterCell = cells[row][col];
+      for (let r = row; r < row + masterCell.rowspan; r += 1) {
+        const neighbor = cells[r][targetCol];
+        neighbor.hidden = true;
+        neighbor.master = { row, col };
+        neighbor.text = "";
+        neighbor.rowspan = 1;
+        neighbor.colspan = 1;
+      }
+      masterCell.colspan += 1;
+      return { ...prev, cells };
+    });
+  };
+
+  const handleMergeDown = () => {
+    setTableBuilder((prev) => {
+      const { row, col } = prev.activeCell;
+      const master = prev.cells[row]?.[col];
+      if (!master || master.hidden) return prev;
+      const targetRow = row + master.rowspan;
+      if (targetRow >= prev.rows) return prev;
+
+      for (let c = col; c < col + master.colspan; c += 1) {
+        const neighbor = prev.cells[targetRow]?.[c];
+        if (!neighbor || neighbor.hidden || neighbor.rowspan !== 1 || neighbor.colspan !== 1) {
+          return prev;
+        }
+      }
+
+      const cells = cloneCells(prev.cells);
+      const masterCell = cells[row][col];
+      for (let c = col; c < col + masterCell.colspan; c += 1) {
+        const neighbor = cells[targetRow][c];
+        neighbor.hidden = true;
+        neighbor.master = { row, col };
+        neighbor.text = "";
+        neighbor.rowspan = 1;
+        neighbor.colspan = 1;
+      }
+      masterCell.rowspan += 1;
+      return { ...prev, cells };
+    });
+  };
+
+  const handleSplitCell = () => {
+    setTableBuilder((prev) => {
+      const { row, col } = prev.activeCell;
+      const master = prev.cells[row]?.[col];
+      if (!master || master.hidden) return prev;
+      if (master.rowspan === 1 && master.colspan === 1) return prev;
+
+      const cells = cloneCells(prev.cells);
+      for (let r = row; r < row + master.rowspan; r += 1) {
+        for (let c = col; c < col + master.colspan; c += 1) {
+          if (r === row && c === col) continue;
+          const cell = cells[r][c];
+          if (cell && cell.hidden && cell.master && cell.master.row === row && cell.master.col === col) {
+            cells[r][c] = createCell();
+          }
+        }
+      }
+      cells[row][col].rowspan = 1;
+      cells[row][col].colspan = 1;
       return { ...prev, cells };
     });
   };
@@ -409,6 +523,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setTableBuilder((prev) => ({
       ...prev,
       cells: createEmptyTableCells(prev.rows, prev.cols),
+      activeCell: { row: 0, col: 0 },
     }));
   };
 
@@ -499,12 +614,13 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
   const handleReset = () => {
-    setForm(createDefaultForm(bank));
+    const defaultForm = createDefaultForm(bank);
+    setForm(defaultForm);
     setSuccessMessage("");
     setEditingRow(null);
     setShowImageTools(false);
     setShowTableBuilder(false);
-    setTableBuilder(createInitialTableBuilder());
+    setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
   };
 
   const convertFileToDataUrl = (file) =>
@@ -621,12 +737,13 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       applyImportRow(importRows[nextIndex]);
       if (message) setSuccessMessage(message);
     } else {
+      const defaultForm = createDefaultForm(bank);
       setImportRows([]);
       setImportIndex(0);
-      setForm(createDefaultForm(bank));
+      setForm(defaultForm);
       setShowImageTools(false);
       setShowTableBuilder(false);
-      setTableBuilder(createInitialTableBuilder());
+      setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
       setSuccessMessage(message || copy.importFinished);
     }
   };
@@ -642,10 +759,11 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setSuccessMessage("");
     setPreviewRow(null);
     setEditingRow(null);
-    setForm(createDefaultForm(bank));
+    const defaultForm = createDefaultForm(bank);
+    setForm(defaultForm);
     setShowImageTools(false);
     setShowTableBuilder(false);
-    setTableBuilder(createInitialTableBuilder());
+    setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
   };
 
   const handleImportFile = async (event) => {
@@ -796,11 +914,12 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       if (isEditing) {
         record = await updateAssignmentQuestion(editingRow.id, payload, { table: bank.table });
         setQuestions((prev) => prev.map((q) => (q.id === record.id ? record : q)));
-        setForm(createDefaultForm(bank));
+        const defaultForm = createDefaultForm(bank);
+        setForm(defaultForm);
         setEditingRow(null);
         setShowImageTools(false);
         setShowTableBuilder(false);
-        setTableBuilder(createInitialTableBuilder());
+        setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
         setSuccessMessage(copy.updateSuccess);
       } else {
         record = await createAssignmentQuestion(payload, { table: bank.table });
@@ -809,10 +928,11 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
           const isLast = importIndex === importRows.length - 1;
           advanceImport(isLast ? copy.importFinished : copy.createSuccess);
         } else {
-          setForm(createDefaultForm(bank));
+          const defaultForm = createDefaultForm(bank);
+          setForm(defaultForm);
           setShowImageTools(false);
           setShowTableBuilder(false);
-          setTableBuilder(createInitialTableBuilder());
+          setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
           setSuccessMessage(copy.createSuccess);
         }
       }
@@ -1025,10 +1145,15 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
               targets={tableTargets}
               onDimensionChange={handleTableDimensionChange}
               onCellChange={handleTableCellChange}
+              onSelectCell={handleSelectTableCell}
+              onMergeRight={handleMergeRight}
+              onMergeDown={handleMergeDown}
+              onSplitCell={handleSplitCell}
               onToggleHeader={handleToggleTableHeader}
               onTargetChange={handleTableTargetChange}
               onClear={handleClearTableCells}
               onInsert={handleInsertTable}
+              activeCell={tableBuilder.activeCell}
               previewHtml={tablePreviewHtml}
               canInsert={canInsertTable}
               onClose={() => setShowTableBuilder(false)}
@@ -1372,13 +1497,18 @@ function TableBuilderSection({
   targets,
   onDimensionChange,
   onCellChange,
+  onSelectCell,
+  onMergeRight,
+  onMergeDown,
+  onSplitCell,
   onToggleHeader,
   onTargetChange,
   onClear,
   onInsert,
+  activeCell,
   previewHtml,
   canInsert,
-  onClose,
+  onClose = undefined,
 }) {
   TableBuilderSection.propTypes = {
     copy: PropTypes.object.isRequired,
@@ -1387,7 +1517,20 @@ function TableBuilderSection({
       cols: PropTypes.number.isRequired,
       includeHeader: PropTypes.bool.isRequired,
       target: PropTypes.string.isRequired,
-      cells: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.string)).isRequired,
+      cells: PropTypes.arrayOf(
+        PropTypes.arrayOf(
+          PropTypes.shape({
+            text: PropTypes.string.isRequired,
+            rowspan: PropTypes.number.isRequired,
+            colspan: PropTypes.number.isRequired,
+            hidden: PropTypes.bool.isRequired,
+            master: PropTypes.shape({
+              row: PropTypes.number,
+              col: PropTypes.number,
+            }),
+          })
+        )
+      ).isRequired,
     }).isRequired,
     targets: PropTypes.arrayOf(
       PropTypes.shape({
@@ -1397,18 +1540,66 @@ function TableBuilderSection({
     ).isRequired,
     onDimensionChange: PropTypes.func.isRequired,
     onCellChange: PropTypes.func.isRequired,
+    onSelectCell: PropTypes.func.isRequired,
+    onMergeRight: PropTypes.func.isRequired,
+    onMergeDown: PropTypes.func.isRequired,
+    onSplitCell: PropTypes.func.isRequired,
     onToggleHeader: PropTypes.func.isRequired,
     onTargetChange: PropTypes.func.isRequired,
     onClear: PropTypes.func.isRequired,
     onInsert: PropTypes.func.isRequired,
+    activeCell: PropTypes.shape({
+      row: PropTypes.number.isRequired,
+      col: PropTypes.number.isRequired,
+    }).isRequired,
     previewHtml: PropTypes.string.isRequired,
     canInsert: PropTypes.bool.isRequired,
     onClose: PropTypes.func,
   };
 
-  TableBuilderSection.defaultProps = {
-    onClose: undefined,
+  const safeActive = activeCell || { row: 0, col: 0 };
+  const selectedCell = builder.cells?.[safeActive.row]?.[safeActive.col];
+
+  const mergeRightPossible = (() => {
+    if (!selectedCell || selectedCell.hidden) return false;
+    const targetCol = safeActive.col + selectedCell.colspan;
+    if (targetCol >= builder.cols) return false;
+    for (let r = safeActive.row; r < safeActive.row + selectedCell.rowspan; r += 1) {
+      const neighbor = builder.cells[r]?.[targetCol];
+      if (!neighbor || neighbor.hidden || neighbor.rowspan !== 1 || neighbor.colspan !== 1) {
+        return false;
+      }
+    }
+    return true;
+  })();
+
+  const mergeDownPossible = (() => {
+    if (!selectedCell || selectedCell.hidden) return false;
+    const targetRow = safeActive.row + selectedCell.rowspan;
+    if (targetRow >= builder.rows) return false;
+    for (let c = safeActive.col; c < safeActive.col + selectedCell.colspan; c += 1) {
+      const neighbor = builder.cells[targetRow]?.[c];
+      if (!neighbor || neighbor.hidden || neighbor.rowspan !== 1 || neighbor.colspan !== 1) {
+        return false;
+      }
+    }
+    return true;
+  })();
+
+  const splitPossible = Boolean(selectedCell && !selectedCell.hidden && (selectedCell.rowspan > 1 || selectedCell.colspan > 1));
+  const gridColumns = builder.cols || (builder.cells[0]?.length ?? 1);
+  const selectedLabel = copy.tableBuilderSelectedCell(safeActive.row, safeActive.col);
+
+  const handleCellClick = (rowIndex, colIndex) => {
+    const cell = builder.cells[rowIndex]?.[colIndex];
+    if (!cell || cell.hidden) return;
+    onSelectCell(rowIndex, colIndex);
   };
+
+  const buttonStyle = (enabled) =>
+    enabled
+      ? tableBuilderActionButtonStyle
+      : { ...tableBuilderActionButtonStyle, ...tableBuilderActionButtonDisabledStyle };
 
   return (
     <div style={tableBuilderContainerStyle}>
@@ -1472,19 +1663,77 @@ function TableBuilderSection({
 
       <div style={{ display: "grid", gap: 6 }}>
         <span style={{ fontWeight: 600 }}>{copy.tableBuilderCellsLabel}</span>
-        <div style={tableBuilderGridStyle(builder.cols)}>
+        <div style={tableBuilderGridStyle(gridColumns)}>
           {builder.cells.map((row, rowIndex) =>
-            row.map((cell, colIndex) => (
-              <input
-                key={`${rowIndex}-${colIndex}`}
-                type="text"
-                value={cell}
-                onChange={(e) => onCellChange(rowIndex, colIndex, e.target.value)}
-                placeholder={copy.tableBuilderCellPlaceholder}
-                style={tableBuilderCellInputStyle}
-              />
-            ))
+            row.map((cell, colIndex) => {
+              const key = `${rowIndex}-${colIndex}`;
+              const isSelected = activeCell.row === rowIndex && activeCell.col === colIndex;
+              const isHidden = cell.hidden;
+              return (
+                <div
+                  key={key}
+                  style={tableBuilderCellWrapperStyle(isSelected, isHidden)}
+                  onClick={() => handleCellClick(rowIndex, colIndex)}
+                >
+                  {isHidden ? (
+                    <span style={tableBuilderMergedBadgeStyle}>{copy.tableBuilderMergedCell}</span>
+                  ) : (
+                    <>
+                      <div style={tableBuilderCellIndexStyle}>{`R${rowIndex + 1}C${colIndex + 1}`}</div>
+                      <input
+                        type="text"
+                        value={cell.text}
+                        onFocus={() => onSelectCell(rowIndex, colIndex)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelectCell(rowIndex, colIndex);
+                        }}
+                        onChange={(e) => onCellChange(rowIndex, colIndex, e.target.value)}
+                        placeholder={copy.tableBuilderCellPlaceholder}
+                        style={tableBuilderCellInputStyle}
+                      />
+                      {(cell.rowspan > 1 || cell.colspan > 1) && (
+                        <div style={tableBuilderSpanBadgeStyle}>
+                          {cell.rowspan > 1 && <span>{`rowspan ×${cell.rowspan}`}</span>}
+                          {cell.colspan > 1 && <span>{`colspan ×${cell.colspan}`}</span>}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })
           )}
+        </div>
+      </div>
+
+      <div style={tableBuilderSelectionRowStyle}>
+        <div style={{ fontWeight: 600 }}>{selectedLabel}</div>
+        <div style={tableBuilderSelectionButtonsStyle}>
+          <button
+            type="button"
+            style={buttonStyle(mergeRightPossible)}
+            onClick={onMergeRight}
+            disabled={!mergeRightPossible}
+          >
+            {copy.tableBuilderMergeRight}
+          </button>
+          <button
+            type="button"
+            style={buttonStyle(mergeDownPossible)}
+            onClick={onMergeDown}
+            disabled={!mergeDownPossible}
+          >
+            {copy.tableBuilderMergeDown}
+          </button>
+          <button
+            type="button"
+            style={buttonStyle(splitPossible)}
+            onClick={onSplitCell}
+            disabled={!splitPossible}
+          >
+            {copy.tableBuilderSplitCell}
+          </button>
         </div>
       </div>
 
@@ -1677,12 +1926,51 @@ const tableBuilderTargetStyle = {
 const tableBuilderGridStyle = (cols) => ({
   display: "grid",
   gap: 8,
-  gridTemplateColumns: `repeat(${Math.max(1, Math.min(cols, MAX_TABLE_COLS))}, minmax(120px, 1fr))`,
+  gridTemplateColumns: `repeat(${Math.max(1, Math.min(cols, MAX_TABLE_COLS))}, minmax(140px, 1fr))`,
 });
+
+const tableBuilderCellWrapperStyle = (selected, hidden) => ({
+  position: "relative",
+  borderRadius: 10,
+  border: `1px solid ${hidden ? "#e5e7eb" : selected ? "#2563eb" : "#d1d5db"}`,
+  background: hidden ? "#f9fafb" : "#ffffff",
+  minHeight: 100,
+  padding: 10,
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  cursor: hidden ? "not-allowed" : "pointer",
+  boxShadow: selected ? "0 0 0 2px rgba(37, 99, 235, 0.15)" : "none",
+  transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+});
+
+const tableBuilderMergedBadgeStyle = {
+  fontSize: 13,
+  color: "#6b7280",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "100%",
+};
+
+const tableBuilderCellIndexStyle = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "#64748b",
+};
 
 const tableBuilderCellInputStyle = {
   ...inputStyle,
   minWidth: 0,
+  height: 40,
+};
+
+const tableBuilderSpanBadgeStyle = {
+  display: "flex",
+  gap: 10,
+  fontSize: 12,
+  color: "#2563eb",
+  fontWeight: 600,
 };
 
 const tableBuilderPreviewStyle = {
@@ -1715,6 +2003,42 @@ const tableBuilderHideButtonStyle = {
   cursor: "pointer",
   fontWeight: 600,
   padding: 0,
+};
+
+const tableBuilderSelectionRowStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+  padding: "8px 0",
+  borderTop: "1px solid #e5e7eb",
+  borderBottom: "1px solid #e5e7eb",
+};
+
+const tableBuilderSelectionButtonsStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const tableBuilderActionButtonStyle = {
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
+  background: "#ffffff",
+  padding: "6px 12px",
+  fontWeight: 600,
+  fontSize: 13,
+  cursor: "pointer",
+  transition: "background 0.15s ease, color 0.15s ease, border 0.15s ease",
+};
+
+const tableBuilderActionButtonDisabledStyle = {
+  opacity: 0.55,
+  cursor: "not-allowed",
+  borderColor: "#e5e7eb",
+  color: "#9ca3af",
+  background: "#f3f4f6",
 };
 
 const inlineLinkButtonStyle = {
@@ -1918,6 +2242,38 @@ const TABLE_TARGET_VALUES = {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+const HTML_TABLE_STYLE = "border-collapse:collapse;width:100%;border:1px solid #d1d5db;background:#ffffff";
+const HTML_HEADER_CELL_STYLE = "border:1px solid #d1d5db;padding:8px;background:#f3f4f6;font-weight:600;text-align:left";
+const HTML_BODY_CELL_STYLE = "border:1px solid #d1d5db;padding:8px;text-align:left;background:#ffffff";
+
+const createCell = () => ({
+  text: "",
+  rowspan: 1,
+  colspan: 1,
+  hidden: false,
+  master: null,
+});
+
+function cloneCell(cell) {
+  return {
+    text: cell.text,
+    rowspan: cell.rowspan,
+    colspan: cell.colspan,
+    hidden: cell.hidden,
+    master: cell.master ? { row: cell.master.row, col: cell.master.col } : null,
+  };
+}
+
+function cloneCells(cells) {
+  return cells.map((row) => row.map((cell) => cloneCell(cell)));
+}
+
+function createEmptyTableCells(rows, cols) {
+  const safeRows = clamp(rows, 1, MAX_TABLE_ROWS);
+  const safeCols = clamp(cols, 1, MAX_TABLE_COLS);
+  return Array.from({ length: safeRows }, () => Array.from({ length: safeCols }, () => createCell()));
+}
+
 function createInitialTableBuilder(questionType = "mcq") {
   const targetValues = getTableTargetValues(questionType);
   return {
@@ -1926,24 +2282,21 @@ function createInitialTableBuilder(questionType = "mcq") {
     includeHeader: false,
     target: targetValues[0] || "question",
     cells: createEmptyTableCells(DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLS),
+    activeCell: { row: 0, col: 0 },
   };
-}
-
-function createEmptyTableCells(rows, cols) {
-  const safeRows = clamp(rows, 1, MAX_TABLE_ROWS);
-  const safeCols = clamp(cols, 1, MAX_TABLE_COLS);
-  return Array.from({ length: safeRows }, () => Array.from({ length: safeCols }, () => ""));
 }
 
 function resizeTableCells(prevCells, rows, cols) {
   const next = createEmptyTableCells(rows, cols);
   if (!Array.isArray(prevCells)) return next;
+
   const maxRows = Math.min(rows, prevCells.length);
+  const maxCols = Math.min(cols, prevCells[0]?.length || 0);
   for (let r = 0; r < maxRows; r += 1) {
-    const row = prevCells[r] || [];
-    const maxCols = Math.min(cols, row.length);
     for (let c = 0; c < maxCols; c += 1) {
-      next[r][c] = row[c];
+      const cell = prevCells[r][c];
+      if (!cell || cell.hidden) continue;
+      next[r][c].text = cell.text;
     }
   }
   return next;
@@ -1951,7 +2304,10 @@ function resizeTableCells(prevCells, rows, cols) {
 
 function hasTableContent(cells) {
   if (!Array.isArray(cells)) return false;
-  return cells.some((row) => Array.isArray(row) && row.some((cell) => String(cell || "").trim().length > 0));
+  return cells.some((row) =>
+    Array.isArray(row) &&
+    row.some((cell) => cell && !cell.hidden && String(cell.text || "").trim().length > 0)
+  );
 }
 
 function buildTableHtml(cells, includeHeader) {
@@ -1959,15 +2315,24 @@ function buildTableHtml(cells, includeHeader) {
   const rowsHtml = cells
     .map((row, rowIndex) => {
       const safeRow = Array.isArray(row) ? row : [];
-      const cellTag = includeHeader && rowIndex === 0 ? "th" : "td";
-      const cellsHtml = safeRow
-        .map((cell) => `<${cellTag}>${tableHtmlEscape(cell)}</${cellTag}>`)
+      const cellHtml = safeRow
+        .map((cell, colIndex) => {
+          if (!cell || cell.hidden) return "";
+          const tag = includeHeader && rowIndex === 0 ? "th" : "td";
+          const attrs = [];
+          if (cell.rowspan > 1) attrs.push(`rowspan="${cell.rowspan}"`);
+          if (cell.colspan > 1) attrs.push(`colspan="${cell.colspan}"`);
+          const style = includeHeader && rowIndex === 0 ? HTML_HEADER_CELL_STYLE : HTML_BODY_CELL_STYLE;
+          attrs.push(`style="${style}"`);
+          const attrText = attrs.length ? ` ${attrs.join(" ")}` : "";
+          return `<${tag}${attrText}>${tableHtmlEscape(cell.text)}</${tag}>`;
+        })
         .join("");
-      return `<tr>${cellsHtml}</tr>`;
+      return `<tr>${cellHtml}</tr>`;
     })
     .join("");
   if (!rowsHtml) return "";
-  return `<table>${rowsHtml}</table>`;
+  return `<table style="${HTML_TABLE_STYLE}">${rowsHtml}</table>`;
 }
 
 function tableHtmlEscape(value) {
@@ -2011,7 +2376,7 @@ function tableTargetLabel(copy, value) {
 }
 
 const ALLOWED_TABLE_TAGS = new Set(["TABLE", "TBODY", "THEAD", "TFOOT", "TR", "TD", "TH", "COLGROUP", "COL", "SPAN", "P", "BR", "B", "STRONG", "I", "EM", "U", "SMALL"]);
-const ALLOWED_TABLE_ATTRS = new Set(["rowspan", "colspan", "align"]);
+const ALLOWED_TABLE_ATTRS = new Set(["rowspan", "colspan", "align", "style"]);
 
 const sanitizeTableHtml = (html) => {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") return html;
@@ -2035,6 +2400,15 @@ const sanitizeTableHtml = (html) => {
     toRemove.forEach((node) => {
       const text = node.textContent || "";
       node.replaceWith(doc.createTextNode(text));
+    });
+    doc.querySelectorAll("table").forEach((table) => {
+      table.setAttribute("style", HTML_TABLE_STYLE);
+      table.querySelectorAll("th").forEach((th) => {
+        th.setAttribute("style", HTML_HEADER_CELL_STYLE);
+      });
+      table.querySelectorAll("td").forEach((td) => {
+        td.setAttribute("style", HTML_BODY_CELL_STYLE);
+      });
     });
     return doc.body.innerHTML;
   } catch (err) {
