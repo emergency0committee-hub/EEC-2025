@@ -12,7 +12,6 @@ import {
   deleteAssignmentQuestion,
   listAssignmentQuestions,
   updateAssignmentQuestion,
-  uploadQuestionImage,
 } from "../../lib/assignmentQuestions.js";
 import {
   SUBJECT_OPTIONS,
@@ -23,6 +22,13 @@ import {
   createDefaultForm,
   normalizeSubjectValue,
 } from "../../lib/questionBanks.js";
+
+const LOCAL_IMAGE_STORE_KEY = "cg_question_images_v1";
+const LOCAL_IMAGE_PREFIX = "local-image://";
+const DEFAULT_TABLE_ROWS = 2;
+const DEFAULT_TABLE_COLS = 2;
+const MAX_TABLE_ROWS = 10;
+const MAX_TABLE_COLS = 6;
 
 const COPY = {
   EN: {
@@ -45,6 +51,7 @@ const COPY = {
     imageUpload: "Upload image",
     imageUploading: "Uploading...",
     imageAlt: "Question image (optional)",
+    removeImage: "Remove Image",
     optional: "optional",
     create: "Save Question",
     reset: "Reset",
@@ -67,7 +74,7 @@ const COPY = {
     loadError: "Could not load questions.",
     createSuccess: "Question saved.",
     updateSuccess: "Question updated.",
-    uploadTip: "Upload or paste a publicly accessible image URL.",
+    uploadTip: "Drag & drop an image or click to upload. You can also paste a publicly accessible image URL.",
     refresh: "Refresh",
     update: "Update Question",
     cancelEdit: "Cancel Editing",
@@ -90,6 +97,24 @@ const COPY = {
     tabMath: "Math Bank",
     tabEnglish: "English Bank",
     tabTests: "Test Bank",
+    tableBuilderTitle: "Table Builder",
+    tableBuilderInstructions: "Configure rows and columns, fill the cells, then insert the table into the question or an answer.",
+    tableBuilderRows: "Rows",
+    tableBuilderCols: "Columns",
+    tableBuilderIncludeHeader: "Use first row as header",
+    tableBuilderTarget: "Insert into",
+    tableBuilderCellsLabel: "Cells",
+    tableBuilderCellPlaceholder: "Cell",
+    tableBuilderPreview: "Preview",
+    tableBuilderPreviewEmpty: "Add content to preview the table.",
+    tableBuilderInsert: "Insert Table",
+    tableBuilderClear: "Clear cells",
+    tableBuilderInsertSuccess: "Table inserted.",
+    tableBuilderEmptyError: "Please add some content to the table before inserting.",
+    tableBuilderHide: "Hide table builder",
+    addTable: "Add table",
+    addImage: "Add image",
+    hideImage: "Hide image tools",
   },
   AR: {
     title: "بنك الأسئلة",
@@ -111,6 +136,7 @@ const COPY = {
     imageUpload: "رفع صورة",
     imageUploading: "جاري الرفع...",
     imageAlt: "صورة السؤال (اختياري)",
+    removeImage: "إزالة الصورة",
     optional: "اختياري",
     create: "حفظ السؤال",
     reset: "إعادة ضبط",
@@ -133,7 +159,7 @@ const COPY = {
     loadError: "تعذّر تحميل الأسئلة.",
     createSuccess: "تم حفظ السؤال.",
     updateSuccess: "تم تحديث السؤال.",
-    uploadTip: "قم برفع الصورة أو لصق رابط صورة متاح للجميع.",
+    uploadTip: "اسحب الصورة وأفلتها أو اضغط للرفع. يمكنك أيضًا لصق رابط صورة متاحة للجميع.",
     refresh: "تحديث",
     update: "تحديث السؤال",
     cancelEdit: "إلغاء التعديل",
@@ -153,9 +179,27 @@ const COPY = {
     importFinished: "اكتمل الاستيراد.",
     importPreviewTitle: "معاينة السؤال المستورد",
     importSkipped: "تم تخطي السؤال.",
-    tabMath: "بنك الرياضيات",
+   tabMath: "بنك الرياضيات",
     tabEnglish: "بنك اللغة الإنجليزية",
     tabTests: "بنك الاختبارات",
+    tableBuilderTitle: "منشئ الجداول",
+    tableBuilderInstructions: "اضبط عدد الصفوف والأعمدة واملأ الخلايا ثم أدرج الجدول في السؤال أو الإجابة.",
+    tableBuilderRows: "عدد الصفوف",
+    tableBuilderCols: "عدد الأعمدة",
+    tableBuilderIncludeHeader: "استخدام الصف الأول كعنوان",
+    tableBuilderTarget: "الإدراج في",
+    tableBuilderCellsLabel: "الخلايا",
+    tableBuilderCellPlaceholder: "خلية",
+    tableBuilderPreview: "معاينة",
+    tableBuilderPreviewEmpty: "أضف محتوى لعرض الجدول.",
+    tableBuilderInsert: "إدراج الجدول",
+    tableBuilderClear: "مسح الخلايا",
+    tableBuilderInsertSuccess: "تم إدراج الجدول.",
+    tableBuilderEmptyError: "يرجى إدخال محتوى في خلايا الجدول قبل الإدراج.",
+    tableBuilderHide: "إخفاء منشئ الجداول",
+    addTable: "إضافة جدول",
+    addImage: "إضافة صورة",
+    hideImage: "إخفاء خيارات الصورة",
   },
   FR: {
     title: "Banque de questions",
@@ -177,6 +221,7 @@ const COPY = {
     imageUpload: "Téléverser une image",
     imageUploading: "Téléversement...",
     imageAlt: "Image de la question (optionnel)",
+    removeImage: "Supprimer l'image",
     optional: "optionnel",
     create: "Enregistrer",
     reset: "Réinitialiser",
@@ -199,7 +244,7 @@ const COPY = {
     loadError: "Impossible de charger les questions.",
     createSuccess: "Question enregistrée.",
     updateSuccess: "Question mise à jour.",
-    uploadTip: "Téléversez ou collez l'URL d'une image publique.",
+    uploadTip: "Glissez-déposez une image ou cliquez pour la téléverser. Vous pouvez aussi coller une URL publique.",
     refresh: "Actualiser",
     update: "Mettre à jour la question",
     cancelEdit: "Annuler la modification",
@@ -222,6 +267,24 @@ const COPY = {
     tabMath: "Banque Maths",
     tabEnglish: "Banque Anglais",
     tabTests: "Banque Tests",
+    tableBuilderTitle: "Créateur de tableau",
+    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis insérez le tableau dans la question ou la réponse.",
+    tableBuilderRows: "Lignes",
+    tableBuilderCols: "Colonnes",
+    tableBuilderIncludeHeader: "Utiliser la première ligne comme en-tête",
+    tableBuilderTarget: "Insérer dans",
+    tableBuilderCellsLabel: "Cellules",
+    tableBuilderCellPlaceholder: "Cellule",
+    tableBuilderPreview: "Aperçu",
+    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aperçu du tableau.",
+    tableBuilderInsert: "Insérer le tableau",
+    tableBuilderClear: "Effacer les cellules",
+    tableBuilderInsertSuccess: "Tableau inséré.",
+    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'insérer le tableau.",
+    tableBuilderHide: "Masquer le créateur de tableau",
+    addTable: "Ajouter un tableau",
+    addImage: "Ajouter une image",
+    hideImage: "Masquer les options d'image",
   },
 };
 
@@ -252,9 +315,14 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [isImageDragOver, setIsImageDragOver] = useState(false);
+  const [localImages, setLocalImages] = useState(() => loadLocalImages());
   const [reloadKey, setReloadKey] = useState(0);
   const [editingRow, setEditingRow] = useState(null);
   const [previewRow, setPreviewRow] = useState(null);
+  const [showImageTools, setShowImageTools] = useState(false);
+  const [showTableBuilder, setShowTableBuilder] = useState(false);
+  const [tableBuilder, setTableBuilder] = useState(() => createInitialTableBuilder());
   const importInputRef = useRef(null);
   const [importRows, setImportRows] = useState([]);
   const [importIndex, setImportIndex] = useState(0);
@@ -263,6 +331,29 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const isImporting = importRows.length > 0;
   const isImportingActive = isImporting && !isEditing;
   const currentImportRow = isImportingActive ? importRows[importIndex] : null;
+
+  const tableTargets = useMemo(() => {
+    const values = getTableTargetValues(form.questionType);
+    return values.map((value) => ({
+      value,
+      label: tableTargetLabel(copy, value),
+    }));
+  }, [copy, form.questionType]);
+
+  const tablePreviewHtml = useMemo(
+    () => buildTableHtml(tableBuilder.cells, tableBuilder.includeHeader),
+    [tableBuilder.cells, tableBuilder.includeHeader]
+  );
+
+  const canInsertTable = hasTableContent(tableBuilder.cells);
+
+  useEffect(() => {
+    const allowed = getTableTargetValues(form.questionType);
+    setTableBuilder((prev) => {
+      if (allowed.includes(prev.target)) return prev;
+      return { ...prev, target: allowed[0] || "question" };
+    });
+  }, [form.questionType]);
 
   useEffect(() => {
     setForm(createDefaultForm(bank));
@@ -274,7 +365,70 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setSuccessMessage("");
     setFilters({ type: "all" });
     setQuestions([]);
+    setLocalImages(loadLocalImages());
+    setShowImageTools(false);
+    setShowTableBuilder(false);
+    setTableBuilder(createInitialTableBuilder());
   }, [bank]);
+
+  const handleTableDimensionChange = (field, rawValue) => {
+    setTableBuilder((prev) => {
+      const limit = field === "rows" ? MAX_TABLE_ROWS : MAX_TABLE_COLS;
+      const fallback = field === "rows" ? prev.rows : prev.cols;
+      const parsed = parseInt(rawValue, 10);
+      const clamped = clamp(Number.isFinite(parsed) ? parsed : fallback, 1, limit);
+      const nextRows = field === "rows" ? clamped : prev.rows;
+      const nextCols = field === "cols" ? clamped : prev.cols;
+      return {
+        ...prev,
+        rows: nextRows,
+        cols: nextCols,
+        cells: resizeTableCells(prev.cells, nextRows, nextCols),
+      };
+    });
+  };
+
+  const handleTableCellChange = (rowIndex, colIndex, value) => {
+    setTableBuilder((prev) => {
+      const cells = prev.cells.map((row, rIdx) =>
+        row.map((cell, cIdx) => (rIdx === rowIndex && cIdx === colIndex ? value : cell))
+      );
+      return { ...prev, cells };
+    });
+  };
+
+  const handleToggleTableHeader = (checked) => {
+    setTableBuilder((prev) => ({ ...prev, includeHeader: checked }));
+  };
+
+  const handleTableTargetChange = (value) => {
+    setTableBuilder((prev) => ({ ...prev, target: value }));
+  };
+
+  const handleClearTableCells = () => {
+    setTableBuilder((prev) => ({
+      ...prev,
+      cells: createEmptyTableCells(prev.rows, prev.cols),
+    }));
+  };
+
+  const handleInsertTable = () => {
+    if (!hasTableContent(tableBuilder.cells)) {
+      alert(copy.tableBuilderEmptyError);
+      return;
+    }
+    const html = buildTableHtml(tableBuilder.cells, tableBuilder.includeHeader);
+    const targetField = tableBuilder.target || "question";
+    setForm((prev) => {
+      if (!(targetField in prev)) return prev;
+      return {
+        ...prev,
+        [targetField]: mergeTableContent(prev[targetField], html),
+      };
+    });
+    setError("");
+    setSuccessMessage(copy.tableBuilderInsertSuccess);
+  };
   const refreshQuestions = () => setReloadKey((prev) => prev + 1);
 
   useEffect(() => {
@@ -348,26 +502,99 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setForm(createDefaultForm(bank));
     setSuccessMessage("");
     setEditingRow(null);
+    setShowImageTools(false);
+    setShowTableBuilder(false);
+    setTableBuilder(createInitialTableBuilder());
+  };
+
+  const convertFileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const uploadImageFile = async (file) => {
+    if (!file) return false;
+    if (file.type !== "image/png") {
+      alert("Only PNG images are supported for question attachments.");
+      return false;
+    }
+    try {
+      setUploading(true);
+      const dataUrl = await convertFileToDataUrl(file);
+      const name = `assignment/${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name.replace(/\s+/g, "_")}`;
+      const nextImages = { ...localImages, [name]: dataUrl || "" };
+      setLocalImages(nextImages);
+      persistLocalImages(nextImages);
+      setForm((prev) => ({ ...prev, imageUrl: `${LOCAL_IMAGE_PREFIX}${name}` }));
+      return true;
+    } catch (err) {
+      console.error("encode question image", err);
+      alert(err?.message || "Failed to read image file.");
+      return false;
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleFileUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    try {
-      setUploading(true);
-      const url = await uploadQuestionImage(file, { prefix: "assignment" });
-      setForm((prev) => ({ ...prev, imageUrl: url || "" }));
-    } catch (err) {
-      console.error("upload question image", err);
-      alert(err?.message || "Upload failed.");
-    } finally {
-      setUploading(false);
-      event.target.value = "";
+    await uploadImageFile(file);
+    event.target.value = "";
+  };
+
+  const handleImageDragOver = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setIsImageDragOver(true);
+  };
+
+  const handleImageDragLeave = (event) => {
+    event.preventDefault();
+    const related = event.relatedTarget;
+    if (related && event.currentTarget.contains(related)) return;
+    setIsImageDragOver(false);
+  };
+
+  const handleImageDrop = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsImageDragOver(false);
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      await uploadImageFile(file);
     }
   };
 
+  const handleRemoveImage = () => {
+    setForm((prev) => {
+      const current = prev.imageUrl;
+      if (!current) return prev;
+      if (current.startsWith(LOCAL_IMAGE_PREFIX)) {
+        const key = current.slice(LOCAL_IMAGE_PREFIX.length);
+        setLocalImages((map) => {
+          const next = { ...map };
+          if (next[key]) {
+            delete next[key];
+            persistLocalImages(next);
+          }
+          return next;
+        });
+      }
+      return { ...prev, imageUrl: "" };
+    });
+  };
+
   const applyImportRow = (row) => {
-    setForm(buildFormFromRow(row, bank));
+    const nextForm = buildFormFromRow(row, bank);
+    setForm(nextForm);
+    setShowImageTools(Boolean(nextForm.imageUrl));
+    setShowTableBuilder(false);
+    setTableBuilder(createInitialTableBuilder(nextForm.questionType));
   };
 
   const startImport = (rows) => {
@@ -397,6 +624,9 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       setImportRows([]);
       setImportIndex(0);
       setForm(createDefaultForm(bank));
+      setShowImageTools(false);
+      setShowTableBuilder(false);
+      setTableBuilder(createInitialTableBuilder());
       setSuccessMessage(message || copy.importFinished);
     }
   };
@@ -413,6 +643,9 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setPreviewRow(null);
     setEditingRow(null);
     setForm(createDefaultForm(bank));
+    setShowImageTools(false);
+    setShowTableBuilder(false);
+    setTableBuilder(createInitialTableBuilder());
   };
 
   const handleImportFile = async (event) => {
@@ -494,7 +727,11 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setEditingRow(row);
     setSuccessMessage("");
     setPreviewRow(null);
-    setForm(buildFormFromRow(row, bank));
+    const nextForm = buildFormFromRow(row, bank);
+    setForm(nextForm);
+    setShowImageTools(Boolean(nextForm.imageUrl));
+    setShowTableBuilder(false);
+    setTableBuilder(createInitialTableBuilder(nextForm.questionType));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -561,6 +798,9 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
         setQuestions((prev) => prev.map((q) => (q.id === record.id ? record : q)));
         setForm(createDefaultForm(bank));
         setEditingRow(null);
+        setShowImageTools(false);
+        setShowTableBuilder(false);
+        setTableBuilder(createInitialTableBuilder());
         setSuccessMessage(copy.updateSuccess);
       } else {
         record = await createAssignmentQuestion(payload, { table: bank.table });
@@ -570,6 +810,9 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
           advanceImport(isLast ? copy.importFinished : copy.createSuccess);
         } else {
           setForm(createDefaultForm(bank));
+          setShowImageTools(false);
+          setShowTableBuilder(false);
+          setTableBuilder(createInitialTableBuilder());
           setSuccessMessage(copy.createSuccess);
         }
       }
@@ -748,32 +991,107 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
             </div>
           )}
 
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontWeight: 600 }}>
-              {copy.imageLabel} <span style={{ color: "#9ca3af" }}>({copy.optional})</span>
-            </label>
-            <input
-              type="url"
-              value={form.imageUrl}
-              onChange={(e) => handleChange("imageUrl", e.target.value)}
-              placeholder="https://..."
-              style={inputStyle}
-            />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={handleFileUpload}
-                />
-                <span style={{ padding: "6px 12px", borderRadius: 6, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
-                  {uploading ? copy.imageUploading : copy.imageUpload}
-                </span>
-              </label>
-              <small style={{ color: "#6b7280" }}>{copy.uploadTip}</small>
-            </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {!showTableBuilder && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTableBuilder(true);
+                  setSuccessMessage("");
+                }}
+                style={secondaryButtonStyle}
+              >
+                {copy.addTable}
+              </button>
+            )}
+            {!showImageTools && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImageTools(true);
+                  setSuccessMessage("");
+                }}
+                style={secondaryButtonStyle}
+              >
+                {copy.addImage}
+              </button>
+            )}
           </div>
+
+          {showTableBuilder && (
+            <TableBuilderSection
+              copy={copy}
+              builder={tableBuilder}
+              targets={tableTargets}
+              onDimensionChange={handleTableDimensionChange}
+              onCellChange={handleTableCellChange}
+              onToggleHeader={handleToggleTableHeader}
+              onTargetChange={handleTableTargetChange}
+              onClear={handleClearTableCells}
+              onInsert={handleInsertTable}
+              previewHtml={tablePreviewHtml}
+              canInsert={canInsertTable}
+              onClose={() => setShowTableBuilder(false)}
+            />
+          )}
+
+          {showImageTools ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 600 }}>
+                  {copy.imageLabel} <span style={{ color: "#9ca3af" }}>({copy.optional})</span>
+                </span>
+                <button type="button" style={inlineLinkButtonStyle} onClick={() => setShowImageTools(false)}>
+                  {copy.hideImage}
+                </button>
+              </div>
+              <input
+                type="url"
+                value={form.imageUrl}
+                onChange={(e) => handleChange("imageUrl", e.target.value)}
+                placeholder="https://..."
+                style={inputStyle}
+              />
+              <div
+                onDragOver={handleImageDragOver}
+                onDragLeave={handleImageDragLeave}
+                onDrop={handleImageDrop}
+                style={{
+                  border: `2px dashed ${isImageDragOver ? "#2563eb" : "#d1d5db"}`,
+                  borderRadius: 12,
+                  padding: 16,
+                  background: isImageDragOver ? "#eff6ff" : "#f9fafb",
+                  transition: "background 0.2s ease, border-color 0.2s ease",
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", justifySelf: "flex-start" }}>
+                  <input type="file" accept="image/png" style={{ display: "none" }} onChange={handleFileUpload} />
+                  <span style={{ padding: "6px 12px", borderRadius: 6, background: "#e0f2fe", border: "1px solid #bfdbfe", color: "#1d4ed8", fontWeight: 600 }}>
+                    {uploading ? copy.imageUploading : copy.imageUpload}
+                  </span>
+                </label>
+                <small style={{ color: "#6b7280" }}>{copy.uploadTip}</small>
+              </div>
+              {form.imageUrl && resolveImageUrl(form.imageUrl) && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8 }}>
+                  <img
+                    src={resolveImageUrl(form.imageUrl)}
+                    alt={copy.imageAlt}
+                    style={{ maxWidth: 200, borderRadius: 12, border: "1px solid #d1d5db" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #ef4444", background: "#fee2e2", color: "#b91c1c", fontWeight: 600, cursor: "pointer" }}
+                  >
+                    {copy.removeImage || "Remove Image"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button
@@ -825,7 +1143,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
             {currentImportRow.image_url && (
               <div>
                 <img
-                  src={currentImportRow.image_url}
+                  src={resolveImageUrl(currentImportRow.image_url)}
                   alt=""
                   style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid #bfdbfe" }}
                 />
@@ -911,11 +1229,27 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
                     <td style={tdStyle}>{hardnessLabel(row.hardness, lang)}</td>
                     <td style={tdStyle}>{row.skill || "—"}</td>
                     <td style={tdStyle}>
-                      {row.image_url ? (
-                        <a href={row.image_url} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
-                          View
-                        </a>
-                      ) : (
+                      {row.image_url ? (() => {
+                        const href = resolveImageUrl(row.image_url);
+                        if (!href) return "—";
+                        const isLocal = row.image_url.startsWith(LOCAL_IMAGE_PREFIX);
+                        if (isLocal) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => window.open(href, "_blank", "noopener")}
+                              style={{ background: "none", border: "1px solid #bfdbfe", color: "#2563eb", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
+                            >
+                              View
+                            </button>
+                          );
+                        }
+                        return (
+                          <a href={href} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
+                            View
+                          </a>
+                        );
+                      })() : (
                         "—"
                       )}
                     </td>
@@ -977,7 +1311,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
               {previewRow.image_url && (
                 <div>
                   <img
-                    src={previewRow.image_url}
+                    src={resolveImageUrl(previewRow.image_url)}
                     alt=""
                     style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid #e5e7eb" }}
                   />
@@ -1029,6 +1363,146 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       )}
 
     </PageWrap>
+  );
+}
+
+function TableBuilderSection({
+  copy,
+  builder,
+  targets,
+  onDimensionChange,
+  onCellChange,
+  onToggleHeader,
+  onTargetChange,
+  onClear,
+  onInsert,
+  previewHtml,
+  canInsert,
+  onClose,
+}) {
+  TableBuilderSection.propTypes = {
+    copy: PropTypes.object.isRequired,
+    builder: PropTypes.shape({
+      rows: PropTypes.number.isRequired,
+      cols: PropTypes.number.isRequired,
+      includeHeader: PropTypes.bool.isRequired,
+      target: PropTypes.string.isRequired,
+      cells: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.string)).isRequired,
+    }).isRequired,
+    targets: PropTypes.arrayOf(
+      PropTypes.shape({
+        value: PropTypes.string.isRequired,
+        label: PropTypes.node.isRequired,
+      })
+    ).isRequired,
+    onDimensionChange: PropTypes.func.isRequired,
+    onCellChange: PropTypes.func.isRequired,
+    onToggleHeader: PropTypes.func.isRequired,
+    onTargetChange: PropTypes.func.isRequired,
+    onClear: PropTypes.func.isRequired,
+    onInsert: PropTypes.func.isRequired,
+    previewHtml: PropTypes.string.isRequired,
+    canInsert: PropTypes.bool.isRequired,
+    onClose: PropTypes.func,
+  };
+
+  TableBuilderSection.defaultProps = {
+    onClose: undefined,
+  };
+
+  return (
+    <div style={tableBuilderContainerStyle}>
+      <div style={tableBuilderHeaderStyle}>
+        <div style={{ fontWeight: 600 }}>{copy.tableBuilderTitle}</div>
+        <div style={tableBuilderHeaderActionsStyle}>
+          <button type="button" onClick={onClear} style={tableBuilderClearButtonStyle}>
+            {copy.tableBuilderClear}
+          </button>
+          {onClose && (
+            <button type="button" onClick={onClose} style={tableBuilderHideButtonStyle}>
+              {copy.tableBuilderHide}
+            </button>
+          )}
+        </div>
+      </div>
+      <p style={tableBuilderHintStyle}>{copy.tableBuilderInstructions}</p>
+
+      <div style={tableBuilderControlsRowStyle}>
+        <label style={tableBuilderControlStyle}>
+          <span style={{ fontWeight: 600 }}>{copy.tableBuilderRows}</span>
+          <input
+            type="number"
+            min={1}
+            max={MAX_TABLE_ROWS}
+            value={builder.rows}
+            onChange={(e) => onDimensionChange("rows", e.target.value)}
+            style={tableBuilderNumberInputStyle}
+          />
+        </label>
+        <label style={tableBuilderControlStyle}>
+          <span style={{ fontWeight: 600 }}>{copy.tableBuilderCols}</span>
+          <input
+            type="number"
+            min={1}
+            max={MAX_TABLE_COLS}
+            value={builder.cols}
+            onChange={(e) => onDimensionChange("cols", e.target.value)}
+            style={tableBuilderNumberInputStyle}
+          />
+        </label>
+        <label style={tableBuilderToggleStyle}>
+          <input
+            type="checkbox"
+            checked={builder.includeHeader}
+            onChange={(e) => onToggleHeader(e.target.checked)}
+          />
+          <span>{copy.tableBuilderIncludeHeader}</span>
+        </label>
+        <label style={tableBuilderTargetStyle}>
+          <span style={{ fontWeight: 600 }}>{copy.tableBuilderTarget}</span>
+          <select value={builder.target} onChange={(e) => onTargetChange(e.target.value)} style={selectStyle}>
+            {targets.map((target) => (
+              <option key={target.value} value={target.value}>
+                {target.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>{copy.tableBuilderCellsLabel}</span>
+        <div style={tableBuilderGridStyle(builder.cols)}>
+          {builder.cells.map((row, rowIndex) =>
+            row.map((cell, colIndex) => (
+              <input
+                key={`${rowIndex}-${colIndex}`}
+                type="text"
+                value={cell}
+                onChange={(e) => onCellChange(rowIndex, colIndex, e.target.value)}
+                placeholder={copy.tableBuilderCellPlaceholder}
+                style={tableBuilderCellInputStyle}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>{copy.tableBuilderPreview}</span>
+        {canInsert ? (
+          <div style={tableBuilderPreviewStyle} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+        ) : (
+          <div style={tableBuilderPreviewEmptyStyle}>{copy.tableBuilderPreviewEmpty}</div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <Btn type="button" onClick={onInsert} disabled={!canInsert}>
+          {copy.tableBuilderInsert}
+        </Btn>
+      </div>
+    </div>
   );
 }
 
@@ -1135,6 +1609,121 @@ const textareaStyle = {
 const selectStyle = {
   ...inputStyle,
   appearance: "none",
+};
+
+const tableBuilderContainerStyle = {
+  marginTop: 4,
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  padding: 16,
+  background: "#f9fafb",
+  display: "grid",
+  gap: 12,
+};
+
+const tableBuilderHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const tableBuilderHeaderActionsStyle = {
+  display: "flex",
+  gap: 12,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const tableBuilderHintStyle = {
+  margin: 0,
+  color: "#6b7280",
+  fontSize: 13,
+};
+
+const tableBuilderControlsRowStyle = {
+  display: "flex",
+  gap: 12,
+  flexWrap: "wrap",
+  alignItems: "flex-end",
+};
+
+const tableBuilderControlStyle = {
+  display: "grid",
+  gap: 6,
+  minWidth: 120,
+};
+
+const tableBuilderNumberInputStyle = {
+  ...inputStyle,
+  maxWidth: 120,
+};
+
+const tableBuilderToggleStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  minHeight: 38,
+  fontSize: 14,
+};
+
+const tableBuilderTargetStyle = {
+  display: "grid",
+  gap: 6,
+  minWidth: 160,
+};
+
+const tableBuilderGridStyle = (cols) => ({
+  display: "grid",
+  gap: 8,
+  gridTemplateColumns: `repeat(${Math.max(1, Math.min(cols, MAX_TABLE_COLS))}, minmax(120px, 1fr))`,
+});
+
+const tableBuilderCellInputStyle = {
+  ...inputStyle,
+  minWidth: 0,
+};
+
+const tableBuilderPreviewStyle = {
+  border: "1px solid #d1d5db",
+  borderRadius: 8,
+  padding: 12,
+  background: "#ffffff",
+  overflowX: "auto",
+};
+
+const tableBuilderPreviewEmptyStyle = {
+  ...tableBuilderPreviewStyle,
+  color: "#6b7280",
+  fontStyle: "italic",
+};
+
+const tableBuilderClearButtonStyle = {
+  background: "none",
+  border: "none",
+  color: "#2563eb",
+  cursor: "pointer",
+  fontWeight: 600,
+  padding: 0,
+};
+
+const tableBuilderHideButtonStyle = {
+  background: "none",
+  border: "none",
+  color: "#b91c1c",
+  cursor: "pointer",
+  fontWeight: 600,
+  padding: 0,
+};
+
+const inlineLinkButtonStyle = {
+  background: "none",
+  border: "none",
+  color: "#2563eb",
+  cursor: "pointer",
+  fontWeight: 600,
+  padding: 0,
 };
 
 const lockedFieldStyle = {
@@ -1290,6 +1879,224 @@ function TrashIcon() {
 
 const MATH_HINT_REGEX = /\\[a-zA-Z]+|\\frac|\\sqrt|\\sum|\\int|\\left|\\right|\\times|\\div|\\pm|\\pi|\\alpha|\\beta|\\gamma|\^|_|=|\\\(|\\\)|\\\[|\\\]|\$\$/;
 
+const loadLocalImages = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_IMAGE_STORE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (err) {
+    console.warn("loadLocalImages", err);
+    return {};
+  }
+};
+
+const persistLocalImages = (map) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOCAL_IMAGE_STORE_KEY, JSON.stringify(map || {}));
+  } catch (err) {
+    console.warn("persistLocalImages", err);
+  }
+};
+
+const resolveImageUrl = (value) => {
+  if (!value) return "";
+  if (value.startsWith(LOCAL_IMAGE_PREFIX)) {
+    const key = value.slice(LOCAL_IMAGE_PREFIX.length);
+    const images = loadLocalImages();
+    return images[key] || "";
+  }
+  return value;
+};
+
+const TABLE_TARGET_VALUES = {
+  mcq: ["question", "answerA", "answerB", "answerC", "answerD"],
+  fill: ["question", "fillAnswer"],
+};
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+function createInitialTableBuilder(questionType = "mcq") {
+  const targetValues = getTableTargetValues(questionType);
+  return {
+    rows: DEFAULT_TABLE_ROWS,
+    cols: DEFAULT_TABLE_COLS,
+    includeHeader: false,
+    target: targetValues[0] || "question",
+    cells: createEmptyTableCells(DEFAULT_TABLE_ROWS, DEFAULT_TABLE_COLS),
+  };
+}
+
+function createEmptyTableCells(rows, cols) {
+  const safeRows = clamp(rows, 1, MAX_TABLE_ROWS);
+  const safeCols = clamp(cols, 1, MAX_TABLE_COLS);
+  return Array.from({ length: safeRows }, () => Array.from({ length: safeCols }, () => ""));
+}
+
+function resizeTableCells(prevCells, rows, cols) {
+  const next = createEmptyTableCells(rows, cols);
+  if (!Array.isArray(prevCells)) return next;
+  const maxRows = Math.min(rows, prevCells.length);
+  for (let r = 0; r < maxRows; r += 1) {
+    const row = prevCells[r] || [];
+    const maxCols = Math.min(cols, row.length);
+    for (let c = 0; c < maxCols; c += 1) {
+      next[r][c] = row[c];
+    }
+  }
+  return next;
+}
+
+function hasTableContent(cells) {
+  if (!Array.isArray(cells)) return false;
+  return cells.some((row) => Array.isArray(row) && row.some((cell) => String(cell || "").trim().length > 0));
+}
+
+function buildTableHtml(cells, includeHeader) {
+  if (!Array.isArray(cells) || cells.length === 0) return "";
+  const rowsHtml = cells
+    .map((row, rowIndex) => {
+      const safeRow = Array.isArray(row) ? row : [];
+      const cellTag = includeHeader && rowIndex === 0 ? "th" : "td";
+      const cellsHtml = safeRow
+        .map((cell) => `<${cellTag}>${tableHtmlEscape(cell)}</${cellTag}>`)
+        .join("");
+      return `<tr>${cellsHtml}</tr>`;
+    })
+    .join("");
+  if (!rowsHtml) return "";
+  return `<table>${rowsHtml}</table>`;
+}
+
+function tableHtmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function mergeTableContent(existing, html) {
+  const current = String(existing || "").trim();
+  const next = String(html || "").trim();
+  if (!current) return next;
+  if (!next) return current;
+  return `${current}\n\n${next}`;
+}
+
+function getTableTargetValues(questionType) {
+  return TABLE_TARGET_VALUES[questionType] || TABLE_TARGET_VALUES.mcq;
+}
+
+function tableTargetLabel(copy, value) {
+  switch (value) {
+    case "question":
+      return copy.question;
+    case "answerA":
+      return copy.answer("A");
+    case "answerB":
+      return copy.answer("B");
+    case "answerC":
+      return copy.answer("C");
+    case "answerD":
+      return copy.answer("D");
+    case "fillAnswer":
+      return copy.fillAnswerLabel;
+    default:
+      return value;
+  }
+}
+
+const ALLOWED_TABLE_TAGS = new Set(["TABLE", "TBODY", "THEAD", "TFOOT", "TR", "TD", "TH", "COLGROUP", "COL", "SPAN", "P", "BR", "B", "STRONG", "I", "EM", "U", "SMALL"]);
+const ALLOWED_TABLE_ATTRS = new Set(["rowspan", "colspan", "align"]);
+
+const sanitizeTableHtml = (html) => {
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") return html;
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+    const toRemove = [];
+    while (walker.nextNode()) {
+      const el = walker.currentNode;
+      if (!ALLOWED_TABLE_TAGS.has(el.tagName)) {
+        toRemove.push(el);
+        continue;
+      }
+      Array.from(el.attributes).forEach((attr) => {
+        if (!ALLOWED_TABLE_ATTRS.has(attr.name.toLowerCase())) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    }
+    toRemove.forEach((node) => {
+      const text = node.textContent || "";
+      node.replaceWith(doc.createTextNode(text));
+    });
+    return doc.body.innerHTML;
+  } catch (err) {
+    console.warn("sanitizeTableHtml", err);
+    return html;
+  }
+};
+
+const renderMathSegments = (text, block) => {
+  const inlineRegex = /\\\[(.+?)\\\]|\\\((.+?)\\\)|\$\$(.+?)\$\$/gs;
+  const segments = [];
+  let match;
+  let lastIndex = 0;
+  while ((match = inlineRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", value: text.slice(lastIndex, match.index) });
+    }
+    if (match[1] != null) {
+      segments.push({ type: "block", value: match[1] });
+    } else if (match[2] != null) {
+      segments.push({ type: "inline", value: match[2] });
+    } else if (match[3] != null) {
+      segments.push({ type: "block", value: match[3] });
+    }
+    lastIndex = inlineRegex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", value: text.slice(lastIndex) });
+  }
+
+  if (segments.some((segment) => segment.type !== "text")) {
+    return segments.map((segment, idx) => {
+      if (segment.type === "text") {
+        return <React.Fragment key={`text-${idx}`}>{segment.value}</React.Fragment>;
+      }
+      const Component = segment.type === "block" ? BlockMath : InlineMath;
+      return (
+        <Component
+          key={`math-${idx}`}
+          math={segment.value}
+          errorColor="#dc2626"
+          renderError={() => <span>{segment.value}</span>}
+        />
+      );
+    });
+  }
+
+  if (!MATH_HINT_REGEX.test(text)) {
+    return [<React.Fragment key="text">{text}</React.Fragment>];
+  }
+
+  const Component = block ? BlockMath : InlineMath;
+  return [
+    <Component
+      key="math"
+      math={text}
+      errorColor="#dc2626"
+      renderError={() => <span>{text}</span>}
+    />,
+  ];
+};
+
 function MathText({ value, block = false }) {
   const raw = value == null ? "" : String(value).trim();
   if (!raw) return <span>—</span>;
@@ -1311,60 +2118,33 @@ function MathText({ value, block = false }) {
     );
   }
 
-  const inlineRegex = /\\\[(.+?)\\\]|\\\((.+?)\\\)|\$\$(.+?)\$\$/gs;
-  let match;
-  let lastIndex = 0;
-  const parts = [];
-  while ((match = inlineRegex.exec(normalized)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ type: "text", value: normalized.slice(lastIndex, match.index) });
+  const tableRegex = /<table[\s\S]*?<\/table>/gi;
+  if (tableRegex.test(normalized)) {
+    const nodes = [];
+    let lastIndex = 0;
+    normalized.replace(tableRegex, (match, offset) => {
+      if (offset > lastIndex) {
+        const textPart = normalized.slice(lastIndex, offset);
+        nodes.push(...renderMathSegments(textPart, block));
+      }
+      const sanitized = sanitizeTableHtml(match);
+      nodes.push(
+        <div
+          key={`table-${nodes.length}`}
+          style={{ overflowX: "auto" }}
+          dangerouslySetInnerHTML={{ __html: sanitized }}
+        />
+      );
+      lastIndex = offset + match.length;
+      return match;
+    });
+    if (lastIndex < normalized.length) {
+      nodes.push(...renderMathSegments(normalized.slice(lastIndex), block));
     }
-    if (match[1] != null) {
-      parts.push({ type: "block", value: match[1] });
-    } else if (match[2] != null) {
-      parts.push({ type: "inline", value: match[2] });
-    } else if (match[3] != null) {
-      parts.push({ type: "block", value: match[3] });
-    }
-    lastIndex = inlineRegex.lastIndex;
-  }
-  if (lastIndex < normalized.length) {
-    parts.push({ type: "text", value: normalized.slice(lastIndex) });
-  }
-  if (parts.some((p) => p.type !== "text")) {
-    return (
-      <>
-        {parts.map((part, idx) => {
-          if (part.type === "text") {
-            return <React.Fragment key={idx}>{part.value}</React.Fragment>;
-          }
-          const Component = part.type === "block" ? BlockMath : InlineMath;
-          return (
-            <Component
-              key={idx}
-              math={part.value}
-              errorColor="#dc2626"
-              renderError={() => <span>{part.value}</span>}
-            />
-          );
-        })}
-      </>
-    );
+    return <>{nodes}</>;
   }
 
-  const looksMath = MATH_HINT_REGEX.test(normalized);
-  if (!looksMath) {
-    return <span>{normalized}</span>;
-  }
-
-  const Component = block ? BlockMath : InlineMath;
-  return (
-    <Component
-      math={normalized}
-      errorColor="#dc2626"
-      renderError={() => <span>{normalized}</span>}
-    />
-  );
+  return <>{renderMathSegments(normalized, block)}</>;
 }
 
 MathText.propTypes = {
