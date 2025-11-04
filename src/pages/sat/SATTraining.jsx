@@ -158,18 +158,6 @@ export default function SATTraining({ onNavigate }) {
   const [autoAssign, setAutoAssign] = useState(() => createDefaultAutoAssign("math"));
   const [autoGenerating, setAutoGenerating] = useState(false);
 
-  const usedQuestionIds = useMemo(() => {
-    const ids = new Set();
-    (resources || []).forEach((resource) => {
-      const questions = getResourceQuestions(resource) || [];
-      questions.forEach((question) => {
-        const key = question?.id != null ? String(question.id) : null;
-        if (key) ids.add(key);
-      });
-    });
-    return ids;
-  }, [resources]);
-
   const openClassLog = (row) => setViewClassLog(row);
   const closeClassLog = () => setViewClassLog(null);
 
@@ -485,6 +473,17 @@ export default function SATTraining({ onNavigate }) {
   };
 
   const [resources, setResources] = useState([]);
+  const usedQuestionIds = useMemo(() => {
+    const ids = new Set();
+    (resources || []).forEach((resource) => {
+      const questions = getResourceQuestions(resource) || [];
+      questions.forEach((question) => {
+        const key = question?.id != null ? String(question.id) : null;
+        if (key) ids.add(key);
+      });
+    });
+    return ids;
+  }, [resources]);
   const handleAutoAssignChange = (field, rawValue) => {
     setAutoAssign((prev) => {
       let next = { ...prev };
