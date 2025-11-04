@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 export default function useCountdown(secondsInitial) {
   const initialRef = useRef(secondsInitial);
@@ -21,15 +21,17 @@ export default function useCountdown(secondsInitial) {
     return () => clearTimeout(timer);
   }, [running, remaining]);
 
-  const start = () => setRunning(true);
-  const stop = () => setRunning(false);
-  const reset = (sec = initialRef.current) => setRemaining(sec);
+  const start = useCallback(() => setRunning(true), []);
+  const stop = useCallback(() => setRunning(false), []);
+  const reset = useCallback((sec = initialRef.current) => {
+    setRemaining(sec);
+  }, []);
 
-  const fmt = (sec) => {
+  const fmt = useCallback((sec) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
-  };
+  }, []);
 
   return { remaining, running, start, stop, reset, fmt };
 }

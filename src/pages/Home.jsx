@@ -31,11 +31,16 @@ const HOME_CARDS = {
       locked: "Request Access",
       lockedMessage: "Limited to approved educators.",
     },
+    certificate: {
+      title: "Verify Certificate",
+      desc: "Authenticate an official EEC certificate using its unique ID.",
+      cta: "Verify",
+    },
   },
   AR: {
     career: {
       title: "\u0627\u062e\u062a\u0628\u0627\u0631\u0627\u062a \u0627\u0644\u0645\u064a\u0648\u0644 \u0627\u0644\u0645\u0647\u0646\u064a\u0629",
-      desc: "\u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0647\u062a\u0645\u0627\u0645\u0627\u062a\u0643 \u0648\u0642\u062f\u0631\u0627\u062a\u0643 \u0639\u0628\u0631 \u0627\u062e\u062a\u0628\u0627\u0631 RIASEC \u062a\u0641\u0627\u0639\u0644\u064a \u0648\u062a\u0648\u0635\u064a\u0627\u062a \u0648\u0638\u0627\u0626\u0641 \u0645\u062e\u0635\u0635\u0629.",
+      desc: "\u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0647\u062a\u0645\u0627\u062a\u0643 \u0648\u0642\u062f\u0631\u0627\u062a\u0643 \u0639\u0628\u0631 \u0627\u062e\u062a\u0628\u0627\u0631 RIASEC \u062a\u0641\u0627\u0639\u0644\u064a \u0648\u062a\u0648\u0635\u064a\u0627\u062a \u0648\u0638\u0627\u0626\u0641 \u0645\u062e\u0635\u0635\u0629.",
       cta: "\u0627\u0641\u062a\u062d",
     },
     satDiagnostic: {
@@ -53,7 +58,12 @@ const HOME_CARDS = {
       desc: "\u062f\u0631\u0648\u0633 \u0645\u062a\u0643\u064a\u0641\u0629\u060c \u062a\u063a\u0630\u064a\u0629 \u0631\u0627\u062c\u0639\u0629 \u0641\u0648\u0631\u064a\u0629\u060c \u0648\u062e\u0637\u0637 \u062f\u0631\u0627\u0633\u0629 \u0634\u062e\u0635\u064a\u0629.",
       cta: "\u0627\u0641\u062a\u062d",
       locked: "\u0627\u0637\u0644\u0628 \u0635\u0644\u0627\u062d\u064a\u0629",
-      lockedMessage: "\u0645\u062a\u0627\u062d \u0641\u0642\u0637 \u0644\u0644\u0645\u0639\u0644\u0645\u064a\u0646 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u064a\u0646.",
+      lockedMessage: "\u0645\u062a\u0627\u062d \u0641\u0642\u0637 \u0644\u0644\u0645\u0639\u0644\u0651\u0645\u064a\u0646 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u064a\u0646.",
+    },
+    certificate: {
+      title: "\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0634\u0647\u0627\u062f\u0629",
+      desc: "\u062a\u0623\u0643\u062f \u0645\u0646 \u0635\u062d\u0629 \u0634\u0647\u0627\u062f\u0629 EEC \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0631\u0642\u0645\u0647\u0627 \u0627\u0644\u0645\u0645\u064a\u0632.",
+      cta: "\u062a\u062d\u0642\u0642 \u0627\u0644\u0622\u0646",
     },
   },
   FR: {
@@ -79,8 +89,14 @@ const HOME_CARDS = {
       locked: "Demander l'acc\u00e8s",
       lockedMessage: "R\u00e9serv\u00e9 aux enseignants approuv\u00e9s.",
     },
+    certificate: {
+      title: "V\u00e9rifier un certificat",
+      desc: "Confirmez l'authenticit\u00e9 d'un certificat EEC gr\u00e2ce \u00e0 son identifiant unique.",
+      cta: "V\u00e9rifier",
+    },
   },
 };
+
 
 export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEducator = false }) {
   Home.propTypes = {
@@ -213,6 +229,18 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
               {!canAccessAIEducator && (
                 <small style={{ color: "#9ca3af", fontSize: 12 }}>{aiLockedMessage}</small>
               )}
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+            <h3 style={{ marginTop: 0, color: "#111827" }}>{home.certificate.title}</h3>
+            <p style={{ color: "#6b7280" }}>{home.certificate.desc}</p>
+            <div style={{ marginTop: "auto" }}>
+              <Btn variant="primary" to="verify-certificate" onClick={navTo("verify-certificate")}>
+                {home.certificate.cta}
+              </Btn>
             </div>
           </div>
         </Card>

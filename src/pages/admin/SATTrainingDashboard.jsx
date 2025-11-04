@@ -9,12 +9,6 @@ export default function SATTrainingDashboard({ onNavigate }) {
   SATTrainingDashboard.propTypes = { onNavigate: PropTypes.func.isRequired };
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [assignments, setAssignments] = useState([]);
-  const [savingAssign, setSavingAssign] = useState(false);
-  const [assignForm, setAssignForm] = useState({ email: "", className: "" });
-  const [knownEmails, setKnownEmails] = useState([]);
-  const [loadingEmails, setLoadingEmails] = useState(true);
-  const [deletingId, setDeletingId] = useState(null);
   const [deletingRowId, setDeletingRowId] = useState(null);
   const [viewRow, setViewRow] = useState(null);
 
@@ -42,57 +36,6 @@ export default function SATTrainingDashboard({ onNavigate }) {
         if (resp.error) { try { resp = await supabase.from(table).select("*").order("id", { ascending: false }); } catch {}
         }
         setRows(resp.error ? [] : (resp.data || []));
-
-        // Load recent class assignments
-        try {
-          const aTable = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
-          let ar = await supabase.from(aTable).select("*").order("ts", { ascending: false }).limit(20);
-          if (ar.error) { try { ar = await supabase.from(aTable).select("*").order("id", { ascending: false }).limit(20); } catch {}
-          }
-          setAssignments(ar.error ? [] : (ar.data || []));
-        } catch (e) {
-          console.warn(e);
-          setAssignments([]);
-        }
-
-        // Load known emails from multiple sources (best-effort)
-        try {
-          const emails = new Set();
-          // 0) Preferred: from Supabase Auth via an admin-only RPC (list_user_emails)
-          try {
-            const rpc = await supabase.rpc('list_user_emails');
-            if (!rpc.error && rpc.data) rpc.data.forEach(r => { if (r?.email) emails.add(r.email); });
-          } catch (e) { /* fallback below */ }
-          // 1) profiles.email (if policies allow)
-          try {
-            const pr = await supabase.from('profiles').select('email').limit(5000);
-            if (!pr.error && pr.data) pr.data.forEach(r => { if (r?.email) emails.add(r.email); });
-          } catch {}
-          // 2) existing class assignments
-          try {
-            const aTable = import.meta.env.VITE_CLASS_ASSIGN_TABLE || 'cg_class_assignments';
-            const ar = await supabase.from(aTable).select('student_email').limit(5000);
-            if (!ar.error && ar.data) ar.data.forEach(r => { if (r?.student_email) emails.add(r.student_email); });
-          } catch {}
-          // 3) SAT training logs
-          try {
-            const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || 'cg_sat_training';
-            const tr = await supabase.from(tTable).select('user_email').limit(5000);
-            if (!tr.error && tr.data) tr.data.forEach(r => { if (r?.user_email) emails.add(r.user_email); });
-          } catch {}
-          // 4) Career submissions (if accessible)
-          try {
-            const sTable = import.meta.env.VITE_SUBMISSIONS_TABLE || 'cg_submissions';
-            const sr = await supabase.from(sTable).select('user_email').limit(5000);
-            if (!sr.error && sr.data) sr.data.forEach(r => { if (r?.user_email) emails.add(r.user_email); });
-          } catch {}
-          setKnownEmails(Array.from(emails).filter(Boolean).sort((a,b)=>a.localeCompare(b)));
-        } catch (e) {
-          console.warn('load known emails', e);
-          setKnownEmails([]);
-        } finally {
-          setLoadingEmails(false);
-        }
       } catch (e) {
         console.error(e);
       } finally { setLoading(false); }
@@ -124,32 +67,6 @@ export default function SATTrainingDashboard({ onNavigate }) {
     };
   }, []);
 
-  const saveAssignment = async () => {
-    const email = (assignForm.email || "").trim();
-    const className = (assignForm.className || "").trim();
-    if (!email || !/\S+@\S+\.\S+/.test(email)) { alert("Enter a valid student email"); return; }
-    if (!className) { alert("Enter a class"); return; }
-    setSavingAssign(true);
-    try {
-      const { data: me } = await supabase.auth.getUser();
-      const adminEmail = me?.user?.email || null;
-      const aTable = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
-      // Delete previous assignment for this email to keep a single active row
-      try { await supabase.from(aTable).delete().eq("student_email", email); } catch {}
-      const { error } = await supabase.from(aTable).insert({ student_email: email, class_name: className, assigned_by: adminEmail });
-      if (error) throw error;
-      // refresh
-      const ar = await supabase.from(aTable).select("*").order("ts", { ascending: false }).limit(20);
-      setAssignments(ar.error ? [] : (ar.data || []));
-      setAssignForm({ email: "", className: "" });
-      alert("Assigned class saved");
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || "Failed to save assignment");
-    } finally {
-      setSavingAssign(false);
-    }
-  };
 
   const deleteTrainingRow = async (row) => {
     if (!row) return;
@@ -172,23 +89,6 @@ export default function SATTrainingDashboard({ onNavigate }) {
   const openView = (row) => setViewRow(row || null);
   const closeView = () => setViewRow(null);
 
-  const deleteAssignment = async (row) => {
-    if (!row) return;
-    const ok = window.confirm(`Delete class assignment for ${row.student_email || 'this student'}?`);
-    if (!ok) return;
-    setDeletingId(row.id || null);
-    try {
-      const aTable = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
-      const { error } = await supabase.from(aTable).delete().eq('id', row.id);
-      if (error) throw error;
-      setAssignments((list) => list.filter((x) => x.id !== row.id));
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || 'Failed to delete assignment');
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   const fmt = (iso, time = false) => {
     if (!iso) return "--";
@@ -338,7 +238,7 @@ export default function SATTrainingDashboard({ onNavigate }) {
               <h3 style={{ marginTop:0 }}>Submission Details</h3>
               <button onClick={closeView} style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer' }}>Close</button>
             </div>
-            <div style={{ color:'#6b7280', marginBottom:8 }}>User: {viewRow.user_email || '--'} Â- Date: {fmt(viewRow.ts)} {fmt(viewRow.ts,true)}</div>
+            <div style={{ color:'#6b7280', marginBottom:8 }}>User: {viewRow.user_email || '--'} ï¿½- Date: {fmt(viewRow.ts)} {fmt(viewRow.ts,true)}</div>
             <div style={{ color:'#6b7280', marginBottom:8 }}>Duration: {fmtDur(Number(viewRow.elapsed_sec || 0))}</div>
             <div style={{ borderTop:'1px solid #e5e7eb', paddingTop:10 }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>

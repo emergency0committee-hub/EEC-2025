@@ -1,5 +1,5 @@
 // src/pages/sat/SATTraining.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
@@ -92,6 +92,10 @@ export default function SATTraining({ onNavigate }) {
   const [viewClassLog, setViewClassLog] = useState(null);
   // Class sub-tabs (admin view)
   const [classTab, setClassTab] = useState("classwork"); // classwork | analytics
+  const [assignForm, setAssignForm] = useState({ email: "", className: "" });
+  const [savingAssign, setSavingAssign] = useState(false);
+  const [knownEmails, setKnownEmails] = useState([]);
+  const [loadingEmails, setLoadingEmails] = useState(false);
 
   const fmtDate = (iso, time = false) => {
     if (!iso) return "—";
@@ -154,6 +158,18 @@ export default function SATTraining({ onNavigate }) {
   const [autoAssign, setAutoAssign] = useState(() => createDefaultAutoAssign("math"));
   const [autoGenerating, setAutoGenerating] = useState(false);
 
+  const usedQuestionIds = useMemo(() => {
+    const ids = new Set();
+    (resources || []).forEach((resource) => {
+      const questions = getResourceQuestions(resource) || [];
+      questions.forEach((question) => {
+        const key = question?.id != null ? String(question.id) : null;
+        if (key) ids.add(key);
+      });
+    });
+    return ids;
+  }, [resources]);
+
   const openClassLog = (row) => setViewClassLog(row);
   const closeClassLog = () => setViewClassLog(null);
 
@@ -198,6 +214,163 @@ export default function SATTraining({ onNavigate }) {
     }
     return `${minutes} min${minutes === 1 ? "" : "s"}`;
   };
+
+  const loadClasses = useCallback(async () => {
+    if (!isAdmin) return;
+    setClassesLoading(true);
+    try {
+      const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+      const { data, error } = await supabase.from(table).select("class_name, student_email").limit(2000);
+      if (error) throw error;
+      const map = new Map();
+      (data || []).forEach((r) => {
+        const name = r.class_name || "(Unassigned)";
+        map.set(name, (map.get(name) || 0) + 1);
+      });
+      const arr = Array.from(map.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setClasses(arr);
+    } catch (e) {
+      console.warn(e);
+      setClasses([]);
+    } finally {
+      setClassesLoading(false);
+    }
+  }, [isAdmin]);
+
+  const loadKnownEmails = useCallback(async () => {
+    if (!isAdmin) {
+      setKnownEmails([]);
+      return;
+    }
+    setLoadingEmails(true);
+    try {
+      const emails = new Set();
+      try {
+        const rpc = await supabase.rpc("list_user_emails");
+        if (!rpc.error && rpc.data) {
+          rpc.data.forEach((entry) => {
+            if (entry?.email) emails.add(entry.email);
+          });
+        }
+      } catch {}
+      try {
+        const pr = await supabase.from("profiles").select("email").limit(5000);
+        if (!pr.error && pr.data) {
+          pr.data.forEach((entry) => {
+            if (entry?.email) emails.add(entry.email);
+          });
+        }
+      } catch {}
+      try {
+        const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+        const ar = await supabase.from(table).select("student_email").limit(5000);
+        if (!ar.error && ar.data) {
+          ar.data.forEach((entry) => {
+            if (entry?.student_email) emails.add(entry.student_email);
+          });
+        }
+      } catch {}
+      try {
+        const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+        const tr = await supabase.from(tTable).select("user_email").limit(5000);
+        if (!tr.error && tr.data) {
+          tr.data.forEach((entry) => {
+            if (entry?.user_email) emails.add(entry.user_email);
+          });
+        }
+      } catch {}
+      try {
+        const sTable = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
+        const sr = await supabase.from(sTable).select("user_email").limit(5000);
+        if (!sr.error && sr.data) {
+          sr.data.forEach((entry) => {
+            if (entry?.user_email) emails.add(entry.user_email);
+          });
+        }
+      } catch {}
+      setKnownEmails(Array.from(emails).filter(Boolean).sort((a, b) => a.localeCompare(b)));
+    } catch (e) {
+      console.warn("load known emails", e);
+      setKnownEmails([]);
+    } finally {
+      setLoadingEmails(false);
+    }
+  }, [isAdmin]);
+
+  const handleAssignInput = (field, value) => {
+    setAssignForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const saveAssignment = async () => {
+    if (!isAdmin) return;
+    const email = (assignForm.email || "").trim();
+    const className = (assignForm.className || "").trim();
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      alert("Enter a valid student email.");
+      return;
+    }
+    if (!className) {
+      alert("Enter a class name.");
+      return;
+    }
+    setSavingAssign(true);
+    try {
+      const { data: me } = await supabase.auth.getUser();
+      const adminEmail = me?.user?.email || null;
+      const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+      try {
+        await supabase.from(table).delete().eq("student_email", email);
+      } catch {}
+      const { error } = await supabase
+        .from(table)
+        .insert({ student_email: email, class_name: className, assigned_by: adminEmail });
+      if (error) throw error;
+      setAssignForm({ email: "", className: "" });
+      await loadClasses();
+      alert("Class assignment saved.");
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "Failed to save class assignment.");
+    } finally {
+      setSavingAssign(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    (async () => {
+      setClassesLoading(true);
+      try {
+        const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+        const { data, error } = await supabase.from(table).select("class_name, student_email").limit(2000);
+        if (error) throw error;
+        const map = new Map();
+        (data || []).forEach((r) => {
+          const name = r.class_name || "(Unassigned)";
+          map.set(name, (map.get(name) || 0) + 1);
+        });
+        const arr = Array.from(map.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setClasses(arr);
+      } catch (e) {
+        console.warn(e);
+        setClasses([]);
+      } finally {
+        setClassesLoading(false);
+      }
+    })();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    loadClasses();
+  }, [loadClasses]);
+
+  useEffect(() => {
+    loadKnownEmails();
+  }, [loadKnownEmails]);
 
   const pillStyles = {
     base: { display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600 },
@@ -524,13 +697,35 @@ export default function SATTraining({ onNavigate }) {
         lesson: supportsMathUnits ? lessonValue : undefined,
         limit: questionLimit,
       });
-      const items = (rows || []).map(mapBankQuestionToResource).filter(Boolean);
-      if (!items.length) {
+      const candidates = (rows || []).map(mapBankQuestionToResource).filter(Boolean);
+      if (!candidates.length) {
         throw new Error("No questions found for the selected filters.");
       }
+
+      const seenIds = new Set();
+      const deduped = [];
+      candidates.forEach((item) => {
+        const key = item?.id != null ? String(item.id) : null;
+        if (!key || seenIds.has(key)) return;
+        seenIds.add(key);
+        deduped.push(item);
+      });
+
+      const freshItems = deduped.filter((item) => {
+        const key = item?.id != null ? String(item.id) : null;
+        if (!key) return true;
+        return !usedQuestionIds.has(key);
+      });
+
+      if (!freshItems.length) {
+        alert("All matching questions were already used in this class. Adjust your filters or archive older assignments.");
+        return;
+      }
+
+      const items = freshItems.slice(0, requestedCount);
       if (items.length < requestedCount) {
         const proceed = window.confirm(
-          `Only ${items.length} question${items.length === 1 ? "" : "s"} were found. Continue anyway?`,
+          `Only ${items.length} unused question${items.length === 1 ? "" : "s"} are available for this class. Continue anyway?`,
         );
         if (!proceed) {
           return;
@@ -589,31 +784,6 @@ export default function SATTraining({ onNavigate }) {
   const subjectDisplayLabel =
     SUBJECT_OPTIONS.find((opt) => opt.value === activeSubject)?.label?.EN || activeSubject;
   const activeBankLabel = BANK_LABELS[activeBank.id] || "Question Bank";
-  useEffect(() => {
-    if (!isAdmin) return;
-    (async () => {
-      setClassesLoading(true);
-      try {
-        const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
-        const { data, error } = await supabase.from(table).select("class_name, student_email").limit(2000);
-        if (error) throw error;
-        const map = new Map();
-        (data || []).forEach(r => {
-          const name = r.class_name || "(Unassigned)";
-          map.set(name, (map.get(name) || 0) + 1);
-        });
-        const arr = Array.from(map.entries()).map(([name, count]) => ({ name, count })).sort((a,b)=>a.name.localeCompare(b.name));
-        setClasses(arr);
-      } catch (e) {
-        console.warn(e);
-        setClasses([]);
-      } finally {
-        setClassesLoading(false);
-      }
-    })();
-  }, [isAdmin]);
-
-
   useEffect(() => {
     if (!isAdmin || !selectedClass) return;
     (async () => {
@@ -949,8 +1119,84 @@ export default function SATTraining({ onNavigate }) {
                 <h3 style={{ marginTop: 0 }}>Your Classes</h3>
                 <div style={{ color: '#6b7280', fontSize: 12 }}>{classesLoading ? 'Loading…' : `${classes.length} class${classes.length === 1 ? '' : 'es'}`}</div>
               </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  border: '1px dashed #dbeafe',
+                  borderRadius: 12,
+                  padding: 16,
+                  background: '#f8fafc',
+                  display: 'grid',
+                  gap: 12,
+                }}
+              >
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>Create or Assign a Class</div>
+                    <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 13 }}>
+                      Add a student email and class name. New names create classes automatically.
+                    </p>
+                  </div>
+                  <Btn
+                    variant="secondary"
+                    onClick={() => loadClasses()}
+                    style={{ minWidth: 150 }}
+                    disabled={classesLoading}
+                  >
+                    {classesLoading ? 'Refreshing…' : 'Refresh list'}
+                  </Btn>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: 12,
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    alignItems: 'flex-end',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontWeight: 600, fontSize: 13 }}>Student Email</label>
+                    <input
+                      type="email"
+                      list="sat-training-email-options"
+                      placeholder="student@example.com"
+                      value={assignForm.email}
+                      onChange={(e) => handleAssignInput("email", e.target.value)}
+                      style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontWeight: 600, fontSize: 13 }}>Class Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Cohort A"
+                      value={assignForm.className}
+                      onChange={(e) => handleAssignInput("className", e.target.value)}
+                      style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <Btn
+                      variant="primary"
+                      onClick={saveAssignment}
+                      disabled={savingAssign}
+                      style={{ width: '100%' }}
+                    >
+                      {savingAssign ? 'Saving...' : 'Save Assignment'}
+                    </Btn>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                  {loadingEmails ? 'Loading known student emails…' : 'Suggestions appear as you type.'}
+                </div>
+                <datalist id="sat-training-email-options">
+                  {knownEmails.map((email) => (
+                    <option key={email} value={email} />
+                  ))}
+                </datalist>
+              </div>
               {classes.length === 0 ? (
-                <p style={{ color: '#6b7280' }}>No classes found. Assign students to classes in the Admin dashboard first.</p>
+                <p style={{ color: '#6b7280' }}>No classes found yet. Use the form above to create your first class.</p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
                   {classes.map((c) => (

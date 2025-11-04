@@ -12,6 +12,7 @@ import Login from "./pages/Login.jsx";
 import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import AdminQuestionBank from "./pages/admin/AdminQuestionBank.jsx";
 import AdminManageUsers from "./pages/admin/AdminManageUsers.jsx";
+import AdminCertificates from "./pages/admin/AdminCertificates.jsx";
 import SATAdmin from "./pages/admin/SATDashboard.jsx";
 import SATResults from "./pages/sat/SATResults.jsx";
 import SATTrainingAdmin from "./pages/admin/SATTrainingDashboard.jsx";
@@ -23,6 +24,7 @@ import SATAssignment from "./pages/sat/SATAssignment.jsx";
 import SATTraining from "./pages/sat/SATTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
+import VerifyCertificate from "./pages/VerifyCertificate.jsx";
 import Btn from "./components/Btn.jsx";
 import { normalizeRoute, routeHref, isModifiedEvent } from "./lib/routes.js";
 // import { testSupabaseConnection } from "./lib/supabase.js";
@@ -334,6 +336,7 @@ export default function App() {
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
+  if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
@@ -402,6 +405,28 @@ export default function App() {
       );
     }
     return <AdminQuestionBank onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  }
+  if (route === "admin-certificates") {
+    if (!canViewResults) {
+      return (
+        <PageWrap>
+          <HeaderBar title="Not Authorized" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              Certificate management is limited to administrators.
+            </p>
+            <Btn
+              variant="primary"
+              to="home"
+              onClick={(e) => onNavigate("home", null, e)}
+            >
+              Back to Home
+            </Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    return <AdminCertificates onNavigate={onNavigate} />;
   }
   if (route === "admin-sat") return <SATAdmin onNavigate={onNavigate} />;
   if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
