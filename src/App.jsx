@@ -298,16 +298,17 @@ export default function App() {
     };
   }, [sessionTimeoutMs, setRoute, setResultsPayload]);
 
-  const currentRole = (() => {
+  const currentUser = (() => {
     try {
       const raw = localStorage.getItem("cg_current_user_v1");
-      if (!raw) return "";
-      const user = JSON.parse(raw);
-      return (user?.role || "").toLowerCase();
+      if (!raw) return {};
+      return JSON.parse(raw) || {};
     } catch {
-      return "";
+      return {};
     }
   })();
+  const currentRole = (currentUser.role || "").toLowerCase();
+  const currentAiAccess = Boolean(currentUser.ai_access);
 
   const canViewResults = useMemo(() => {
     try {
@@ -319,8 +320,17 @@ export default function App() {
   }, [route, currentRole]);
 
   const canAccessQuestionBank = canViewResults;
+  const canAccessAIEducator = useMemo(() => {
+    try {
+      if (localStorage.getItem("cg_admin_ok_v1") === "1") return true;
+    } catch {}
+    if (currentRole === "admin" || currentRole === "administrator" || currentRole === "staff") {
+      return true;
+    }
+    return currentRole === "educator" && currentAiAccess;
+  }, [currentRole, currentAiAccess]);
 
-  if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />;
   if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
@@ -328,7 +338,24 @@ export default function App() {
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  if (route === "ai-educator") return <AIEducator onNavigate={onNavigate} />;
+  if (route === "ai-educator") {
+    if (!canAccessAIEducator) {
+      return (
+        <PageWrap>
+          <HeaderBar title="Educator Access Required" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              AI Educator is limited to approved educators. Please contact an administrator if you need access.
+            </p>
+            <Btn variant="primary" to="home" onClick={(e) => onNavigate("home", null, e)}>
+              Back to Home
+            </Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    return <AIEducator onNavigate={onNavigate} />;
+  }
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;

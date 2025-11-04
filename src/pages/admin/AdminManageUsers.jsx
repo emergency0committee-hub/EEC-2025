@@ -17,6 +17,10 @@ const COPY = {
     searchPlaceholder: "Type name, email, or username",
     roleLabel: "Role",
     roleHint: "Users with the Admin role can access the question bank.",
+    aiAccessLabel: "AI Educator Access",
+    aiAccessHint: "Grant access to the AI Educator experience for approved educators only.",
+    aiAccessButton: "Save AI Access",
+    aiAccessSaved: "AI access updated.",
     passwordLabel: "New Password",
     passwordPlaceholder: "Enter new password",
     passwordButton: "Update Password",
@@ -31,28 +35,36 @@ const COPY = {
     adminOnly: "Administrators only.",
   },
   AR: {
-    title: "إدارة المستخدمين",
-    subtitle: "ابحث عن المستخدم، حدّد دوره أو أعد تعيين كلمة المرور.",
-    searchLabel: "اختيار المستخدم",
-    searchPlaceholder: "اكتب الاسم أو البريد أو اسم المستخدم",
-    roleLabel: "الدور",
-    roleHint: "المستخدمون بدور Admin يمكنهم الوصول إلى بنك الأسئلة.",
-    passwordLabel: "كلمة مرور جديدة",
-    passwordPlaceholder: "أدخل كلمة مرور جديدة",
-    passwordButton: "تحديث كلمة المرور",
-    roleButton: "حفظ الدور",
-    loading: "جارٍ تحميل المستخدمين...",
-    empty: "لا يوجد مستخدمون.",
-    error: "تعذّر تحميل المستخدمين.",
-    roleSaved: "تم تحديث الدور.",
-    passwordSaved: "تم تحديث كلمة المرور.",
-    refresh: "تحديث",
-    searchClear: "مسح الاختيار",
-    adminOnly: "مقتصر على المسؤولين.",
+    title: "????? ??????????",
+    subtitle: "???? ?? ????????? ???? ???? ?? ??? ????? ???? ??????.",
+    searchLabel: "?????? ????????",
+    searchPlaceholder: "???? ????? ?? ?????? ?? ??? ????????",
+    roleLabel: "?????",
+    roleHint: "?????????? ???? Admin ?????? ?????? ??? ??? ???????.",
+    aiAccessLabel: "?????? AI Educator",
+    aiAccessHint: "???? ????? ??????? ??????? ???????? ???? ???? ???????.",
+    aiAccessButton: "????? ?????? AI",
+    aiAccessSaved: "?? ????? ?????? AI.",
+    passwordLabel: "???? ???? ?????",
+    passwordPlaceholder: "???? ???? ???? ?????",
+    passwordButton: "????? ???? ??????",
+    roleButton: "??? ?????",
+    loading: "???? ????? ??????????...",
+    empty: "?? ???? ????????.",
+    error: "????? ????? ??????????.",
+    roleSaved: "?? ????? ?????.",
+    passwordSaved: "?? ????? ???? ??????.",
+    refresh: "?????",
+    searchClear: "??? ????????",
+    adminOnly: "????? ??? ?????????.",
   },
   FR: {
     title: "Gérer les utilisateurs",
     subtitle: "Recherchez un utilisateur, ajustez son rôle ou réinitialisez son mot de passe.",
+    aiAccessLabel: "Acc?s AI Educator",
+    aiAccessHint: "Autorisez cet enseignant ? utiliser l'espace AI Educator.",
+    aiAccessButton: "Enregistrer l'acc?s AI",
+    aiAccessSaved: "Acc?s AI mis ? jour.",
     searchLabel: "Sélectionner un utilisateur",
     searchPlaceholder: "Tapez nom, e-mail ou identifiant",
     roleLabel: "Rôle",
@@ -73,18 +85,18 @@ const COPY = {
 };
 
 const ROLE_OPTIONS = [
-  { value: "", label: { EN: "—", AR: "—", FR: "—" } },
-  { value: "admin", label: { EN: "Admin", AR: "مشرف", FR: "Admin" } },
-  { value: "educator", label: { EN: "Educator", AR: "معلم", FR: "Enseignant" } },
-  { value: "staff", label: { EN: "Staff", AR: "طاقم", FR: "Personnel" } },
-  { value: "student", label: { EN: "Student", AR: "طالب", FR: "Étudiant" } },
-  { value: "user", label: { EN: "User", AR: "مستخدم", FR: "Utilisateur" } },
+  { value: "", label: { EN: "", AR: "", FR: "" } },
+  { value: "admin", label: { EN: "Admin", AR: "????", FR: "Admin" } },
+  { value: "educator", label: { EN: "Educator", AR: "????", FR: "Enseignant" } },
+  { value: "staff", label: { EN: "Staff", AR: "????", FR: "Personnel" } },
+  { value: "student", label: { EN: "Student", AR: "????", FR: "Étudiant" } },
+  { value: "user", label: { EN: "User", AR: "??????", FR: "Utilisateur" } },
 ];
 
 const formatUserLabel = (user) => {
   if (!user) return "";
   const parts = [
-    user.name || user.username || user.email || "—",
+    user.name || user.username || user.email || "",
     user.email ? `· ${user.email}` : null,
     user.username ? `(@${user.username})` : null,
   ].filter(Boolean);
@@ -107,8 +119,10 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [roleDraft, setRoleDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
+  const [aiAccessDraft, setAiAccessDraft] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [savingAiAccess, setSavingAiAccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   const loadUsers = async (focus = null) => {
@@ -186,6 +200,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
     if (selectedUser) {
       setRoleDraft(selectedUser.role || "");
       setPasswordDraft("");
+      setAiAccessDraft(Boolean(selectedUser.ai_access));
       setSuccessMessage("");
     }
   }, [selectedUser]);
@@ -196,6 +211,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       setSelectedUserId(match.id);
       const matchUser = users.find((u) => u.id === match.id);
       setRoleDraft(matchUser?.role || "");
+      setAiAccessDraft(Boolean(matchUser?.ai_access));
     }
   };
 
@@ -241,6 +257,46 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       alert(err?.message || copy.error);
     } finally {
       setSavingRole(false);
+    }
+  };
+
+  const doSaveAiAccess = async () => {
+    if (!selectedUser) return;
+    const nextValue = Boolean(aiAccessDraft);
+    if (Boolean(selectedUser.ai_access) === nextValue) return;
+    const table = import.meta.env.VITE_USERS_TABLE || "profiles";
+    setSavingAiAccess(true);
+    setSuccessMessage("");
+    try {
+      const { error } = await supabase
+        .from(table)
+        .update({ ai_access: nextValue })
+        .eq("id", selectedUser.id);
+      if (error) throw error;
+
+      await loadUsers({ id: selectedUser.id, label: formatUserLabel({ ...selectedUser, ai_access: nextValue }) });
+
+      try {
+        const raw = localStorage.getItem("cg_current_user_v1");
+        const current = raw ? JSON.parse(raw) : null;
+        const isCurrentUser =
+          current &&
+          (current.id === selectedUser.id ||
+            (!current.id && current.email && current.email === (selectedUser.email || current.email)));
+        if (isCurrentUser) {
+          localStorage.setItem(
+            "cg_current_user_v1",
+            JSON.stringify({ ...current, ai_access: nextValue })
+          );
+        }
+      } catch {}
+
+      setSuccessMessage(copy.aiAccessSaved || copy.roleSaved);
+    } catch (err) {
+      console.error("manage-users ai access", err);
+      alert(err?.message || copy.error);
+    } finally {
+      setSavingAiAccess(false);
     }
   };
 
@@ -355,6 +411,28 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
             </Btn>
 
             <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>{copy.aiAccessLabel}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={aiAccessDraft}
+                  onChange={(e) => {
+                    setAiAccessDraft(e.target.checked);
+                    setSuccessMessage("");
+                  }}
+                />
+                <span style={{ color: "#374151" }}>{copy.aiAccessHint}</span>
+              </div>
+            </label>
+            <Btn
+              variant="secondary"
+              disabled={savingAiAccess || Boolean(selectedUser.ai_access) === Boolean(aiAccessDraft)}
+              onClick={doSaveAiAccess}
+            >
+              {savingAiAccess ? "Saving..." : (copy.aiAccessButton || "Save AI Access")}
+            </Btn>
+
+            <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 600 }}>{copy.passwordLabel}</span>
               <input
                 type="text"
@@ -384,3 +462,4 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
     </PageWrap>
   );
 }
+
