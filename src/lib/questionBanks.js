@@ -76,15 +76,15 @@ export const BANKS = {
 export const getBankConfig = (id) => BANKS[id] || BANKS.math;
 
 export const createDefaultForm = (bank = BANKS.math) => ({
-  questionType: "mcq",
+  questionType: "",
   question: "",
   answerA: "",
   answerB: "",
   answerC: "",
   answerD: "",
   fillAnswer: "",
-  correctAnswer: "A",
-  subject: bank.subjectLocked ? bank.defaultSubject : bank.defaultSubject || SUBJECT_OPTIONS[0].value,
+  correctAnswer: "",
+  subject: bank.subjectLocked ? bank.defaultSubject : "",
   unit: bank.supportsUnitLesson ? "" : "",
   lesson: bank.supportsUnitLesson ? "" : "",
   hardness: "",

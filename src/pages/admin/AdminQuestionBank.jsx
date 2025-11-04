@@ -30,6 +30,30 @@ const DEFAULT_TABLE_COLS = 2;
 const MAX_TABLE_ROWS = 10;
 const MAX_TABLE_COLS = 6;
 
+const BANK_TAB_META = {
+  math: { accent: "#2563eb" },
+  english: { accent: "#ea580c" },
+  tests: { accent: "#16a34a" },
+};
+
+const BANK_TAB_DESCRIPTIONS = {
+  math: {
+    EN: "SAT-style math questions organized by units and lessons.",
+    AR: "أسئلة رياضيات بأسلوب SAT ضمن وحدات ودروس واضحة.",
+    FR: "Questions de mathématiques type SAT classées par unités.",
+  },
+  english: {
+    EN: "Reading & writing prompts with evidence-based answers.",
+    AR: "مقاطع قراءة وكتابة مع إجابات قائمة على الأدلة.",
+    FR: "Sujets de lecture/écriture avec réponses fondées sur des preuves.",
+  },
+  tests: {
+    EN: "Full mixed-subject exams for diagnostics and practice.",
+    AR: "اختبارات شاملة لمواد متعددة للتشخيص والمراجعة.",
+    FR: "Examens mixtes pour un diagnostic complet.",
+  },
+};
+
 const COPY = {
   EN: {
     title: "Question Bank",
@@ -120,6 +144,20 @@ const COPY = {
     tableBuilderMergeRight: "Merge right",
     tableBuilderMergeDown: "Merge down",
     tableBuilderSplitCell: "Split cell",
+    sectionSetup: "Question Setup",
+    sectionSetupDesc: "Select question type, subject, and metadata before writing the prompt.",
+    sectionPrompt: "Prompt & Media",
+    sectionPromptDesc: "Write the question stem and attach optional notes.",
+    sectionAnswers: "Answer Choices",
+    sectionAnswersDesc: "Provide answer options and mark the correct one.",
+    sectionAssets: "Tools & Attachments",
+    sectionAssetsDesc: "Use the table builder or image uploader as needed.",
+    sectionFiltersDesc: "Filter the list or reload the latest questions.",
+    questionTypeRequired: "Please select a question type.",
+    subjectRequired: "Please select a subject.",
+    correctAnswerRequired: "Please select the correct answer.",
+    unitRequired: "Please select a unit.",
+    lessonRequired: "Please select a lesson.",
   },
   AR: {
     title: "بنك الأسئلة",
@@ -210,6 +248,20 @@ const COPY = {
     tableBuilderMergeRight: "دمج إلى اليمين",
     tableBuilderMergeDown: "دمج إلى الأسفل",
     tableBuilderSplitCell: "فصل الخلية",
+    sectionSetup: "إعداد السؤال",
+    sectionSetupDesc: "اختر نوع السؤال والمادة والبيانات قبل كتابة المتن.",
+    sectionPrompt: "النص والوسائط",
+    sectionPromptDesc: "اكتب نص السؤال وأضف الملاحظات الاختيارية.",
+    sectionAnswers: "خيارات الإجابة",
+    sectionAnswersDesc: "أدخل الخيارات وحدد الإجابة الصحيحة.",
+    sectionAssets: "الأدوات والمرفقات",
+    sectionAssetsDesc: "استخدم منشئ الجداول أو رفع الصور عند الحاجة.",
+    sectionFiltersDesc: "رشّح قائمة النتائج أو أعد تحميل أحدث الأسئلة.",
+    questionTypeRequired: "يرجى اختيار نوع السؤال.",
+    subjectRequired: "يرجى اختيار المادة.",
+    correctAnswerRequired: "يرجى تحديد الإجابة الصحيحة.",
+    unitRequired: "يرجى اختيار الوحدة.",
+    lessonRequired: "يرجى اختيار الدرس.",
   },
   FR: {
     title: "Banque de questions",
@@ -300,6 +352,20 @@ const COPY = {
     tableBuilderMergeRight: "Fusionner vers la droite",
     tableBuilderMergeDown: "Fusionner vers le bas",
     tableBuilderSplitCell: "Séparer la cellule",
+    sectionSetup: "Configuration",
+    sectionSetupDesc: "Choisissez le type de question, la matière et les métadonnées.",
+    sectionPrompt: "Énoncé et médias",
+    sectionPromptDesc: "Rédigez l'énoncé et ajoutez des notes facultatives.",
+    sectionAnswers: "Choix de réponses",
+    sectionAnswersDesc: "Saisissez les options et indiquez la bonne réponse.",
+    sectionAssets: "Outils et pièces jointes",
+    sectionAssetsDesc: "Utilisez le générateur de tableaux ou l'import d'images.",
+    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions récentes.",
+    questionTypeRequired: "Veuillez sélectionner un type de question.",
+    subjectRequired: "Veuillez choisir la matière.",
+    correctAnswerRequired: "Veuillez indiquer la réponse correcte.",
+    unitRequired: "Veuillez choisir l'unité.",
+    lessonRequired: "Veuillez choisir la leçon.",
   },
 };
 
@@ -324,7 +390,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
 
   const [form, setForm] = useState(() => createDefaultForm(bank));
   const [questions, setQuestions] = useState([]);
-  const [filters, setFilters] = useState({ type: "all" });
+  const [filters, setFilters] = useState({ type: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -379,7 +445,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setImportIndex(0);
     setImportError("");
     setSuccessMessage("");
-    setFilters({ type: "all" });
+    setFilters({ type: "" });
     setQuestions([]);
     setLocalImages(loadLocalImages());
     setShowImageTools(false);
@@ -569,7 +635,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
 
   const filteredQuestions = useMemo(() => {
     return questions.filter((q) => {
-      const matchType = filters.type === "all" ? true : q.question_type === filters.type;
+      const matchType = !filters.type || filters.type === "all" ? true : q.question_type === filters.type;
       return matchType;
     });
   }, [questions, filters]);
@@ -790,26 +856,29 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     }
   };
 
-  const validate = () => {
+const validate = () => {
     const trimmedQuestion = form.question.trim();
+    if (!form.questionType) return copy.questionTypeRequired || COPY.EN.questionTypeRequired;
     if (!trimmedQuestion) return "Question is required.";
-    if (!form.subject) return "Subject is required.";
+    if (!bank.subjectLocked && !form.subject) return copy.subjectRequired || COPY.EN.subjectRequired;
+    const subjectForValidation = bank.subjectLocked ? (bank.defaultSubject || SUBJECT_OPTIONS[0].value) : (form.subject || "");
 
-    if (bank.supportsUnitLesson && form.subject === "math") {
+    if (bank.supportsUnitLesson && subjectForValidation === "math") {
       const unitValue = form.unit ?? "";
       const unitIsBlank = typeof unitValue === "string" ? unitValue.trim() === "" : !unitValue;
-      if (unitIsBlank) return "Unit is required.";
+      if (unitIsBlank) return copy.unitRequired || COPY.EN.unitRequired;
       const lessonValue = form.lesson ?? "";
       const lessonIsBlank = typeof lessonValue === "string" ? lessonValue.trim() === "" : !lessonValue;
-      if (lessonIsBlank) return "Lesson is required.";
+      if (lessonIsBlank) return copy.lessonRequired || COPY.EN.lessonRequired;
     }
 
     if (form.questionType === "mcq") {
       if (!form.answerA.trim() || !form.answerB.trim() || !form.answerC.trim() || !form.answerD.trim()) {
         return "All four answers are required for MCQ.";
       }
+      if (!form.correctAnswer) return copy.correctAnswerRequired || COPY.EN.correctAnswerRequired;
     } else {
-      if (!form.fillAnswer.trim()) return "Correct answer is required.";
+      if (!form.fillAnswer.trim()) return copy.correctAnswerRequired || COPY.EN.correctAnswerRequired;
     }
     return "";
   };
@@ -828,7 +897,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       answerC: row.answer_c || "",
       answerD: row.answer_d || "",
       fillAnswer: type === "fill" ? row.correct_answer || "" : "",
-      correctAnswer: type === "mcq" ? row.correct_answer || "A" : "A",
+      correctAnswer: type === "mcq" ? row.correct_answer || "" : "",
       subject: subjectValue,
       unit: includeUnitLesson ? row.unit || "" : "",
       lesson: includeUnitLesson ? row.lesson || "" : "",
@@ -872,7 +941,8 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       (isImportingActive && currentImportRow?.assignment_type ? currentImportRow.assignment_type : null) ||
       editingRow?.assignment_type ||
       "quiz";
-    const subjectValue = bank.subjectLocked ? bank.defaultSubject : form.subject || bank.defaultSubject;
+    const fallbackSubject = bank.defaultSubject || SUBJECT_OPTIONS[0].value;
+    const subjectValue = bank.subjectLocked ? fallbackSubject : (form.subject || "");
 
     const payload = {
       question_type: form.questionType,
@@ -975,33 +1045,55 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
         }
       />
 
-      <div style={{ marginTop: 24, display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {Object.values(BANKS).map((cfg) => (
-          <button
-            key={cfg.id}
-            type="button"
-            onClick={() => setActiveBank(cfg.id)}
-            style={bankTabStyle(cfg.id === bank.id)}
-          >
-            {copy[cfg.labelKey]}
-          </button>
-        ))}
+      <div
+        style={{
+          marginTop: 24,
+          marginBottom: 24,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          gap: 16,
+        }}
+      >
+        {Object.values(BANKS).map((cfg) => {
+          const active = cfg.id === bank.id;
+          const meta = BANK_TAB_META[cfg.id] || BANK_TAB_META.math;
+          const desc = bankTabDescription(cfg.id, lang);
+          return (
+            <button
+              key={cfg.id}
+              type="button"
+              onClick={() => setActiveBank(cfg.id)}
+              style={bankTabStyle(active, meta.accent)}
+            >
+              <span style={bankTabIconWrapperStyle(active, meta.accent)}>{getBankTabIcon(cfg.id)}</span>
+              <span style={{ display: "grid", gap: 4, textAlign: "left" }}>
+                <span style={{ fontWeight: 700, fontSize: 15 }}>{copy[cfg.labelKey]}</span>
+                <span style={bankTabDescriptionStyle(active)}>{desc}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <Card>
         <p style={{ marginTop: 0, color: "#6b7280" }}>{copy.subtitle}</p>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <Btn variant="secondary" onClick={() => importInputRef.current?.click()}>
-            {copy.importLabel}
+        <div style={actionBarStyle}>
+          <div style={actionBarInfoStyle}>
+            <Btn variant="secondary" onClick={() => importInputRef.current?.click()}>
+              {copy.importLabel}
+            </Btn>
+            <span style={actionBarHintStyle}>{copy.importHint}</span>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".csv"
+              style={{ display: "none" }}
+              onChange={handleImportFile}
+            />
+          </div>
+          <Btn variant="secondary" onClick={refreshQuestions}>
+            {copy.refresh}
           </Btn>
-          <span style={{ color: "#6b7280", fontSize: 13 }}>{copy.importHint}</span>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".csv"
-            style={{ display: "none" }}
-            onChange={handleImportFile}
-          />
         </div>
         {importError && (
           <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#fee2e2", border: "1px solid #fecaca", color: "#b91c1c" }}>
@@ -1019,46 +1111,49 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
               {copy.editingNotice}
             </div>
           )}
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontWeight: 600 }}>{copy.questionType}</label>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              {QUESTION_TYPES.map((item) => (
-                <label key={item.value} style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                  <input
-                    type="radio"
-                    name="questionType"
-                    value={item.value}
-                    checked={form.questionType === item.value}
-                    onChange={(e) => handleChange("questionType", e.target.value)}
-                  />
-                  {copy[item.labelKey]}
-                </label>
-              ))}
+        <FormSection title={copy.sectionSetup || COPY.EN.sectionSetup} description={copy.sectionSetupDesc || COPY.EN.sectionSetupDesc}>
+          <div style={twoColumnGridStyle}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <label style={{ fontWeight: 600 }}>{copy.questionType}</label>
+              <select
+                value={form.questionType}
+                onChange={(e) => handleChange("questionType", e.target.value)}
+                style={selectStyle}
+                required
+              >
+                <option value=""> </option>
+                {QUESTION_TYPES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {copy[item.labelKey]}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontWeight: 600 }}>{copy.subject}</label>
-            {bank.subjectLocked ? (
-              <div style={lockedFieldStyle}>{subjectLabel(form.subject, lang)}</div>
-            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                <label style={{ fontWeight: 600 }}>{copy.subject}</label>
+                {bank.subjectLocked ? (
+                  <div style={lockedFieldStyle}>{subjectLabel(form.subject, lang)}</div>
+                ) : (
               <select
                 value={form.subject}
                 onChange={(e) => handleChange("subject", e.target.value)}
                 style={selectStyle}
+                required
               >
+                <option value=""> </option>
                 {SUBJECT_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label[lang] || opt.label.EN}
                   </option>
                 ))}
-              </select>
-            )}
-          </div>
+                  </select>
+                )}
+              </div>
+            </div>
+            <GridInputs copy={copy} form={form} handleChange={handleChange} lang={lang} bank={bank} />
+          </FormSection>
 
-          <GridInputs copy={copy} form={form} handleChange={handleChange} lang={lang} bank={bank} />
-
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontWeight: 600 }}>{copy.question}</label>
+          <FormSection title={copy.sectionPrompt || COPY.EN.sectionPrompt} description={copy.sectionPromptDesc || COPY.EN.sectionPromptDesc}>
             <textarea
               value={form.question}
               onChange={(e) => handleChange("question", e.target.value)}
@@ -1066,157 +1161,162 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
               style={textareaStyle}
               required
             />
-          </div>
+          </FormSection>
 
-          {form.questionType === "mcq" ? (
-            <div style={{ display: "grid", gap: 12 }}>
-              <div style={{ fontWeight: 600 }}>{copy.answers}</div>
-              {["A", "B", "C", "D"].map((label) => (
-                <div key={label} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ width: 20, fontWeight: 600 }}>{label}</span>
-                  <input
-                    type="text"
-                    value={form[`answer${label}`]}
-                    onChange={(e) => handleChange(`answer${label}`, e.target.value)}
-                    style={inputStyle}
+          <FormSection title={copy.sectionAnswers || COPY.EN.sectionAnswers} description={copy.sectionAnswersDesc || COPY.EN.sectionAnswersDesc}>
+            {form.questionType === "mcq" ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                {["A", "B", "C", "D"].map((label) => (
+                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ width: 20, fontWeight: 600 }}>{label}</span>
+                    <input
+                      type="text"
+                      value={form[`answer${label}`]}
+                      onChange={(e) => handleChange(`answer${label}`, e.target.value)}
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+                ))}
+                <div style={{ display: "grid", gap: 8 }}>
+                  <label style={{ fontWeight: 600 }}>{copy.correctAnswer}</label>
+                  <select
+                    value={form.correctAnswer}
+                    onChange={(e) => handleChange("correctAnswer", e.target.value)}
+                    style={selectStyle}
                     required
-                  />
-                </div>
-              ))}
-              <div style={{ display: "grid", gap: 8 }}>
-                <label style={{ fontWeight: 600 }}>{copy.correctAnswer}</label>
-                <select
-                  value={form.correctAnswer}
-                  onChange={(e) => handleChange("correctAnswer", e.target.value)}
-                  style={selectStyle}
-                >
-                  {["A", "B", "C", "D"].map((label) => (
-                    <option key={label} value={label}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 600 }}>{copy.fillAnswerLabel}</label>
-              <input
-                type="text"
-                value={form.fillAnswer}
-                onChange={(e) => handleChange("fillAnswer", e.target.value)}
-                style={inputStyle}
-                required
-              />
-            </div>
-          )}
-
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {!showTableBuilder && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTableBuilder(true);
-                  setSuccessMessage("");
-                }}
-                style={secondaryButtonStyle}
-              >
-                {copy.addTable}
-              </button>
-            )}
-            {!showImageTools && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowImageTools(true);
-                  setSuccessMessage("");
-                }}
-                style={secondaryButtonStyle}
-              >
-                {copy.addImage}
-              </button>
-            )}
-          </div>
-
-          {showTableBuilder && (
-            <TableBuilderSection
-              copy={copy}
-              builder={tableBuilder}
-              targets={tableTargets}
-              onDimensionChange={handleTableDimensionChange}
-              onCellChange={handleTableCellChange}
-              onSelectCell={handleSelectTableCell}
-              onMergeRight={handleMergeRight}
-              onMergeDown={handleMergeDown}
-              onSplitCell={handleSplitCell}
-              onToggleHeader={handleToggleTableHeader}
-              onTargetChange={handleTableTargetChange}
-              onClear={handleClearTableCells}
-              onInsert={handleInsertTable}
-              activeCell={tableBuilder.activeCell}
-              previewHtml={tablePreviewHtml}
-              canInsert={canInsertTable}
-              onClose={() => setShowTableBuilder(false)}
-            />
-          )}
-
-          {showImageTools ? (
-            <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <span style={{ fontWeight: 600 }}>
-                  {copy.imageLabel} <span style={{ color: "#9ca3af" }}>({copy.optional})</span>
-                </span>
-                <button type="button" style={inlineLinkButtonStyle} onClick={() => setShowImageTools(false)}>
-                  {copy.hideImage}
-                </button>
-              </div>
-              <input
-                type="url"
-                value={form.imageUrl}
-                onChange={(e) => handleChange("imageUrl", e.target.value)}
-                placeholder="https://..."
-                style={inputStyle}
-              />
-              <div
-                onDragOver={handleImageDragOver}
-                onDragLeave={handleImageDragLeave}
-                onDrop={handleImageDrop}
-                style={{
-                  border: `2px dashed ${isImageDragOver ? "#2563eb" : "#d1d5db"}`,
-                  borderRadius: 12,
-                  padding: 16,
-                  background: isImageDragOver ? "#eff6ff" : "#f9fafb",
-                  transition: "background 0.2s ease, border-color 0.2s ease",
-                  display: "grid",
-                  gap: 10,
-                }}
-              >
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", justifySelf: "flex-start" }}>
-                  <input type="file" accept="image/png" style={{ display: "none" }} onChange={handleFileUpload} />
-                  <span style={{ padding: "6px 12px", borderRadius: 6, background: "#e0f2fe", border: "1px solid #bfdbfe", color: "#1d4ed8", fontWeight: 600 }}>
-                    {uploading ? copy.imageUploading : copy.imageUpload}
-                  </span>
-                </label>
-                <small style={{ color: "#6b7280" }}>{copy.uploadTip}</small>
-              </div>
-              {form.imageUrl && resolveImageUrl(form.imageUrl) && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8 }}>
-                  <img
-                    src={resolveImageUrl(form.imageUrl)}
-                    alt={copy.imageAlt}
-                    style={{ maxWidth: 200, borderRadius: 12, border: "1px solid #d1d5db" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #ef4444", background: "#fee2e2", color: "#b91c1c", fontWeight: 600, cursor: "pointer" }}
                   >
-                    {copy.removeImage || "Remove Image"}
-                  </button>
+                    <option value=""> </option>
+                    {["A", "B", "C", "D"].map((label) => (
+                      <option key={label} value={label}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                <label style={{ fontWeight: 600 }}>{copy.fillAnswerLabel}</label>
+                <input
+                  type="text"
+                  value={form.fillAnswer}
+                  onChange={(e) => handleChange("fillAnswer", e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              </div>
+            )}
+          </FormSection>
+
+          <FormSection title={copy.sectionAssets || COPY.EN.sectionAssets} description={copy.sectionAssetsDesc || COPY.EN.sectionAssetsDesc}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {!showTableBuilder && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTableBuilder(true);
+                    setSuccessMessage("");
+                  }}
+                  style={secondaryButtonStyle}
+                >
+                  {copy.addTable}
+                </button>
+              )}
+              {!showImageTools && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowImageTools(true);
+                    setSuccessMessage("");
+                  }}
+                  style={secondaryButtonStyle}
+                >
+                  {copy.addImage}
+                </button>
               )}
             </div>
-          ) : null}
+
+            {showTableBuilder && (
+              <TableBuilderSection
+                copy={copy}
+                builder={tableBuilder}
+                targets={tableTargets}
+                onDimensionChange={handleTableDimensionChange}
+                onCellChange={handleTableCellChange}
+                onSelectCell={handleSelectTableCell}
+                onMergeRight={handleMergeRight}
+                onMergeDown={handleMergeDown}
+                onSplitCell={handleSplitCell}
+                onToggleHeader={handleToggleTableHeader}
+                onTargetChange={handleTableTargetChange}
+                onClear={handleClearTableCells}
+                onInsert={handleInsertTable}
+                activeCell={tableBuilder.activeCell}
+                previewHtml={tablePreviewHtml}
+                canInsert={canInsertTable}
+                onClose={() => setShowTableBuilder(false)}
+              />
+            )}
+
+            {showImageTools ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600 }}>
+                    {copy.imageLabel} <span style={{ color: "#9ca3af" }}>({copy.optional})</span>
+                  </span>
+                  <button type="button" style={inlineLinkButtonStyle} onClick={() => setShowImageTools(false)}>
+                    {copy.hideImage}
+                  </button>
+                </div>
+                <input
+                  type="url"
+                  value={form.imageUrl}
+                  onChange={(e) => handleChange("imageUrl", e.target.value)}
+                  placeholder="https://..."
+                  style={inputStyle}
+                />
+                <div
+                  onDragOver={handleImageDragOver}
+                  onDragLeave={handleImageDragLeave}
+                  onDrop={handleImageDrop}
+                  style={{
+                    border: `2px dashed ${isImageDragOver ? "#2563eb" : "#d1d5db"}`,
+                    borderRadius: 12,
+                    padding: 16,
+                    background: isImageDragOver ? "#eff6ff" : "#f9fafb",
+                    transition: "background 0.2s ease, border-color 0.2s ease",
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", justifySelf: "flex-start" }}>
+                    <input type="file" accept="image/png" style={{ display: "none" }} onChange={handleFileUpload} />
+                    <span style={{ padding: "6px 12px", borderRadius: 6, background: "#e0f2fe", border: "1px solid #bfdbfe", color: "#1d4ed8", fontWeight: 600 }}>
+                      {uploading ? copy.imageUploading : copy.imageUpload}
+                    </span>
+                  </label>
+                  <small style={{ color: "#6b7280" }}>{copy.uploadTip}</small>
+                </div>
+                {form.imageUrl && resolveImageUrl(form.imageUrl) && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8 }}>
+                    <img
+                      src={resolveImageUrl(form.imageUrl)}
+                      alt={copy.imageAlt}
+                      style={{ maxWidth: 200, borderRadius: 12, border: "1px solid #d1d5db" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #ef4444", background: "#fee2e2", color: "#b91c1c", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      {copy.removeImage || "Remove Image"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </FormSection>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button
@@ -1288,28 +1388,27 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       )}
 
       <Card style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <strong>{copy.filters}</strong>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span>{copy.filterQuestionType}</span>
-              <select
-                value={filters.type}
-                onChange={(e) => setFilters((prev) => ({ ...prev, type: e.target.value }))}
-                style={selectStyle}
-              >
-                <option value="all">{copy.filterAll}</option>
-                {QUESTION_TYPES.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {copy[opt.labelKey]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Btn variant="secondary" onClick={refreshQuestions}>
-              {copy.refresh}
-            </Btn>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div>
+            <strong>{copy.filters}</strong>
+            <p style={filterDescriptionStyle}>{copy.sectionFiltersDesc || COPY.EN.sectionFiltersDesc}</p>
           </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span>{copy.filterQuestionType}</span>
+            <select
+          value={filters.type}
+          onChange={(e) => setFilters((prev) => ({ ...prev, type: e.target.value }))}
+          style={selectStyle}
+        >
+          <option value=""> </option>
+          <option value="all">{copy.filterAll}</option>
+              {QUESTION_TYPES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {copy[opt.labelKey]}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {loading ? (
@@ -1769,46 +1868,52 @@ function GridInputs({ copy, form, handleChange, lang, bank }) {
   return (
     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
       {showMathSelectors && (
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 600 }}>{copy.unit}</span>
-          <select
-            value={form.unit}
-            onChange={(e) => handleChange("unit", e.target.value)}
-            style={selectStyle}
-          >
-            {MATH_UNIT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label[lang] || opt.label.EN}
-              </option>
-            ))}
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>{copy.unit}</span>
+        <select
+          value={form.unit}
+          onChange={(e) => handleChange("unit", e.target.value)}
+          style={selectStyle}
+          required={showMathSelectors}
+        >
+          <option value=""> </option>
+          {MATH_UNIT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label[lang] || opt.label.EN}
+            </option>
+          ))}
           </select>
         </label>
       )}
 
       {showMathSelectors && (
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontWeight: 600 }}>{copy.lesson}</span>
-          <select
-            value={form.lesson}
-            onChange={(e) => handleChange("lesson", e.target.value)}
-            style={selectStyle}
-          >
-            {(MATH_LESSON_OPTIONS[form.unit] || []).map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label[lang] || opt.label.EN}
-              </option>
-            ))}
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>{copy.lesson}</span>
+        <select
+          value={form.lesson}
+          onChange={(e) => handleChange("lesson", e.target.value)}
+          style={selectStyle}
+          required={showMathSelectors}
+        >
+          <option value=""> </option>
+          {(MATH_LESSON_OPTIONS[form.unit] || []).map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label[lang] || opt.label.EN}
+            </option>
+          ))}
           </select>
         </label>
       )}
       <label style={{ display: "grid", gap: 6 }}>
-        <span style={{ fontWeight: 600 }}>{copy.hardness}</span>
+        <span style={{ fontWeight: 600 }}>
+          {copy.hardness} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({copy.optional})</span>
+        </span>
         <select
           value={form.hardness}
           onChange={(e) => handleChange("hardness", e.target.value)}
           style={selectStyle}
         >
-          <option value="">{copy.optional}</option>
+          <option value=""> </option>
           {HARDNESS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label[lang] || opt.label.EN}
@@ -1841,12 +1946,33 @@ function LabeledInput({ label, value, onChange, required = false }) {
   );
 }
 
+function FormSection({ title, description, children }) {
+  FormSection.propTypes = {
+    title: PropTypes.node.isRequired,
+    description: PropTypes.node,
+    children: PropTypes.node.isRequired,
+  };
+
+  return (
+    <section style={formSectionStyle}>
+      <div style={formSectionHeaderStyle}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 16, color: "#111827" }}>{title}</h3>
+          {description && <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: 13 }}>{description}</p>}
+        </div>
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>{children}</div>
+    </section>
+  );
+}
+
 const inputStyle = {
   width: "100%",
   padding: "10px 12px",
   borderRadius: 8,
   border: "1px solid #d1d5db",
   fontSize: 14,
+  boxSizing: "border-box",
 };
 
 const textareaStyle = {
@@ -1858,6 +1984,60 @@ const textareaStyle = {
 const selectStyle = {
   ...inputStyle,
   appearance: "none",
+};
+
+const formSectionStyle = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 20,
+  background: "#ffffff",
+  boxShadow: "0 6px 18px rgba(15, 23, 42, 0.05)",
+  display: "grid",
+  gap: 16,
+};
+
+const formSectionHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+};
+
+const twoColumnGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 16,
+};
+
+const actionBarStyle = {
+  marginTop: 16,
+  padding: "14px 18px",
+  borderRadius: 16,
+  border: "1px dashed #cbd5f5",
+  background: "#f8fafc",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+};
+
+const actionBarInfoStyle = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 12,
+};
+
+const actionBarHintStyle = {
+  color: "#6b7280",
+  fontSize: 13,
+};
+
+const filterDescriptionStyle = {
+  margin: "4px 0 0",
+  color: "#6b7280",
+  fontSize: 13,
 };
 
 const tableBuilderContainerStyle = {
@@ -2126,17 +2306,75 @@ const actionButtonStyle = {
   cursor: "pointer",
 };
 
-const bankTabStyle = (active) => ({
-  padding: "6px 14px",
-  borderRadius: 999,
-  border: active ? "1px solid #2563eb" : "1px solid #d1d5db",
-  background: active ? "#2563eb" : "#ffffff",
+const bankTabStyle = (active, accent = "#2563eb") => ({
+  padding: "14px 18px",
+  borderRadius: 18,
+  border: active ? `1px solid ${accent}` : "1px solid #e5e7eb",
+  background: active
+    ? `linear-gradient(120deg, ${accent}, ${accent}dd)`
+    : "#ffffff",
   color: active ? "#ffffff" : "#111827",
-  fontWeight: 600,
+  fontWeight: 500,
   cursor: "pointer",
-  boxShadow: active ? "0 6px 12px rgba(37, 99, 235, 0.25)" : "none",
-  transition: "background 0.2s ease, color 0.2s ease, border 0.2s ease",
+  boxShadow: active ? `0 12px 25px ${accent}33` : "0 4px 8px rgba(15,23,42,0.05)",
+  transition: "transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease",
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  minWidth: 260,
+  textAlign: "left",
+  lineHeight: 1.35,
 });
+
+const bankTabIconWrapperStyle = (active, accent) => ({
+  width: 42,
+  aspectRatio: "1 / 1",
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: active ? "rgba(255,255,255,0.18)" : `${accent}1a`,
+  color: active ? "#ffffff" : accent,
+});
+
+const bankTabDescriptionStyle = (active) => ({
+  fontSize: 12,
+  color: active ? "rgba(255,255,255,0.85)" : "#6b7280",
+});
+
+const bankTabDescription = (id, lang) => {
+  const entry = BANK_TAB_DESCRIPTIONS[id];
+  if (!entry) return "";
+  return entry[lang] || entry.EN || "";
+};
+
+function getBankTabIcon(id) {
+  switch (id) {
+    case "english":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          <path d="M4 19.5V5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v14" />
+          <path d="M4 19.5a2.5 2.5 0 0 1 2.5-2.5h11A2.5 2.5 0 0 1 20 19.5" />
+          <path d="M8 7h8M8 11h5" />
+        </svg>
+      );
+    case "tests":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <path d="M7 8h10M7 12h10M7 16h6" />
+        </svg>
+      );
+    case "math":
+    default:
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+          <path d="M8 4v16" />
+        </svg>
+      );
+  }
+}
 
 const modalOverlayStyle = {
   position: "fixed",

@@ -643,6 +643,7 @@ function SectionField({ field, value, onChange }) {
     color: "#111827",
     backgroundColor: "#fff",
     fontFamily: "inherit",
+    boxSizing: "border-box",
   };
 
   if (field.type === "textarea") {
@@ -745,6 +746,7 @@ function WeeklyScheduleTable({ rows, onChangeCell, onAddRow, onRemoveRow }) {
                         borderRadius: 8,
                         border: "1px solid #d1d5db",
                         fontSize: 13,
+                        boxSizing: "border-box",
                       }}
                     />
                   </td>
@@ -821,6 +823,7 @@ function LessonSequenceList({ entries, onChange, onAdd, onRemove }) {
               borderRadius: 10,
               border: "1px solid #d1d5db",
               fontSize: 14,
+              boxSizing: "border-box",
             }}
           />
           <div>
@@ -1012,6 +1015,7 @@ export default function AIEducator({ onNavigate }) {
               border: "1px solid #d1d5db",
               fontSize: 16,
               fontWeight: 500,
+              boxSizing: "border-box",
             }}
           />
         </label>
@@ -1064,6 +1068,7 @@ export default function AIEducator({ onNavigate }) {
               border: "1px solid #d1d5db",
               fontSize: 16,
               fontWeight: 500,
+              boxSizing: "border-box",
             }}
           />
         </label>
@@ -1134,6 +1139,7 @@ export default function AIEducator({ onNavigate }) {
                 border: "1px solid #d1d5db",
                 fontSize: 16,
                 fontWeight: 500,
+                boxSizing: "border-box",
               }}
             />
           </label>
