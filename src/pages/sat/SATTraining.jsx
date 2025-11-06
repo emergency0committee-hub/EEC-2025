@@ -1,5 +1,5 @@
 // src/pages/sat/SATTraining.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
@@ -32,6 +32,43 @@ const defaultDurationForKind = (kind) => {
 };
 
 const resolveBankConfig = (bankId) => BANKS[bankId] || BANKS.math;
+
+const normalizeKeyValue = (value) => String(value == null ? "" : value).trim().toLowerCase();
+const buildStatKey = (meta = {}) =>
+  [meta.subject, meta.unit, meta.lesson].map((part, idx) => normalizeKeyValue(part || (idx === 0 ? "unknown" : ""))).join("::");
+const parseStatKey = (key = "") => {
+  const [subject = "unknown", unit = "", lesson = ""] = String(key || "").split("::");
+  return { subject, unit, lesson };
+};
+
+const findSubjectLabel = (value) => {
+  const normalized = normalizeKeyValue(value);
+  const match = SUBJECT_OPTIONS.find((opt) => normalizeKeyValue(opt.value) === normalized);
+  return match?.label?.EN || (value ? String(value) : "—");
+};
+
+const findMathUnitLabel = (value) => {
+  if (!value) return "—";
+  const match = MATH_UNIT_OPTIONS.find((opt) => opt.value === value);
+  return match?.label?.EN || value;
+};
+
+const findMathLessonLabel = (unit, lesson) => {
+  if (!lesson) return "—";
+  const list = MATH_LESSON_OPTIONS[unit] || [];
+  const match = list.find((opt) => opt.value === lesson);
+  return match?.label?.EN || lesson;
+};
+
+const formatUnitLabel = (subject, unit) => {
+  if (!unit) return "—";
+  return normalizeKeyValue(subject) === "math" ? findMathUnitLabel(unit) : unit;
+};
+
+const formatLessonLabel = (subject, unit, lesson) => {
+  if (!lesson) return "—";
+  return normalizeKeyValue(subject) === "math" ? findMathLessonLabel(unit, lesson) : lesson;
+};
 
 const createDefaultAutoAssign = (bankId = "math") => {
   const bank = resolveBankConfig(bankId);
@@ -484,6 +521,10 @@ export default function SATTraining({ onNavigate }) {
   };
 
   const [resources, setResources] = useState([]);
+  const bankCatalogRef = useRef({});
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  const [catalogLoadingBank, setCatalogLoadingBank] = useState(null);
+  const [catalogError, setCatalogError] = useState(null);
   const usedQuestionIds = useMemo(() => {
     const ids = new Set();
     (resources || []).forEach((resource) => {
@@ -794,6 +835,139 @@ export default function SATTraining({ onNavigate }) {
   const subjectDisplayLabel =
     SUBJECT_OPTIONS.find((opt) => opt.value === activeSubject)?.label?.EN || activeSubject;
   const activeBankLabel = BANK_LABELS[activeBank.id] || "Question Bank";
+
+  const ensureBankCatalog = useCallback(
+    async (bankId) => {
+      const targetBank = bankId || autoAssign.bank || "math";
+      const config = resolveBankConfig(targetBank);
+      if (bankCatalogRef.current[config.id]) {
+        return bankCatalogRef.current[config.id];
+      }
+      setCatalogLoadingBank(config.id);
+      setCatalogError(null);
+      try {
+        const rows = [];
+        const chunkSize = 1000;
+        const maxRows = 20000; // guard to avoid runaway downloads if the bank explodes in size
+        for (let start = 0; start < maxRows; start += chunkSize) {
+          const end = start + chunkSize - 1;
+          const { data, error } = await supabase
+            .from(config.table)
+            .select("id,uuid,question_id,questionid,questionId,subject,unit,lesson")
+            .range(start, end);
+          if (error) throw error;
+          if (Array.isArray(data) && data.length > 0) {
+            rows.push(...data);
+            if (data.length < chunkSize) break;
+          } else {
+            break;
+          }
+        }
+        const metaById = {};
+        const totals = {};
+        rows.forEach((row) => {
+          const questionId =
+            row?.id ??
+            row?.uuid ??
+            row?.question_id ??
+            row?.questionid ??
+            row?.questionId ??
+            null;
+          if (questionId == null) return;
+          const idKey = String(questionId);
+          const meta = {
+            subject: row?.subject || config.defaultSubject || "math",
+            unit: row?.unit || "",
+            lesson: row?.lesson || "",
+          };
+          metaById[idKey] = meta;
+          const bucketKey = buildStatKey(meta);
+          totals[bucketKey] = (totals[bucketKey] || 0) + 1;
+        });
+        bankCatalogRef.current[config.id] = { metaById, totals };
+        setCatalogVersion((v) => v + 1);
+        setCatalogError(null);
+        return bankCatalogRef.current[config.id];
+      } catch (error) {
+        console.warn("question catalog load", error);
+        setCatalogError(error?.message || "Failed to load question counts.");
+        return null;
+      } finally {
+        setCatalogLoadingBank((current) => (current === config.id ? null : current));
+      }
+    },
+    [autoAssign.bank],
+  );
+
+  useEffect(() => {
+    if (!isAdmin || !selectedClass) return;
+    ensureBankCatalog(activeBank.id).catch(() => {});
+  }, [activeBank.id, ensureBankCatalog, isAdmin, selectedClass]);
+
+  const refreshQuestionStats = useCallback(() => {
+    const key = activeBank.id;
+    if (bankCatalogRef.current[key]) {
+      delete bankCatalogRef.current[key];
+      setCatalogVersion((v) => v + 1);
+    }
+    ensureBankCatalog(key).catch(() => {});
+  }, [activeBank.id, ensureBankCatalog]);
+
+  const questionStats = useMemo(() => {
+    const catalog = bankCatalogRef.current[activeBank.id];
+    if (!catalog) return [];
+    const totals = catalog.totals || {};
+    const usedCounts = {};
+    usedQuestionIds.forEach((value) => {
+      if (value == null) return;
+      const idKey = String(value);
+      const meta = catalog.metaById?.[idKey] || { subject: activeSubject || "unknown", unit: "", lesson: "" };
+      const bucketKey = buildStatKey(meta);
+      usedCounts[bucketKey] = (usedCounts[bucketKey] || 0) + 1;
+    });
+    const normalizedSubject = normalizeKeyValue(activeSubject);
+    const combinedKeys = Object.keys({ ...totals, ...usedCounts }).filter((key) => {
+      if (!normalizedSubject) return true;
+      const { subject } = parseStatKey(key);
+      return normalizeKeyValue(subject) === normalizedSubject;
+    });
+    const rows = combinedKeys.map((key) => {
+      const { subject, unit, lesson } = parseStatKey(key);
+      const total = totals[key] || 0;
+      const used = usedCounts[key] || 0;
+      return {
+        key,
+        subject,
+        unit,
+        lesson,
+        total,
+        used,
+        remaining: Math.max(0, total - used),
+      };
+    });
+    rows.sort((a, b) => {
+      if (a.subject !== b.subject) return a.subject.localeCompare(b.subject);
+      if (a.unit !== b.unit) return a.unit.localeCompare(b.unit);
+      return a.lesson.localeCompare(b.lesson);
+    });
+    return rows;
+  }, [activeBank.id, activeSubject, catalogVersion, usedQuestionIds]);
+
+  const highlightKey = useMemo(() => {
+    if (!activeSubject) return null;
+    const meta = {
+      subject: activeSubject,
+      unit: showMathSelectors ? autoAssign.unit : "",
+      lesson: showMathSelectors ? autoAssign.lesson : "",
+    };
+    return buildStatKey(meta);
+  }, [activeSubject, autoAssign.lesson, autoAssign.unit, showMathSelectors]);
+
+  const highlightStats = highlightKey ? questionStats.find((row) => row.key === highlightKey) : null;
+  const catalogBusy = catalogLoadingBank === activeBank.id;
+  const catalogLoaded = Boolean(bankCatalogRef.current[activeBank.id]);
+  const usedQuestionCount = usedQuestionIds.size;
+  const selectedClassLabel = selectedClass || "this class";
   useEffect(() => {
     if (!isAdmin || !selectedClass) return;
     (async () => {
@@ -1381,7 +1555,96 @@ export default function SATTraining({ onNavigate }) {
                             We will pick random questions from the {activeBankLabel.toLowerCase()} based on your filters.
                           </span>
                         </div>
+                    </div>
+                  </div>
+
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>Question Availability</div>
+                          <div style={{ color: '#6b7280', fontSize: 12 }}>
+                            Tracking unique questions already assigned in {selectedClassLabel}.
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>{usedQuestionCount} used</span>
+                          <Btn variant="secondary" disabled={catalogBusy} onClick={refreshQuestionStats}>
+                            {catalogBusy ? 'Loading...' : 'Refresh'}
+                          </Btn>
+                        </div>
                       </div>
+                      {catalogError && (
+                        <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 12 }}>{catalogError}</div>
+                      )}
+                      {highlightStats ? (
+                        <div style={{ marginTop: 10, fontSize: 13, color: '#374151' }}>
+                          Current selection:&nbsp;
+                          <strong>{findSubjectLabel(highlightStats.subject)}</strong>
+                          {highlightStats.unit ? (
+                            <>
+                              {' · '}
+                              <strong>{formatUnitLabel(highlightStats.subject, highlightStats.unit)}</strong>
+                            </>
+                          ) : null}
+                          {highlightStats.lesson ? (
+                            <>
+                              {' · '}
+                              <strong>{formatLessonLabel(highlightStats.subject, highlightStats.unit, highlightStats.lesson)}</strong>
+                            </>
+                          ) : null}
+                          <div style={{ marginTop: 4 }}>
+                            <span style={{ color: '#15803d', fontWeight: 600 }}>{highlightStats.remaining}</span>
+                            {' '}of {highlightStats.total} remain unused in this class.
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
+                          Select a unit and lesson to highlight its availability.
+                        </div>
+                      )}
+                      {(!catalogLoaded && catalogBusy) ? (
+                        <div style={{ marginTop: 12, color: '#6b7280' }}>Loading question counts...</div>
+                      ) : questionStats.length === 0 ? (
+                        <div style={{ marginTop: 12, color: '#6b7280' }}>
+                          Question stats will appear once the {activeBankLabel.toLowerCase()} loads.
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: 12, overflowX: 'auto', overflowY: 'auto', maxHeight: 260 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                            <thead>
+                              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                                <th style={{ padding: 8, textAlign: 'left' }}>Subject</th>
+                                <th style={{ padding: 8, textAlign: 'left' }}>Unit</th>
+                                <th style={{ padding: 8, textAlign: 'left' }}>Lesson</th>
+                                <th style={{ padding: 8, textAlign: 'left' }}>Total</th>
+                                <th style={{ padding: 8, textAlign: 'left' }}>Used (class)</th>
+                                <th style={{ padding: 8, textAlign: 'left' }}>Remaining</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {questionStats.map((row) => {
+                                const isHighlight = highlightKey && row.key === highlightKey;
+                                return (
+                                  <tr
+                                    key={row.key}
+                                    style={{
+                                      borderBottom: '1px solid #e5e7eb',
+                                      background: isHighlight ? '#fefce8' : 'transparent',
+                                    }}
+                                  >
+                                    <td style={{ padding: 8 }}>{findSubjectLabel(row.subject)}</td>
+                                    <td style={{ padding: 8 }}>{formatUnitLabel(row.subject, row.unit)}</td>
+                                    <td style={{ padding: 8 }}>{formatLessonLabel(row.subject, row.unit, row.lesson)}</td>
+                                    <td style={{ padding: 8 }}>{row.total}</td>
+                                    <td style={{ padding: 8 }}>{row.used}</td>
+                                    <td style={{ padding: 8 }}>{row.remaining}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>

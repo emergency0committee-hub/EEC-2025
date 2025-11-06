@@ -6,11 +6,74 @@ import Btn from "../../components/Btn.jsx";
 import useCountdown from "../../hooks/useCountdown.js";
 import { supabase } from "../../lib/supabase.js";
 import { beginSatTrainingSession, saveSatTraining, updateSatTrainingSession } from "../../lib/supabaseStorage.js";
+import "katex/dist/katex.min.css";
+import { InlineMath, BlockMath } from "react-katex";
 
 const DEFAULT_META = {
   classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
   homework: { durationSec: null, allowRetake: true, resumeMode: "resume", attemptLimit: null },
   quiz: { durationSec: 15 * 60, allowRetake: false, resumeMode: "restart", attemptLimit: 1 },
+};
+
+const renderMathText = (value) => {
+  if (value == null) return null;
+  const text = String(value);
+  const tokens = [];
+  let lastIndex = 0;
+  const pattern = /\$\$([\s\S]+?)\$\$|\$([^$]+?)\$/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push({ type: "text", value: text.slice(lastIndex, match.index) });
+    }
+    if (match[1] !== undefined) {
+      tokens.push({ type: "block", value: match[1] });
+    } else if (match[2] !== undefined) {
+      tokens.push({ type: "inline", value: match[2] });
+    }
+    lastIndex = pattern.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    tokens.push({ type: "text", value: text.slice(lastIndex) });
+  }
+  const hasLatexCommand = /\\[a-zA-Z]+/.test(text);
+  const hasDelimiters = /\$/.test(text);
+  if (!hasDelimiters && hasLatexCommand && tokens.length === 1 && tokens[0].type === "text") {
+    try {
+      return <BlockMath>{text}</BlockMath>;
+    } catch {
+      return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
+    }
+  }
+  return tokens.map((token, idx) => {
+    if (token.type === "block") {
+      try {
+        return <BlockMath key={`math-block-${idx}`}>{token.value}</BlockMath>;
+      } catch {
+        return (
+          <span key={`math-block-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
+            {token.value}
+          </span>
+        );
+      }
+    }
+    if (token.type === "inline") {
+      try {
+        return <InlineMath key={`math-inline-${idx}`}>{token.value}</InlineMath>;
+      } catch {
+        return (
+          <span key={`math-inline-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
+            {token.value}
+          </span>
+        );
+      }
+    }
+    return (
+      <span key={`text-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
+        {token.value}
+      </span>
+    );
+  });
 };
 
 const normalizeQuestion = (question, idx) => {
@@ -796,7 +859,9 @@ const {
         {questions.map((question, idx) => (
           <Card key={question.id}>
             <div style={{ fontWeight: 700, color: "#111827" }}>Question {idx + 1}</div>
-            <div style={{ marginTop: 6, color: "#111827", lineHeight: 1.6 }}>{question?.prompt || "Untitled question"}</div>
+            <div style={{ marginTop: 6, color: "#111827", lineHeight: 1.6 }}>
+              {renderMathText(question?.prompt || "Untitled question")}
+            </div>
             <div style={{ marginTop: 10, color: "#111827" }}>
               <strong>Your answer: </strong>
               {formatAnswerForDisplay(question, answers[question.id])}
@@ -916,8 +981,8 @@ const {
         <div style={{ margin: "16px 0" }}>
           <ProgressBar value={qNumber} max={totalQuestions} />
         </div>
-        <div style={{ fontSize: 16, lineHeight: 1.6, color: "#111827", whiteSpace: "pre-wrap" }}>
-          {currentQuestion?.prompt || "Untitled question"}
+        <div style={{ fontSize: 16, lineHeight: 1.6, color: "#111827" }}>
+          {renderMathText(currentQuestion?.prompt || "Untitled question")}
         </div>
         {currentQuestion?.choices?.length ? (
           <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
@@ -940,7 +1005,9 @@ const {
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>{choice.value}</div>
-                  <div style={{ color: "#4b5563", fontSize: 14, marginTop: 4 }}>{choice.label}</div>
+                  <div style={{ color: "#4b5563", fontSize: 14, marginTop: 4 }}>
+                    {renderMathText(choice.label || choice.text || choice.value)}
+                  </div>
                 </button>
               );
             })}

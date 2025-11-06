@@ -6,6 +6,8 @@ import Btn from "../../components/Btn.jsx";
 import { SATFooterBar } from "./SATLayout.jsx";
 import PaletteOverlay from "../test/PaletteOverlay.jsx";
 import useCountdown from "../../hooks/useCountdown.js";
+import "katex/dist/katex.min.css";
+import { InlineMath, BlockMath } from "react-katex";
 
 import { supabase } from "../../lib/supabase.js";
 import { saveSatResult } from "../../lib/supabaseStorage.js";
@@ -18,7 +20,68 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     preview: PropTypes.bool,
   };
 
-  const previewMode = Boolean(preview || practice?.preview);
+const previewMode = Boolean(preview || practice?.preview);
+
+const renderMathText = (value) => {
+  if (value == null) return null;
+  const text = String(value);
+  const tokens = [];
+  let lastIndex = 0;
+  const pattern = /\$\$([\s\S]+?)\$\$|\$([^$]+?)\$/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push({ type: "text", value: text.slice(lastIndex, match.index) });
+    }
+    if (match[1] !== undefined) {
+      tokens.push({ type: "block", value: match[1] });
+    } else if (match[2] !== undefined) {
+      tokens.push({ type: "inline", value: match[2] });
+    }
+    lastIndex = pattern.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    tokens.push({ type: "text", value: text.slice(lastIndex) });
+  }
+  const hasLatexCommand = /\\[a-zA-Z]+/.test(text);
+  const hasDelimiters = /\$/.test(text);
+  if (!hasDelimiters && hasLatexCommand && tokens.length === 1 && tokens[0].type === "text") {
+    try {
+      return <BlockMath>{text}</BlockMath>;
+    } catch {
+      return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
+    }
+  }
+  return tokens.map((token, idx) => {
+    if (token.type === "block") {
+      try {
+        return <BlockMath key={`math-block-${idx}`}>{token.value}</BlockMath>;
+      } catch {
+        return (
+          <span key={`math-block-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
+            {token.value}
+          </span>
+        );
+      }
+    }
+    if (token.type === "inline") {
+      try {
+        return <InlineMath key={`math-inline-${idx}`}>{token.value}</InlineMath>;
+      } catch {
+        return (
+          <span key={`math-inline-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
+            {token.value}
+          </span>
+        );
+      }
+    }
+    return (
+      <span key={`text-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
+        {token.value}
+      </span>
+    );
+  });
+};
 
   // Require auth
   const [authUser, setAuthUser] = useState(null);
@@ -713,11 +776,13 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
           <div style={{ marginBottom: 8, color: "#6b7280", fontSize: 13 }}>Question {page} of {qCount}</div>
           {q?.passage && showPassage && (
             <div style={{ marginBottom: 12, padding: 14, background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 8, color: "#374151" }}>
-              {q.passage}
+              {renderMathText(q.passage)}
             </div>
           )}
           <div>
-            <h3 style={{ margin: 0, color: "#111827", lineHeight: 1.4 }}>{q?.text || "No question available."}</h3>
+            <h3 style={{ margin: 0, color: "#111827", lineHeight: 1.4 }}>
+              {renderMathText(q?.text || "No question available.")}
+            </h3>
           </div>
         </div>
 
@@ -792,7 +857,9 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
                     }}>
                       {letter(idx)}
                     </span>
-                    <span style={{ color: "#111827" }}>{ch.label}</span>
+                    <span style={{ color: "#111827" }}>
+                      {renderMathText(ch.label || ch.text || ch.value)}
+                    </span>
                   </button>
                 );
               });

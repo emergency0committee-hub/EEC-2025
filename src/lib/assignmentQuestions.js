@@ -70,10 +70,14 @@ export async function fetchQuestionBankSample({
   limit = 20,
 } = {}) {
   const target = resolveTable(table);
-  const fetchLimit = Math.min(Math.max(limit * 5, limit), 500);
+  const baseFetchLimit = Math.min(Math.max(limit * 10, limit), 1000);
 
-  const tryFetch = async (filters = {}) => {
-    let query = supabase.from(target).select("*").limit(fetchLimit);
+  const tryFetch = async (filters = {}, size = baseFetchLimit) => {
+    let query = supabase
+      .from(target)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(size);
     if (filters.subject) query = query.eq("subject", filters.subject);
     if (filters.unit) query = query.eq("unit", filters.unit);
     if (filters.lesson) query = query.eq("lesson", filters.lesson);
@@ -95,11 +99,17 @@ export async function fetchQuestionBankSample({
   }
 
   if (rows.length < limit && subject) {
-    const subjectRelaxed = await tryFetch({});
+    const subjectRelaxed = await tryFetch({}, baseFetchLimit);
     rows = rows.concat(subjectRelaxed);
   }
 
-  const deduped = dedupeRows(rows);
+  let deduped = dedupeRows(rows);
+
+  if (deduped.length < limit) {
+    const fallbackRows = await tryFetch({}, Math.min(baseFetchLimit * 2, 1000));
+    deduped = dedupeRows(deduped.concat(fallbackRows));
+  }
+
   const shuffled = shuffleRows(deduped);
   return shuffled.slice(0, limit);
 }
