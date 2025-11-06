@@ -205,7 +205,11 @@ async function loadRWFromCSV() {
 export async function loadRWModules() {
   try {
     const supabaseModules = await loadRWFromSupabase();
-    if (supabaseModules && supabaseModules.length) {
+    if (
+      supabaseModules &&
+      supabaseModules.length &&
+      supabaseModules.some((mod) => Array.isArray(mod) && mod.length > 0)
+    ) {
       return supabaseModules;
     }
   } catch (err) {
