@@ -196,6 +196,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const [overlay, setOverlay] = useState({ open: false, title: "", message: "" });
   const [summaryModal, setSummaryModal] = useState({ open: false, stats: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sectionActive, setSectionActive] = useState(true);
   const qCount = mod?.questions?.length || 0;
   const cd = useCountdown(isTimed ? mod?.durationSec : 60);
   const startedAtRef = useRef(Date.now());
@@ -246,25 +247,37 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   }, [answers, flags, page, persistProgress]);
 
 
-  useEffect(() => { // reset timer and page on module change
-    const duration = isTimed ? (mod?.durationSec || 60) : 60;
-    cd.reset(duration);
-    if (isTimed) cd.start();
-    else cd.stop();
-    setShowTimer(isTimed);
+  useEffect(() => {
+    if (!mod) return;
     setPage(1);
-    questionStartRef.current = Date.now();
+    questionStartRef.current = null;
     prevPageRef.current = 1;
     timesRef.current = {};
     persistProgress();
-  }, [modIdx, isTimed, mod?.durationSec]);
+  }, [modIdx, mod?.durationSec]);
+
+  useEffect(() => {
+    if (!mod) return;
+    const duration = mod?.durationSec || 60;
+    if (sectionActive) {
+      cd.reset(duration);
+      if (isTimed) cd.start();
+      else cd.stop();
+      setShowTimer(isTimed);
+      questionStartRef.current = Date.now();
+      prevPageRef.current = 1;
+    } else {
+      cd.stop();
+      setShowTimer(false);
+    }
+  }, [sectionActive, isTimed, mod?.durationSec]);
 
   useEffect(() => { // auto-advance on timer end
-    if (!isTimed) return;
+    if (!isTimed || !sectionActive) return;
     if (cd.remaining <= 0) {
       handleNextModule();
     }
-  }, [cd.remaining, isTimed]);
+  }, [cd.remaining, isTimed, sectionActive]);
 
   // Track time spent per question
   useEffect(() => {
@@ -344,6 +357,8 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
 
   const handleNextModule = () => {
     if (modIdx + 1 < totalMods) {
+      captureCurrentQuestionTime();
+      setSectionActive(false);
       setModIdx(modIdx + 1);
     } else {
       prepareSubmit();
@@ -611,16 +626,35 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const openOverlay = (title, message) => setOverlay({ open: true, title, message });
   const closeOverlay = () => setOverlay((o) => ({ ...o, open: false }));
 
+  const previewBanner = previewMode ? (
+    <Card style={{ border: "1px solid #f97316", background: "#fff7ed", color: "#9a3412", marginBottom: 12 }}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>Admin Preview Mode</div>
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+        This run is for testing only. Responses are not saved to Supabase, but you can complete the full flow to verify questions, timers, and scoring.
+      </p>
+    </Card>
+  ) : null;
+
+  if (!sectionActive) {
+    return (
+      <PageWrap>
+        {previewBanner}
+        <Card>
+          <h3 style={{ marginTop: 0 }}>{mod.title || "Next Section"}</h3>
+          <p style={{ color: "#6b7280" }}>
+            Take a short break. When you are ready, begin the next section to continue the diagnostic.
+          </p>
+          <Btn variant="primary" onClick={() => setSectionActive(true)} style={{ marginTop: 12 }}>
+            Begin {mod.title || "Next Section"}
+          </Btn>
+        </Card>
+      </PageWrap>
+    );
+  }
+
   return (
     <PageWrap>
-      {previewMode && (
-        <Card style={{ border: "1px solid #f97316", background: "#fff7ed", color: "#9a3412", marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Admin Preview Mode</div>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-            This run is for testing only. Responses are not saved to Supabase, but you can complete the full flow to verify questions, timers, and scoring.
-          </p>
-        </Card>
-      )}
+      {previewBanner}
       {/* Bluebook-style header */}
       <div style={{ padding: "6px 0 4px" }}>
         <div style={{

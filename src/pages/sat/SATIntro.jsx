@@ -66,12 +66,7 @@ export default function SATIntro({ onNavigate }) {
               </div>
               <Btn
                 variant="secondary"
-                onClick={() =>
-                  onNavigate("sat-exam", {
-                    preview: true,
-                    practice: { preview: true, kind: "diagnostic", title: "SAT Diagnostic Preview" },
-                  })
-                }
+                onClick={() => onNavigate("sat-exam", { preview: true })}
               >
                 Preview Diagnostic
               </Btn>
