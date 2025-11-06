@@ -853,7 +853,7 @@ export default function SATTraining({ onNavigate }) {
           const end = start + chunkSize - 1;
           const { data, error } = await supabase
             .from(config.table)
-            .select("id,uuid,question_id,questionid,questionId,subject,unit,lesson")
+            .select("*")
             .range(start, end);
           if (error) throw error;
           if (Array.isArray(data) && data.length > 0) {

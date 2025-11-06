@@ -7,11 +7,11 @@ import { SATFooterBar } from "./SATLayout.jsx";
 import PaletteOverlay from "../test/PaletteOverlay.jsx";
 import useCountdown from "../../hooks/useCountdown.js";
 import "katex/dist/katex.min.css";
-import { InlineMath, BlockMath } from "react-katex";
 
 import { supabase } from "../../lib/supabase.js";
 import { saveSatResult } from "../../lib/supabaseStorage.js";
 import { loadRWModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../sat/questions.js";
+import { renderMathText } from "../../lib/mathText.jsx";
 
 export default function SATExam({ onNavigate, practice = null, preview = false }) {
   SATExam.propTypes = {
@@ -20,68 +20,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     preview: PropTypes.bool,
   };
 
-const previewMode = Boolean(preview || practice?.preview);
-
-const renderMathText = (value) => {
-  if (value == null) return null;
-  const text = String(value);
-  const tokens = [];
-  let lastIndex = 0;
-  const pattern = /\$\$([\s\S]+?)\$\$|\$([^$]+?)\$/g;
-  let match;
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      tokens.push({ type: "text", value: text.slice(lastIndex, match.index) });
-    }
-    if (match[1] !== undefined) {
-      tokens.push({ type: "block", value: match[1] });
-    } else if (match[2] !== undefined) {
-      tokens.push({ type: "inline", value: match[2] });
-    }
-    lastIndex = pattern.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    tokens.push({ type: "text", value: text.slice(lastIndex) });
-  }
-  const hasLatexCommand = /\\[a-zA-Z]+/.test(text);
-  const hasDelimiters = /\$/.test(text);
-  if (!hasDelimiters && hasLatexCommand && tokens.length === 1 && tokens[0].type === "text") {
-    try {
-      return <BlockMath>{text}</BlockMath>;
-    } catch {
-      return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
-    }
-  }
-  return tokens.map((token, idx) => {
-    if (token.type === "block") {
-      try {
-        return <BlockMath key={`math-block-${idx}`}>{token.value}</BlockMath>;
-      } catch {
-        return (
-          <span key={`math-block-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
-            {token.value}
-          </span>
-        );
-      }
-    }
-    if (token.type === "inline") {
-      try {
-        return <InlineMath key={`math-inline-${idx}`}>{token.value}</InlineMath>;
-      } catch {
-        return (
-          <span key={`math-inline-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
-            {token.value}
-          </span>
-        );
-      }
-    }
-    return (
-      <span key={`text-${idx}`} style={{ whiteSpace: "pre-wrap" }}>
-        {token.value}
-      </span>
-    );
-  });
-};
+  const previewMode = Boolean(preview || practice?.preview);
 
   // Require auth
   const [authUser, setAuthUser] = useState(null);

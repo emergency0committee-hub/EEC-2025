@@ -70,44 +70,72 @@ export async function fetchQuestionBankSample({
   limit = 20,
 } = {}) {
   const target = resolveTable(table);
-  const baseFetchLimit = Math.min(Math.max(limit * 10, limit), 1000);
+  const PAGE_SIZE = 500;
+  const HARD_ROW_LIMIT = 20000;
+  const baseFetchLimit = Math.min(Math.max(limit * 10, 200), HARD_ROW_LIMIT);
+  const escapePattern = (value) =>
+    String(value ?? "")
+      .trim()
+      .replace(/[%_]/g, (match) => `\\${match}`);
+  const normalizeFilter = (value) => escapePattern(value).toLowerCase();
 
-  const tryFetch = async (filters = {}, size = baseFetchLimit) => {
-    let query = supabase
-      .from(target)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(size);
-    if (filters.subject) query = query.eq("subject", filters.subject);
-    if (filters.unit) query = query.eq("unit", filters.unit);
-    if (filters.lesson) query = query.eq("lesson", filters.lesson);
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+  const pagedFetch = async (filters = {}, desiredRows = baseFetchLimit) => {
+    const rows = [];
+    const targetRows = Math.min(Math.max(desiredRows, PAGE_SIZE), HARD_ROW_LIMIT);
+    for (let offset = 0; offset < HARD_ROW_LIMIT; offset += PAGE_SIZE) {
+      if (rows.length >= targetRows) break;
+      const to = Math.min(offset + PAGE_SIZE - 1, HARD_ROW_LIMIT - 1);
+      let query = supabase
+        .from(target)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(offset, to);
+      if (filters.subject) {
+        const pattern = escapePattern(filters.subject);
+        query = query.ilike("subject", pattern);
+      }
+      if (filters.unit) {
+        const pattern = normalizeFilter(filters.unit);
+        query = query.ilike("unit", pattern);
+      }
+      if (filters.lesson) {
+        const pattern = normalizeFilter(filters.lesson);
+        query = query.ilike("lesson", pattern);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      if (Array.isArray(data) && data.length > 0) {
+        rows.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      } else {
+        break;
+      }
+    }
+    return rows;
   };
 
-  let rows = await tryFetch({ subject, unit, lesson });
+  let rows = await pagedFetch({ subject, unit, lesson });
 
   if (rows.length < limit && lesson) {
-    const lessonRelaxed = await tryFetch({ subject, unit });
-    rows = rows.concat(lessonRelaxed);
+    rows = rows.concat(await pagedFetch({ subject, unit }));
   }
 
   if (rows.length < limit && unit) {
-    const unitRelaxed = await tryFetch({ subject });
-    rows = rows.concat(unitRelaxed);
+    rows = rows.concat(await pagedFetch({ subject }));
   }
 
   if (rows.length < limit && subject) {
-    const subjectRelaxed = await tryFetch({}, baseFetchLimit);
-    rows = rows.concat(subjectRelaxed);
+    rows = rows.concat(await pagedFetch({}));
   }
 
   let deduped = dedupeRows(rows);
 
   if (deduped.length < limit) {
-    const fallbackRows = await tryFetch({}, Math.min(baseFetchLimit * 2, 1000));
-    deduped = dedupeRows(deduped.concat(fallbackRows));
+    deduped = dedupeRows(deduped.concat(await pagedFetch({ subject, unit, lesson }, baseFetchLimit * 2)));
+  }
+
+  if (deduped.length < limit) {
+    deduped = dedupeRows(deduped.concat(await pagedFetch({}, Math.min(baseFetchLimit * 3, HARD_ROW_LIMIT))));
   }
 
   const shuffled = shuffleRows(deduped);
