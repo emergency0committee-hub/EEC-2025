@@ -82,6 +82,7 @@ function SATAssignment({ onNavigate, practice = null }) {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [showPalette, setShowPalette] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [showCalculator, setShowCalculator] = useState(false);
 
   const questionTimers = useRef({});
   const questionStartRef = useRef(null);
@@ -90,6 +91,7 @@ function SATAssignment({ onNavigate, practice = null }) {
   const sessionRef = useRef(null);
   const sessionMetaRef = useRef(null);
   const submittedRef = useRef(false);
+  const userEmail = authUser?.email || "";
 
   const practiceKind = String(practice?.kind || "").toLowerCase();
   const practiceSection = practice?.section || null;
@@ -107,14 +109,41 @@ function SATAssignment({ onNavigate, practice = null }) {
   const resumeEnabled = Boolean(practice?.meta?.resumeMode === "resume" && practice?.resourceId);
   const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
 
-  const {
-    remaining: timerRemaining,
-    running: timerRunning,
-    start: startTimer,
-    stop: stopTimer,
+const {
+  remaining: timerRemaining,
+  running: timerRunning,
+  start: startTimer,
+  stop: stopTimer,
     reset: resetTimer,
     fmt: fmtTimer,
-  } = useCountdown(meta && Number.isFinite(Number(meta.durationSec)) && Number(meta.durationSec) > 0 ? Number(meta.durationSec) : 0);
+} = useCountdown(meta && Number.isFinite(Number(meta.durationSec)) && Number(meta.durationSec) > 0 ? Number(meta.durationSec) : 0);
+
+  const assignmentSubject = useMemo(() => {
+    const sources = [
+      practice?.subject,
+      practice?.meta?.subject,
+      practice?.custom?.subject,
+      practice?.custom?.meta?.subject,
+      meta?.subject,
+    ];
+    const found = sources.find((value) => typeof value === "string" && value.trim().length > 0);
+    return found ? found.trim().toLowerCase() : "";
+  }, [practice?.subject, practice?.meta, practice?.custom, meta?.subject]);
+  const isMathAssignment =
+    assignmentSubject === "math" ||
+    String(practiceSection || "").toUpperCase() === "MATH" ||
+    Boolean(practiceUnit);
+  const isHomework = practiceKind === "homework";
+  const deadlineIso =
+    practice?.deadline ||
+    practice?.meta?.deadline ||
+    practice?.custom?.meta?.deadline ||
+    meta?.deadline ||
+    null;
+  const deadlineDate = deadlineIso ? new Date(deadlineIso) : null;
+  const hasValidDeadline = deadlineDate && !Number.isNaN(deadlineDate.getTime());
+  const deadlinePassed = Boolean(hasValidDeadline && Date.now() > deadlineDate.getTime());
+  const reviewOnly = Boolean(practice?.reviewOnly) || (isHomework && deadlinePassed);
 
   useEffect(() => {
     let alive = true;
@@ -207,6 +236,30 @@ function SATAssignment({ onNavigate, practice = null }) {
       console.warn("resume load", err);
     }
   }, [questions, resumeKey]);
+
+  useEffect(() => {
+    if (!reviewOnly || !practiceResourceId || !userEmail) return;
+    (async () => {
+      try {
+        const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+        const { data, error } = await supabase
+          .from(tTable)
+          .select("answers")
+          .eq("resource_id", practiceResourceId)
+          .eq("user_email", userEmail)
+          .order("ts", { ascending: false })
+          .limit(1);
+        if (!error && data && data.length) {
+          const record = data[0];
+          const savedAnswers = record?.answers?.choices || {};
+          setAnswers(savedAnswers || {});
+          setSubmitted(true);
+        }
+      } catch (err) {
+        console.warn("load homework submission", err);
+      }
+    })();
+  }, [practiceResourceId, reviewOnly, userEmail]);
 
   useEffect(() => {
     if (!questions.length || loading) return;
@@ -604,7 +657,14 @@ function SATAssignment({ onNavigate, practice = null }) {
     );
   }
 
+  if (reviewOnly) {
+    return renderReadOnlyLayout();
+  }
+
   if (submitted) {
+    if (reviewOnly) {
+      return renderReadOnlyLayout();
+    }
     const correctCount = Object.entries(answers).reduce((sum, [id, value]) => {
       const q = questions.find((item) => item.id === id);
       if (!q) return sum;
@@ -626,6 +686,9 @@ function SATAssignment({ onNavigate, practice = null }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Back to Training</Btn>
             <Btn variant="primary" onClick={() => onNavigate("home")}>Back Home</Btn>
+            {isHomework && !deadlinePassed && (
+              <Btn variant="primary" onClick={handleResumeHomework}>Edit Homework</Btn>
+            )}
           </div>
         </Card>
       </PageWrap>
@@ -639,11 +702,15 @@ function SATAssignment({ onNavigate, practice = null }) {
   const isLastQuestion = currentIndex >= totalQuestions - 1;
   const submitDisabled = saving || totalQuestions === 0;
   const unansweredCount = unanswered.length;
-
   const headerControls = (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       {meta && Number(meta.durationSec) > 0 && (
         <div style={{ fontWeight: 700, minWidth: 72, textAlign: "right" }}>{timeLabel}</div>
+      )}
+      {deadlineLabel && (
+        <div style={{ fontSize: 12, color: "#9ca3af", minWidth: 140 }}>
+          Due {deadlineLabel}
+        </div>
       )}
       {questions.length > 1 && (
         <button
@@ -662,7 +729,85 @@ function SATAssignment({ onNavigate, practice = null }) {
           Question Map
         </button>
       )}
+      {isMathAssignment && (
+        <button
+          type="button"
+          onClick={() => setShowCalculator(true)}
+          aria-label="Open calculator"
+          style={{
+            border: "1px solid #d1d5db",
+            background: "#111827",
+            color: "#fff",
+            fontWeight: 600,
+            borderRadius: 8,
+            padding: "6px",
+            cursor: "pointer",
+            width: 40,
+            height: 40,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <svg
+            aria-hidden
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="4" y="3" width="16" height="18" rx="2" />
+            <line x1="4" y1="8" x2="20" y2="8" />
+            <line x1="9" y1="13" x2="9" y2="18" />
+            <line x1="6" y1="15.5" x2="12" y2="15.5" />
+            <line x1="14.5" y1="13" x2="18" y2="13" />
+            <line x1="14.5" y1="18" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
     </div>
+  );
+
+  const formatAnswerForDisplay = (question, value) => {
+    if (value == null || value === "") return "—";
+    if (question?.choices?.length) {
+      const match = question.choices.find((choice) => String(choice.value) === String(value));
+      return match ? `${value} — ${match.label}` : String(value);
+    }
+    return String(value);
+  };
+
+  const renderReadOnlyLayout = () => (
+    <PageWrap>
+      <HeaderBar title={title} right={null} />
+      <Card>
+        <h3 style={{ marginTop: 0, color: "#111827" }}>Homework Review</h3>
+        {deadlineLabel && <p style={{ color: "#6b7280", marginBottom: 4 }}>Deadline: {deadlineLabel}</p>}
+        <p style={{ color: "#6b7280" }}>
+          Editing is disabled because the deadline has passed. Review your answers below.
+        </p>
+      </Card>
+      <div style={{ display: "grid", gap: 12 }}>
+        {questions.map((question, idx) => (
+          <Card key={question.id}>
+            <div style={{ fontWeight: 700, color: "#111827" }}>Question {idx + 1}</div>
+            <div style={{ marginTop: 6, color: "#111827", lineHeight: 1.6 }}>{question?.prompt || "Untitled question"}</div>
+            <div style={{ marginTop: 10, color: "#111827" }}>
+              <strong>Your answer: </strong>
+              {formatAnswerForDisplay(question, answers[question.id])}
+            </div>
+          </Card>
+        ))}
+      </div>
+      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Back to Training</Btn>
+        <Btn variant="primary" onClick={() => onNavigate("home")}>Back Home</Btn>
+      </div>
+    </PageWrap>
   );
 
   const handleChoice = (value) => {
@@ -675,9 +820,82 @@ function SATAssignment({ onNavigate, practice = null }) {
     updateAnswer(currentQuestion.id, event.target.value);
   };
 
+  const handleResumeHomework = () => {
+    submittedRef.current = false;
+    setSubmitted(false);
+    setSaveError("");
+  };
+
   return (
     <PageWrap>
       <HeaderBar title={title} right={headerControls} />
+      {showCalculator && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Desmos Calculator"
+          onClick={() => setShowCalculator(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.75)",
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              width: "min(960px, 95vw)",
+              height: "min(640px, 90vh)",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 70px rgba(15,23,42,0.35)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 18px",
+                borderBottom: "1px solid #e5e7eb",
+              }}
+            >
+              <strong style={{ fontSize: 16 }}>Desmos Calculator</strong>
+              <button
+                type="button"
+                onClick={() => setShowCalculator(false)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#2563eb",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              title="Desmos Graphing Calculator"
+              src="https://www.desmos.com/calculator?lang=en"
+              style={{
+                flex: 1,
+                border: "none",
+                borderBottomLeftRadius: 16,
+                borderBottomRightRadius: 16,
+              }}
+              allowFullScreen
+            />
+          </div>
+        </div>
+      )}
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
           <div>

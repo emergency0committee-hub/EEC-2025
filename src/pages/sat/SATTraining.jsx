@@ -53,6 +53,13 @@ const createDefaultAutoAssign = (bankId = "math") => {
   };
 };
 
+const CLASS_ASSIGN_ON_CONFLICT = "student_email,class_name";
+const needsLegacyConflictFallback = (error) => {
+  if (!error) return false;
+  const message = String(error.message || "");
+  return /no unique|matching.*on conflict/i.test(message);
+};
+
 export default function SATTraining({ onNavigate }) {
   SATTraining.propTypes = { onNavigate: PropTypes.func.isRequired };
   const [checking, setChecking] = useState(true);
@@ -308,12 +315,16 @@ export default function SATTraining({ onNavigate }) {
       const { data: me } = await supabase.auth.getUser();
       const adminEmail = me?.user?.email || null;
       const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
-      try {
-        await supabase.from(table).delete().eq("student_email", email);
-      } catch {}
-      const { error } = await supabase
+      const payload = { student_email: email, class_name: className, assigned_by: adminEmail };
+      let { error } = await supabase
         .from(table)
-        .insert({ student_email: email, class_name: className, assigned_by: adminEmail });
+        .upsert(payload, { onConflict: CLASS_ASSIGN_ON_CONFLICT });
+      if (needsLegacyConflictFallback(error)) {
+        try {
+          await supabase.from(table).delete().eq("student_email", email);
+        } catch {}
+        ({ error } = await supabase.from(table).insert(payload));
+      }
       if (error) throw error;
       setAssignForm({ email: "", className: "" });
       await loadClasses();
