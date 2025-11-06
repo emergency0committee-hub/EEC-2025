@@ -58,7 +58,7 @@ export async function saveTestSubmission({
 }
 
 // Save SAT diagnostic result
-export async function saveSatResult({ summary, answers, modules, elapsedSec }) {
+export async function saveSatResult({ summary, skills = null, difficulty = null, answers, modules, elapsedSec }) {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("Supabase is not configured");
@@ -75,7 +75,7 @@ export async function saveSatResult({ summary, answers, modules, elapsedSec }) {
     answers: answers || null,
     radar_data: null,
     area_percents: null,
-    pillar_agg: { summary },
+    pillar_agg: { summary, skills, difficulty },
     pillar_counts: { modules, elapsedSec },
     riasec_code: null,
     top_codes: null,

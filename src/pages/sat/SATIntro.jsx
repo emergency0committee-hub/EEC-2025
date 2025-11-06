@@ -1,5 +1,5 @@
 // src/pages/sat/SATIntro.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
@@ -15,6 +15,17 @@ export default function SATIntro({ onNavigate }) {
   const [unlocked, setUnlocked] = useState(() => {
     try { return localStorage.getItem("sat_access_ok_v1") === "1"; } catch { return false; }
   });
+  const staffPreviewRole = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      if (!raw) return "";
+      const parsed = JSON.parse(raw);
+      return String(parsed?.role || "").toLowerCase();
+    } catch {
+      return "";
+    }
+  }, []);
+  const canPreview = ["admin", "administrator", "staff"].includes(staffPreviewRole);
 
   useEffect(() => {
     let alive = true;
@@ -44,6 +55,29 @@ export default function SATIntro({ onNavigate }) {
     <PageWrap>
       <HeaderBar title="SAT Diagnostic" />
       <Card>
+        {canPreview && (
+          <div style={{ border: "1px dashed #93c5fd", background: "#eff6ff", padding: 12, borderRadius: 10, marginBottom: 16 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ color: "#1d4ed8", fontWeight: 600 }}>
+                Staff Preview
+                <div style={{ color: "#1e3a8a", fontWeight: 400, fontSize: 13 }}>
+                  Launch the diagnostic in preview mode (no timers, no submissions saved).
+                </div>
+              </div>
+              <Btn
+                variant="secondary"
+                onClick={() =>
+                  onNavigate("sat-exam", {
+                    preview: true,
+                    practice: { preview: true, kind: "diagnostic", title: "SAT Diagnostic Preview" },
+                  })
+                }
+              >
+                Preview Diagnostic
+              </Btn>
+            </div>
+          </div>
+        )}
         {!unlocked ? (
           <>
             <h3 style={{ marginTop: 0 }}>Access Code Required</h3>

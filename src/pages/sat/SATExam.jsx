@@ -9,10 +9,16 @@ import useCountdown from "../../hooks/useCountdown.js";
 
 import { supabase } from "../../lib/supabase.js";
 import { saveSatResult } from "../../lib/supabaseStorage.js";
-import { loadRWModules, MATH_MODULES } from "../../sat/questions.js";
+import { loadRWModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../sat/questions.js";
 
-export default function SATExam({ onNavigate, practice = null }) {
-  SATExam.propTypes = { onNavigate: PropTypes.func.isRequired, practice: PropTypes.object };
+export default function SATExam({ onNavigate, practice = null, preview = false }) {
+  SATExam.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+    practice: PropTypes.object,
+    preview: PropTypes.bool,
+  };
+
+  const previewMode = Boolean(preview || practice?.preview);
 
   // Require auth
   const [authUser, setAuthUser] = useState(null);
@@ -167,24 +173,29 @@ export default function SATExam({ onNavigate, practice = null }) {
       return [{ key: 'prw', title: 'Reading & Writing Practice', durationSec: meta.durationSec, questions: (rwMods[0] || []).slice(0, 10), meta, kind: practice.kind || 'classwork' }];
     }
     return [
-      { key: "rw1", title: "Reading & Writing — Module 1", durationSec: 32 * 60, questions: rwMods[0] || [] },
-      { key: "rw2", title: "Reading & Writing — Module 2", durationSec: 32 * 60, questions: rwMods[1] || [] },
-      { key: "m1",  title: "Math — Module 1",              durationSec: 35 * 60, questions: MATH_MODULES[0] || [] },
-      { key: "m2",  title: "Math — Module 2",              durationSec: 35 * 60, questions: MATH_MODULES[1] || [] },
+      { key: "rw1", title: "Reading & Writing - Module 1", durationSec: 35 * 60, questions: rwMods[0] || [] },
+      { key: "rw2", title: "Reading & Writing - Module 2", durationSec: 35 * 60, questions: rwMods[1] || [] },
+      { key: "m1",  title: "Math - Module 1",              durationSec: 35 * 60, questions: MATH_MODULES[0] || [] },
+      { key: "m2",  title: "Math - Module 2",              durationSec: 35 * 60, questions: MATH_MODULES[1] || [] },
     ];
   }, [rwMods, practice]);
 
   const [modIdx, setModIdx] = useState(0);
   const mod = modules[modIdx];
   const totalMods = modules.length;
-  const isTimed = Number.isFinite(mod?.durationSec) && mod.durationSec > 0;
+  const isTimed = !previewMode && Number.isFinite(mod?.durationSec) && mod.durationSec > 0;
   const resumeEnabled = Boolean(practice?.meta?.resumeMode === "resume" && practice?.resourceId);
   const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
   const [resumeLoaded, setResumeLoaded] = useState(!resumeEnabled);
   const [answers, setAnswers] = useState({}); // { modKey: { qid: value } }
   const [flags, setFlags] = useState({}); // { modKey: { qid: true } }
   const [showPalette, setShowPalette] = useState(false);
+  const [showPassage, setShowPassage] = useState(true);
+  const [showTimer, setShowTimer] = useState(() => isTimed);
   const [page, setPage] = useState(1);
+  const [overlay, setOverlay] = useState({ open: false, title: "", message: "" });
+  const [summaryModal, setSummaryModal] = useState({ open: false, stats: null });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const qCount = mod?.questions?.length || 0;
   const cd = useCountdown(isTimed ? mod?.durationSec : 60);
   const startedAtRef = useRef(Date.now());
@@ -214,6 +225,21 @@ export default function SATExam({ onNavigate, practice = null }) {
       setResumeLoaded(true);
     }
   }, [resumeEnabled, resumeLoaded, resumeKey, mod]);
+
+  const persistProgress = useCallback(() => {
+    if (!resumeEnabled || !resumeKey || !resumeLoaded) return;
+    try {
+      const payload = {
+        answers,
+        flags,
+        page,
+        times: timesRef.current,
+      };
+      localStorage.setItem(resumeKey, JSON.stringify(payload));
+    } catch (e) {
+      console.warn("resume save", e);
+    }
+  }, [answers, flags, page, resumeEnabled, resumeKey, resumeLoaded]);
 
   useEffect(() => {
     persistProgress();
@@ -359,20 +385,29 @@ export default function SATExam({ onNavigate, practice = null }) {
     return summary;
   };
 
-  const persistProgress = useCallback(() => {
-    if (!resumeEnabled || !resumeKey || !resumeLoaded) return;
-    try {
-      const payload = {
-        answers,
-        flags,
-        page,
-        times: timesRef.current,
-      };
-      localStorage.setItem(resumeKey, JSON.stringify(payload));
-    } catch (e) {
-      console.warn("resume save", e);
-    }
-  }, [answers, flags, page, resumeEnabled, resumeKey, resumeLoaded]);
+  const aggregatePercentsBy = (getKey) => {
+    const totals = { rw: {}, math: {} };
+    modules.forEach((m) => {
+      const section = m.key.startsWith("rw") ? "rw" : "math";
+      const a = answers[m.key] || {};
+      (m.questions || []).forEach((q) => {
+        const key = getKey(q, section);
+        if (!key) return;
+        const bucket = totals[section][key] || { correct: 0, total: 0 };
+        bucket.total += 1;
+        if (isAnswerCorrect(q, a[q.id])) bucket.correct += 1;
+        totals[section][key] = bucket;
+      });
+    });
+    const out = {};
+    Object.entries(totals).forEach(([section, map]) => {
+      out[section] = {};
+      Object.entries(map).forEach(([key, data]) => {
+        out[section][key] = data.total ? Math.round((data.correct / data.total) * 100) : 0;
+      });
+    });
+    return out;
+  };
 
   const captureCurrentQuestionTime = () => {
     try {
@@ -397,6 +432,14 @@ export default function SATExam({ onNavigate, practice = null }) {
     const elapsedSec = Math.round((finishedAt - startedAtRef.current) / 1000);
     captureCurrentQuestionTime();
     const summary = scoreSummary();
+    const skillPercents = aggregatePercentsBy((q, section) => {
+      if (section !== "rw") return null;
+      return q.skillKey || normalizeEnglishSkill(q.skill || "").key;
+    });
+    const difficultyPercents = aggregatePercentsBy((q, section) => {
+      if (section !== "rw") return null;
+      return q.difficultyKey || normalizeDifficulty(q.difficulty || "");
+    });
     let totalCorrect = 0;
     let totalQuestions = 0;
     modules.forEach((m) => {
@@ -408,7 +451,7 @@ export default function SATExam({ onNavigate, practice = null }) {
     });
     const avgSec = totalQuestions ? Math.round(elapsedSec / totalQuestions) : 0;
     const stats = { totalCorrect, totalQuestions, avgSec };
-    pendingResultRef.current = { finishedAt, elapsedSec, summary, stats };
+    pendingResultRef.current = { finishedAt, elapsedSec, summary, stats, skillPercents, difficultyPercents };
     setSummaryModal({ open: true, stats });
   };
 
@@ -417,7 +460,7 @@ export default function SATExam({ onNavigate, practice = null }) {
       prepareSubmit();
       return;
     }
-    const { elapsedSec, summary, stats } = pendingResultRef.current;
+    const { elapsedSec, summary, stats, skillPercents, difficultyPercents } = pendingResultRef.current;
     try { cd.stop(); } catch {}
     setIsSubmitting(true);
     try {
@@ -510,17 +553,32 @@ export default function SATExam({ onNavigate, practice = null }) {
         pendingResultRef.current = null;
         onNavigate('sat-training');
       } else {
+        const moduleMeta = modules.map((m) => ({ key: m.key, title: m.title, count: m.questions.length }));
+        if (previewMode) {
+          const previewSubmission = {
+            ts: new Date().toISOString(),
+            participant: { name: "Admin Preview" },
+            pillar_agg: { summary, skills: skillPercents, difficulty: difficultyPercents },
+            pillar_counts: { modules: moduleMeta, elapsedSec },
+            meta: { preview: true },
+          };
+          pendingResultRef.current = null;
+          onNavigate('sat-results', { submission: previewSubmission });
+          return;
+        }
         await saveSatResult({
           summary,
+          skills: skillPercents,
+          difficulty: difficultyPercents,
           answers,
-          modules: modules.map((m) => ({ key: m.key, title: m.title, count: m.questions.length })),
+          modules: moduleMeta,
           elapsedSec,
         });
         pendingResultRef.current = null;
         onNavigate('sat-results', {
           submission: {
-            pillar_agg: { summary },
-            pillar_counts: { modules: modules.map((m) => ({ key: m.key, title: m.title, count: m.questions.length })), elapsedSec },
+            pillar_agg: { summary, skills: skillPercents, difficulty: difficultyPercents },
+            pillar_counts: { modules: moduleMeta, elapsedSec },
           },
         });
       }
@@ -550,16 +608,19 @@ export default function SATExam({ onNavigate, practice = null }) {
   // Helpers
   const letter = (i) => String.fromCharCode(65 + i); // 0 -> A
 
-  const [showPassage, setShowPassage] = useState(true);
-  const [showTimer, setShowTimer] = useState(() => isTimed);
-  const [overlay, setOverlay] = useState({ open: false, title: "", message: "" });
-  const [summaryModal, setSummaryModal] = useState({ open: false, stats: null });
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const openOverlay = (title, message) => setOverlay({ open: true, title, message });
   const closeOverlay = () => setOverlay((o) => ({ ...o, open: false }));
 
   return (
     <PageWrap>
+      {previewMode && (
+        <Card style={{ border: "1px solid #f97316", background: "#fff7ed", color: "#9a3412", marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Admin Preview Mode</div>
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+            This run is for testing only. Responses are not saved to Supabase, but you can complete the full flow to verify questions, timers, and scoring.
+          </p>
+        </Card>
+      )}
       {/* Bluebook-style header */}
       <div style={{ padding: "6px 0 4px" }}>
         <div style={{
@@ -763,7 +824,9 @@ export default function SATExam({ onNavigate, practice = null }) {
                 </div>
               );
             })()}
-            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>Submit to save your work and view detailed results.</p>
+            <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
+              {previewMode ? "Submit to finish your preview and view the score breakdown (nothing will be saved)." : "Submit to save your work and view detailed results."}
+            </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -810,6 +873,7 @@ export default function SATExam({ onNavigate, practice = null }) {
     </PageWrap>
   );
 }
+
 
 
 
