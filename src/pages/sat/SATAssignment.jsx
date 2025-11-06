@@ -143,6 +143,7 @@ const {
   const deadlineDate = deadlineIso ? new Date(deadlineIso) : null;
   const hasValidDeadline = deadlineDate && !Number.isNaN(deadlineDate.getTime());
   const deadlinePassed = Boolean(hasValidDeadline && Date.now() > deadlineDate.getTime());
+  const deadlineLabel = hasValidDeadline ? deadlineDate.toLocaleString() : null;
   const reviewOnly = Boolean(practice?.reviewOnly) || (isHomework && deadlinePassed);
 
   useEffect(() => {
