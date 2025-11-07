@@ -1,7 +1,8 @@
-﻿// src/pages/admin/AdminQuestionBank.jsx
+// src/pages/admin/AdminQuestionBank.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
+import RichTextEditor from "../../components/RichTextEditor.jsx";
 import LanguageButton from "../../components/LanguageButton.jsx";
 import UserMenu from "../../components/UserMenu.jsx";
 import { LANGS } from "../../i18n/strings.js";
@@ -29,6 +30,18 @@ const DEFAULT_TABLE_ROWS = 2;
 const DEFAULT_TABLE_COLS = 2;
 const MAX_TABLE_ROWS = 10;
 const MAX_TABLE_COLS = 6;
+const FILTERS_PAGE_SIZE = 5;
+
+const promptHasContent = (html = "") => {
+  if (!html) return false;
+  const stripped = String(html)
+    .replace(/&nbsp;/gi, " ")
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .trim();
+  if (stripped.length > 0) return true;
+  return /<(img|table|video|audio|canvas|svg|iframe)/i.test(html);
+};
 
 const BANK_TAB_META = {
   math: { accent: "#2563eb" },
@@ -39,17 +52,17 @@ const BANK_TAB_META = {
 const BANK_TAB_DESCRIPTIONS = {
   math: {
     EN: "SAT-style math questions organized by units and lessons.",
-    AR: "أسئلة رياضيات بأسلوب SAT ضمن وحدات ودروس واضحة.",
-    FR: "Questions de mathématiques type SAT classées par unités.",
+    AR: "????? ??????? ?????? SAT ??? ????? ????? ?????.",
+    FR: "Questions de math�matiques type SAT class�es par unit�s.",
   },
   english: {
     EN: "Reading & writing prompts with evidence-based answers.",
-    AR: "مقاطع قراءة وكتابة مع إجابات قائمة على الأدلة.",
-    FR: "Sujets de lecture/écriture avec réponses fondées sur des preuves.",
+    AR: "????? ????? ?????? ?? ?????? ????? ??? ??????.",
+    FR: "Sujets de lecture/�criture avec r�ponses fond�es sur des preuves.",
   },
   tests: {
     EN: "Full mixed-subject exams for diagnostics and practice.",
-    AR: "اختبارات شاملة لمواد متعددة للتشخيص والمراجعة.",
+    AR: "???????? ????? ????? ?????? ??????? ?????????.",
     FR: "Examens mixtes pour un diagnostic complet.",
   },
 };
@@ -160,212 +173,212 @@ const COPY = {
     lessonRequired: "Please select a lesson.",
   },
   AR: {
-    title: "بنك الأسئلة",
-    subtitle: "أضف الأسئلة وادِرها للاختبارات والواجبات والتمارين الصفية.",
-    questionType: "نوع السؤال",
-    mcqLabel: "اختيار من متعدد (أ/ب/ج/د)",
-    fillLabel: "إملأ الفراغ",
-    subject: "المادة",
-    unit: "الوحدة",
-    lesson: "الدرس",
-    hardness: "درجة الصعوبة",
-    skill: "المهارة",
-    question: "السؤال",
-    answers: "الإجابات",
-    answer: (label) => `الإجابة ${label}`,
-    fillAnswerLabel: "الإجابة الصحيحة",
-    correctAnswer: "الخيار الصحيح",
-    imageLabel: "رابط الصورة",
-    imageUpload: "رفع صورة",
-    imageUploading: "جاري الرفع...",
-    imageAlt: "صورة السؤال (اختياري)",
-    removeImage: "إزالة الصورة",
-    optional: "اختياري",
-    create: "حفظ السؤال",
-    reset: "إعادة ضبط",
-    filters: "عوامل التصفية",
-    filterQuestionType: "نوع السؤال",
-    filterAll: "الكل",
-    tableQuestion: "السؤال",
-    tableSubject: "المادة",
-    tableUnit: "الوحدة",
-    tableLesson: "الدرس",
-    tableType: "النوع",
-    tableHardness: "الصعوبة",
-    tableSkill: "المهارة",
-    tableImage: "الصورة",
-    tableCreated: "تاريخ الإضافة",
-    tableActions: "إجراءات",
-    delete: "حذف",
-    deleteConfirm: "هل تريد حذف هذا السؤال؟",
-    noResults: "لا توجد أسئلة بعد. أضف أول سؤال أعلاه.",
-    loadError: "تعذّر تحميل الأسئلة.",
-    createSuccess: "تم حفظ السؤال.",
-    updateSuccess: "تم تحديث السؤال.",
-    uploadTip: "اسحب الصورة وأفلتها أو اضغط للرفع. يمكنك أيضًا لصق رابط صورة متاحة للجميع.",
-    refresh: "تحديث",
-    update: "تحديث السؤال",
-    cancelEdit: "إلغاء التعديل",
-    editingNotice: "تعديل سؤال موجود",
-    edit: "تعديل",
-    preview: "عرض",
-    close: "إغلاق",
-    previewTitle: "معاينة السؤال",
-    importLabel: "استيراد CSV",
-    importHint: "قم برفع ملف CSV لإضافة عدة أسئلة.",
-    importingStatus: "استيراد السؤال {current} من {total}",
-    importSubmit: "حفظ والانتقال",
-    skip: "تخطي",
-    cancelImport: "إلغاء الاستيراد",
-    importError: "تعذر معالجة ملف CSV.",
-    importEmpty: "لا توجد صفوف في ملف CSV.",
-    importFinished: "اكتمل الاستيراد.",
-    importPreviewTitle: "معاينة السؤال المستورد",
-    importSkipped: "تم تخطي السؤال.",
-   tabMath: "بنك الرياضيات",
-    tabEnglish: "بنك اللغة الإنجليزية",
-    tabTests: "بنك الاختبارات",
-    tableBuilderTitle: "منشئ الجداول",
-    tableBuilderInstructions: "اضبط عدد الصفوف والأعمدة واملأ الخلايا ثم أدرج الجدول في السؤال أو الإجابة.",
-    tableBuilderRows: "عدد الصفوف",
-    tableBuilderCols: "عدد الأعمدة",
-    tableBuilderIncludeHeader: "استخدام الصف الأول كعنوان",
-    tableBuilderTarget: "الإدراج في",
-    tableBuilderCellsLabel: "الخلايا",
-    tableBuilderCellPlaceholder: "خلية",
-    tableBuilderPreview: "معاينة",
-    tableBuilderPreviewEmpty: "أضف محتوى لعرض الجدول.",
-    tableBuilderInsert: "إدراج الجدول",
-    tableBuilderClear: "مسح الخلايا",
-    tableBuilderInsertSuccess: "تم إدراج الجدول.",
-    tableBuilderEmptyError: "يرجى إدخال محتوى في خلايا الجدول قبل الإدراج.",
-    tableBuilderHide: "إخفاء منشئ الجداول",
-    addTable: "إضافة جدول",
-    addImage: "إضافة صورة",
-    hideImage: "إخفاء خيارات الصورة",
-    tableBuilderMergedCell: "مُدمج",
-    tableBuilderSelectedCell: (row, col) => `الخلية المحددة: الصف ${row + 1}، العمود ${col + 1}`,
-    tableBuilderMergeRight: "دمج إلى اليمين",
-    tableBuilderMergeDown: "دمج إلى الأسفل",
-    tableBuilderSplitCell: "فصل الخلية",
-    sectionSetup: "إعداد السؤال",
-    sectionSetupDesc: "اختر نوع السؤال والمادة والبيانات قبل كتابة المتن.",
-    sectionPrompt: "النص والوسائط",
-    sectionPromptDesc: "اكتب نص السؤال وأضف الملاحظات الاختيارية.",
-    sectionAnswers: "خيارات الإجابة",
-    sectionAnswersDesc: "أدخل الخيارات وحدد الإجابة الصحيحة.",
-    sectionAssets: "الأدوات والمرفقات",
-    sectionAssetsDesc: "استخدم منشئ الجداول أو رفع الصور عند الحاجة.",
-    sectionFiltersDesc: "رشّح قائمة النتائج أو أعد تحميل أحدث الأسئلة.",
-    questionTypeRequired: "يرجى اختيار نوع السؤال.",
-    subjectRequired: "يرجى اختيار المادة.",
-    correctAnswerRequired: "يرجى تحديد الإجابة الصحيحة.",
-    unitRequired: "يرجى اختيار الوحدة.",
-    lessonRequired: "يرجى اختيار الدرس.",
+    title: "??? ???????",
+    subtitle: "??? ??????? ??????? ?????????? ????????? ????????? ??????.",
+    questionType: "??? ??????",
+    mcqLabel: "?????? ?? ????? (?/?/?/?)",
+    fillLabel: "???? ??????",
+    subject: "??????",
+    unit: "??????",
+    lesson: "?????",
+    hardness: "???? ???????",
+    skill: "???????",
+    question: "??????",
+    answers: "????????",
+    answer: (label) => `??????? ${label}`,
+    fillAnswerLabel: "??????? ???????",
+    correctAnswer: "?????? ??????",
+    imageLabel: "???? ??????",
+    imageUpload: "??? ????",
+    imageUploading: "???? ?????...",
+    imageAlt: "???? ?????? (???????)",
+    removeImage: "????? ??????",
+    optional: "???????",
+    create: "??? ??????",
+    reset: "????? ???",
+    filters: "????? ???????",
+    filterQuestionType: "??? ??????",
+    filterAll: "????",
+    tableQuestion: "??????",
+    tableSubject: "??????",
+    tableUnit: "??????",
+    tableLesson: "?????",
+    tableType: "?????",
+    tableHardness: "???????",
+    tableSkill: "???????",
+    tableImage: "??????",
+    tableCreated: "????? ???????",
+    tableActions: "???????",
+    delete: "???",
+    deleteConfirm: "?? ???? ??? ??? ???????",
+    noResults: "?? ???? ????? ???. ??? ??? ???? ?????.",
+    loadError: "????? ????? ???????.",
+    createSuccess: "?? ??? ??????.",
+    updateSuccess: "?? ????? ??????.",
+    uploadTip: "???? ?????? ??????? ?? ???? ?????. ????? ????? ??? ???? ???? ????? ??????.",
+    refresh: "?????",
+    update: "????? ??????",
+    cancelEdit: "????? ???????",
+    editingNotice: "????? ???? ?????",
+    edit: "?????",
+    preview: "???",
+    close: "?????",
+    previewTitle: "?????? ??????",
+    importLabel: "??????? CSV",
+    importHint: "?? ???? ??? CSV ?????? ??? ?????.",
+    importingStatus: "??????? ?????? {current} ?? {total}",
+    importSubmit: "??? ?????????",
+    skip: "????",
+    cancelImport: "????? ?????????",
+    importError: "???? ?????? ??? CSV.",
+    importEmpty: "?? ???? ???? ?? ??? CSV.",
+    importFinished: "????? ?????????.",
+    importPreviewTitle: "?????? ?????? ????????",
+    importSkipped: "?? ???? ??????.",
+   tabMath: "??? ?????????",
+    tabEnglish: "??? ????? ??????????",
+    tabTests: "??? ??????????",
+    tableBuilderTitle: "???? ???????",
+    tableBuilderInstructions: "???? ??? ?????? ???????? ????? ??????? ?? ???? ?????? ?? ?????? ?? ???????.",
+    tableBuilderRows: "??? ??????",
+    tableBuilderCols: "??? ???????",
+    tableBuilderIncludeHeader: "??????? ???? ????? ??????",
+    tableBuilderTarget: "??????? ??",
+    tableBuilderCellsLabel: "???????",
+    tableBuilderCellPlaceholder: "????",
+    tableBuilderPreview: "??????",
+    tableBuilderPreviewEmpty: "??? ????? ???? ??????.",
+    tableBuilderInsert: "????? ??????",
+    tableBuilderClear: "??? ???????",
+    tableBuilderInsertSuccess: "?? ????? ??????.",
+    tableBuilderEmptyError: "???? ????? ????? ?? ????? ?????? ??? ???????.",
+    tableBuilderHide: "????? ???? ???????",
+    addTable: "????? ????",
+    addImage: "????? ????",
+    hideImage: "????? ?????? ??????",
+    tableBuilderMergedCell: "?????",
+    tableBuilderSelectedCell: (row, col) => `?????? ???????: ???? ${row + 1}? ?????? ${col + 1}`,
+    tableBuilderMergeRight: "??? ??? ??????",
+    tableBuilderMergeDown: "??? ??? ??????",
+    tableBuilderSplitCell: "??? ??????",
+    sectionSetup: "????? ??????",
+    sectionSetupDesc: "???? ??? ?????? ??????? ????????? ??? ????? ?????.",
+    sectionPrompt: "???? ????????",
+    sectionPromptDesc: "???? ?? ?????? ???? ????????? ??????????.",
+    sectionAnswers: "?????? ???????",
+    sectionAnswersDesc: "???? ???????? ???? ??????? ???????.",
+    sectionAssets: "??????? ?????????",
+    sectionAssetsDesc: "?????? ???? ??????? ?? ??? ????? ??? ??????.",
+    sectionFiltersDesc: "???? ????? ??????? ?? ??? ????? ???? ???????.",
+    questionTypeRequired: "???? ?????? ??? ??????.",
+    subjectRequired: "???? ?????? ??????.",
+    correctAnswerRequired: "???? ????? ??????? ???????.",
+    unitRequired: "???? ?????? ??????.",
+    lessonRequired: "???? ?????? ?????.",
   },
   FR: {
     title: "Banque de questions",
-    subtitle: "Ajoutez et gérez des questions pour les quiz, devoirs et travaux en classe.",
+    subtitle: "Ajoutez et g�rez des questions pour les quiz, devoirs et travaux en classe.",
     questionType: "Type de question",
     mcqLabel: "Choix multiples (A/B/C/D)",
-    fillLabel: "Réponse libre",
-    subject: "Matière",
-    unit: "Unité",
-    lesson: "Leçon",
-    hardness: "Difficulté",
-    skill: "Compétence",
+    fillLabel: "R�ponse libre",
+    subject: "Mati�re",
+    unit: "Unit�",
+    lesson: "Le�on",
+    hardness: "Difficult�",
+    skill: "Comp�tence",
     question: "Question",
-    answers: "Réponses",
-    answer: (label) => `Réponse ${label}`,
-    fillAnswerLabel: "Bonne réponse",
+    answers: "R�ponses",
+    answer: (label) => `R�ponse ${label}`,
+    fillAnswerLabel: "Bonne r�ponse",
     correctAnswer: "Choix correct",
     imageLabel: "URL de l'image",
-    imageUpload: "Téléverser une image",
-    imageUploading: "Téléversement...",
+    imageUpload: "T�l�verser une image",
+    imageUploading: "T�l�versement...",
     imageAlt: "Image de la question (optionnel)",
     removeImage: "Supprimer l'image",
     optional: "optionnel",
     create: "Enregistrer",
-    reset: "Réinitialiser",
+    reset: "R�initialiser",
     filters: "Filtres",
     filterQuestionType: "Type de question",
     filterAll: "Tous",
     tableQuestion: "Question",
-    tableSubject: "Matière",
-    tableUnit: "Unité",
-    tableLesson: "Leçon",
+    tableSubject: "Mati�re",
+    tableUnit: "Unit�",
+    tableLesson: "Le�on",
     tableType: "Type",
-    tableHardness: "Difficulté",
-    tableSkill: "Compétence",
+    tableHardness: "Difficult�",
+    tableSkill: "Comp�tence",
     tableImage: "Image",
-    tableCreated: "Créé le",
+    tableCreated: "Cr�� le",
     tableActions: "Actions",
     delete: "Supprimer",
     deleteConfirm: "Supprimer cette question ?",
     noResults: "Aucune question pour le moment. Ajoutez-en une ci-dessus.",
     loadError: "Impossible de charger les questions.",
-    createSuccess: "Question enregistrée.",
-    updateSuccess: "Question mise à jour.",
-    uploadTip: "Glissez-déposez une image ou cliquez pour la téléverser. Vous pouvez aussi coller une URL publique.",
+    createSuccess: "Question enregistr�e.",
+    updateSuccess: "Question mise � jour.",
+    uploadTip: "Glissez-d�posez une image ou cliquez pour la t�l�verser. Vous pouvez aussi coller une URL publique.",
     refresh: "Actualiser",
-    update: "Mettre à jour la question",
+    update: "Mettre � jour la question",
     cancelEdit: "Annuler la modification",
     editingNotice: "Modification d'une question existante",
     edit: "Modifier",
-    preview: "Aperçu",
+    preview: "Aper�u",
     close: "Fermer",
-    previewTitle: "Aperçu de la question",
+    previewTitle: "Aper�u de la question",
     importLabel: "Importer un CSV",
-    importHint: "Téléversez un fichier CSV pour ajouter plusieurs questions.",
+    importHint: "T�l�versez un fichier CSV pour ajouter plusieurs questions.",
     importingStatus: "Import de la question {current} sur {total}",
     importSubmit: "Enregistrer et continuer",
     skip: "Ignorer",
     cancelImport: "Annuler l'import",
     importError: "Impossible de traiter le fichier CSV.",
-    importEmpty: "Aucune ligne trouvée dans le CSV.",
-    importFinished: "Import terminé.",
-    importPreviewTitle: "Aperçu de la question importée",
-    importSkipped: "Question ignorée.",
+    importEmpty: "Aucune ligne trouv�e dans le CSV.",
+    importFinished: "Import termin�.",
+    importPreviewTitle: "Aper�u de la question import�e",
+    importSkipped: "Question ignor�e.",
     tabMath: "Banque Maths",
     tabEnglish: "Banque Anglais",
     tabTests: "Banque Tests",
-    tableBuilderTitle: "Créateur de tableau",
-    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis insérez le tableau dans la question ou la réponse.",
+    tableBuilderTitle: "Cr�ateur de tableau",
+    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis ins�rez le tableau dans la question ou la r�ponse.",
     tableBuilderRows: "Lignes",
     tableBuilderCols: "Colonnes",
-    tableBuilderIncludeHeader: "Utiliser la première ligne comme en-tête",
-    tableBuilderTarget: "Insérer dans",
+    tableBuilderIncludeHeader: "Utiliser la premi�re ligne comme en-t�te",
+    tableBuilderTarget: "Ins�rer dans",
     tableBuilderCellsLabel: "Cellules",
     tableBuilderCellPlaceholder: "Cellule",
-    tableBuilderPreview: "Aperçu",
-    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aperçu du tableau.",
-    tableBuilderInsert: "Insérer le tableau",
+    tableBuilderPreview: "Aper�u",
+    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aper�u du tableau.",
+    tableBuilderInsert: "Ins�rer le tableau",
     tableBuilderClear: "Effacer les cellules",
-    tableBuilderInsertSuccess: "Tableau inséré.",
-    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'insérer le tableau.",
-    tableBuilderHide: "Masquer le créateur de tableau",
+    tableBuilderInsertSuccess: "Tableau ins�r�.",
+    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'ins�rer le tableau.",
+    tableBuilderHide: "Masquer le cr�ateur de tableau",
     addTable: "Ajouter un tableau",
     addImage: "Ajouter une image",
     hideImage: "Masquer les options d'image",
-    tableBuilderMergedCell: "Fusionné",
-    tableBuilderSelectedCell: (row, col) => `Cellule sélectionnée : ligne ${row + 1}, colonne ${col + 1}`,
+    tableBuilderMergedCell: "Fusionn�",
+    tableBuilderSelectedCell: (row, col) => `Cellule s�lectionn�e : ligne ${row + 1}, colonne ${col + 1}`,
     tableBuilderMergeRight: "Fusionner vers la droite",
     tableBuilderMergeDown: "Fusionner vers le bas",
-    tableBuilderSplitCell: "Séparer la cellule",
+    tableBuilderSplitCell: "S�parer la cellule",
     sectionSetup: "Configuration",
-    sectionSetupDesc: "Choisissez le type de question, la matière et les métadonnées.",
-    sectionPrompt: "Énoncé et médias",
-    sectionPromptDesc: "Rédigez l'énoncé et ajoutez des notes facultatives.",
-    sectionAnswers: "Choix de réponses",
-    sectionAnswersDesc: "Saisissez les options et indiquez la bonne réponse.",
-    sectionAssets: "Outils et pièces jointes",
-    sectionAssetsDesc: "Utilisez le générateur de tableaux ou l'import d'images.",
-    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions récentes.",
-    questionTypeRequired: "Veuillez sélectionner un type de question.",
-    subjectRequired: "Veuillez choisir la matière.",
-    correctAnswerRequired: "Veuillez indiquer la réponse correcte.",
-    unitRequired: "Veuillez choisir l'unité.",
-    lessonRequired: "Veuillez choisir la leçon.",
+    sectionSetupDesc: "Choisissez le type de question, la mati�re et les m�tadonn�es.",
+    sectionPrompt: "�nonc� et m�dias",
+    sectionPromptDesc: "R�digez l'�nonc� et ajoutez des notes facultatives.",
+    sectionAnswers: "Choix de r�ponses",
+    sectionAnswersDesc: "Saisissez les options et indiquez la bonne r�ponse.",
+    sectionAssets: "Outils et pi�ces jointes",
+    sectionAssetsDesc: "Utilisez le g�n�rateur de tableaux ou l'import d'images.",
+    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions r�centes.",
+    questionTypeRequired: "Veuillez s�lectionner un type de question.",
+    subjectRequired: "Veuillez choisir la mati�re.",
+    correctAnswerRequired: "Veuillez indiquer la r�ponse correcte.",
+    unitRequired: "Veuillez choisir l'unit�.",
+    lessonRequired: "Veuillez choisir la le�on.",
   },
 };
 
@@ -391,6 +404,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const [form, setForm] = useState(() => createDefaultForm(bank));
   const [questions, setQuestions] = useState([]);
   const [filters, setFilters] = useState({ type: "" });
+  const [filtersPage, setFiltersPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -640,6 +654,33 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     });
   }, [questions, filters]);
 
+  const totalFilterPages = Math.max(1, Math.ceil(Math.max(filteredQuestions.length, 1) / FILTERS_PAGE_SIZE));
+  const paginatedQuestions = useMemo(() => {
+    const start = filtersPage * FILTERS_PAGE_SIZE;
+    return filteredQuestions.slice(start, start + FILTERS_PAGE_SIZE);
+  }, [filteredQuestions, filtersPage]);
+  const pageStartIndex = filteredQuestions.length === 0 ? 0 : filtersPage * FILTERS_PAGE_SIZE + 1;
+  const pageEndIndex = filteredQuestions.length === 0 ? 0 : Math.min(filteredQuestions.length, filtersPage * FILTERS_PAGE_SIZE + paginatedQuestions.length);
+
+  useEffect(() => {
+    setFiltersPage((prev) => {
+      const maxPage = Math.max(totalFilterPages - 1, 0);
+      return Math.min(prev, maxPage);
+    });
+  }, [filteredQuestions.length, totalFilterPages]);
+
+  useEffect(() => {
+    setFiltersPage(0);
+  }, [filters.type, bank.id]);
+
+  const handlePrevFiltersPage = () => {
+    setFiltersPage((prev) => Math.max(prev - 1, 0));
+  };
+
+  const handleNextFiltersPage = () => {
+    setFiltersPage((prev) => Math.min(prev + 1, Math.max(totalFilterPages - 1, 0)));
+  };
+
   const handleChange = (field, value) => {
     setForm((prev) => {
       if (field === "subject") {
@@ -832,9 +873,9 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setTableBuilder(createInitialTableBuilder(defaultForm.questionType));
   };
 
-  const handleImportFile = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+const handleImportFile = async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
     try {
       const text = await file.text();
       const parsed = parseCSV(text);
@@ -857,9 +898,8 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
 const validate = () => {
-    const trimmedQuestion = form.question.trim();
     if (!form.questionType) return copy.questionTypeRequired || COPY.EN.questionTypeRequired;
-    if (!trimmedQuestion) return "Question is required.";
+    if (!promptHasContent(form.question || "")) return "Question is required.";
     if (!bank.subjectLocked && !form.subject) return copy.subjectRequired || COPY.EN.subjectRequired;
     const subjectForValidation = bank.subjectLocked ? (bank.defaultSubject || SUBJECT_OPTIONS[0].value) : (form.subject || "");
 
@@ -1154,12 +1194,10 @@ const validate = () => {
           </FormSection>
 
           <FormSection title={copy.sectionPrompt || COPY.EN.sectionPrompt} description={copy.sectionPromptDesc || COPY.EN.sectionPromptDesc}>
-            <textarea
+            <RichTextEditor
               value={form.question}
-              onChange={(e) => handleChange("question", e.target.value)}
-              rows={4}
-              style={textareaStyle}
-              required
+              onChange={(html) => handleChange("question", html)}
+              placeholder="Start typing your question..."
             />
           </FormSection>
 
@@ -1362,7 +1400,7 @@ const validate = () => {
               </ol>
             ) : (
               <div style={{ background: "#e0f2fe", borderRadius: 6, padding: "6px 10px", color: "#0c4a6e" }}>
-                {currentImportRow.correct_answer || "—"}
+                {currentImportRow.correct_answer || "�"}
               </div>
             )}
             {currentImportRow.image_url && (
@@ -1418,6 +1456,7 @@ const validate = () => {
         ) : filteredQuestions.length === 0 ? (
           <p style={{ color: "#6b7280" }}>{copy.noResults}</p>
         ) : (
+          <>
           <div style={{ overflowX: "auto", marginTop: 16 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
@@ -1439,23 +1478,23 @@ const validate = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredQuestions.map((row) => (
+                {paginatedQuestions.map((row) => (
                   <tr key={row.id} style={tbodyRowStyle}>
                     <td style={tdStyle}>{firstWords(row.question, 3)}</td>
                     <td style={tdStyle}>{subjectLabel(row.subject, lang)}</td>
                     {bank.supportsUnitLesson && (
                       <>
-                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "—"}</td>
-                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "—"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "�"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "�"}</td>
                       </>
                     )}
                     <td style={tdStyle}>{row.question_type === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
                     <td style={tdStyle}>{hardnessLabel(row.hardness, lang)}</td>
-                    <td style={tdStyle}>{row.skill || "—"}</td>
+                    <td style={tdStyle}>{row.skill || "�"}</td>
                     <td style={tdStyle}>
                       {row.image_url ? (() => {
                         const href = resolveImageUrl(row.image_url);
-                        if (!href) return "—";
+                        if (!href) return "�";
                         const isLocal = row.image_url.startsWith(LOCAL_IMAGE_PREFIX);
                         if (isLocal) {
                           return (
@@ -1474,7 +1513,7 @@ const validate = () => {
                           </a>
                         );
                       })() : (
-                        "—"
+                        "�"
                       )}
                     </td>
                     <td style={tdStyle}>{new Date(row.created_at).toLocaleString()}</td>
@@ -1514,6 +1553,46 @@ const validate = () => {
               </tbody>
             </table>
           </div>
+          {filteredQuestions.length > 0 && (
+            <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <span style={{ color: "#4b5563", fontSize: 14 }}>
+                Showing {pageStartIndex === 0 ? 0 : pageStartIndex}-{pageEndIndex} of {filteredQuestions.length}
+              </span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handlePrevFiltersPage}
+                  disabled={filtersPage === 0}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: "1px solid #d1d5db",
+                    background: filtersPage === 0 ? "#f3f4f6" : "#fff",
+                    color: "#111827",
+                    cursor: filtersPage === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextFiltersPage}
+                  disabled={pageEndIndex >= filteredQuestions.length}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: "1px solid #d1d5db",
+                    background: pageEndIndex >= filteredQuestions.length ? "#f3f4f6" : "#fff",
+                    color: "#111827",
+                    cursor: pageEndIndex >= filteredQuestions.length ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </Card>
 
@@ -1793,8 +1872,8 @@ function TableBuilderSection({
                       />
                       {(cell.rowspan > 1 || cell.colspan > 1) && (
                         <div style={tableBuilderSpanBadgeStyle}>
-                          {cell.rowspan > 1 && <span>{`rowspan ×${cell.rowspan}`}</span>}
-                          {cell.colspan > 1 && <span>{`colspan ×${cell.colspan}`}</span>}
+                          {cell.rowspan > 1 && <span>{`rowspan �${cell.rowspan}`}</span>}
+                          {cell.colspan > 1 && <span>{`colspan �${cell.colspan}`}</span>}
                         </div>
                       )}
                     </>
@@ -1973,12 +2052,6 @@ const inputStyle = {
   border: "1px solid #d1d5db",
   fontSize: 14,
   boxSizing: "border-box",
-};
-
-const textareaStyle = {
-  ...inputStyle,
-  resize: "vertical",
-  minHeight: 120,
 };
 
 const selectStyle = {
@@ -2483,6 +2556,11 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const HTML_TABLE_STYLE = "border-collapse:collapse;width:100%;border:1px solid #d1d5db;background:#ffffff";
 const HTML_HEADER_CELL_STYLE = "border:1px solid #d1d5db;padding:8px;background:#f3f4f6;font-weight:600;text-align:left";
 const HTML_BODY_CELL_STYLE = "border:1px solid #d1d5db;padding:8px;text-align:left;background:#ffffff";
+const mergeStyles = (base, extra) => {
+  const trimmedExtra = (extra || "").trim();
+  if (!trimmedExtra) return base;
+  return `${base}${base.endsWith(";") ? "" : ";"}${trimmedExtra}`;
+};
 
 const createCell = () => ({
   text: "",
@@ -2560,7 +2638,10 @@ function buildTableHtml(cells, includeHeader) {
           const attrs = [];
           if (cell.rowspan > 1) attrs.push(`rowspan="${cell.rowspan}"`);
           if (cell.colspan > 1) attrs.push(`colspan="${cell.colspan}"`);
-          const style = includeHeader && rowIndex === 0 ? HTML_HEADER_CELL_STYLE : HTML_BODY_CELL_STYLE;
+          const baseStyle = includeHeader && rowIndex === 0 ? HTML_HEADER_CELL_STYLE : HTML_BODY_CELL_STYLE;
+          const backgroundInline =
+            cell.background && cell.background !== "#ffffff" ? `background:${cell.background}` : "";
+          const style = mergeStyles(baseStyle, backgroundInline);
           attrs.push(`style="${style}"`);
           const attrText = attrs.length ? ` ${attrs.join(" ")}` : "";
           return `<${tag}${attrText}>${tableHtmlEscape(cell.text)}</${tag}>`;
@@ -2616,7 +2697,7 @@ function tableTargetLabel(copy, value) {
 const ALLOWED_TABLE_TAGS = new Set(["TABLE", "TBODY", "THEAD", "TFOOT", "TR", "TD", "TH", "COLGROUP", "COL", "SPAN", "P", "BR", "B", "STRONG", "I", "EM", "U", "SMALL"]);
 const ALLOWED_TABLE_ATTRS = new Set(["rowspan", "colspan", "align", "style"]);
 
-const sanitizeTableHtml = (html) => {
+const sanitizeRichTextHtml = (html) => {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") return html;
   try {
     const parser = new DOMParser();
@@ -2640,17 +2721,20 @@ const sanitizeTableHtml = (html) => {
       node.replaceWith(doc.createTextNode(text));
     });
     doc.querySelectorAll("table").forEach((table) => {
-      table.setAttribute("style", HTML_TABLE_STYLE);
+      const current = table.getAttribute("style") || "";
+      table.setAttribute("style", mergeStyles(HTML_TABLE_STYLE, current));
       table.querySelectorAll("th").forEach((th) => {
-        th.setAttribute("style", HTML_HEADER_CELL_STYLE);
+        const currentTh = th.getAttribute("style") || "";
+        th.setAttribute("style", mergeStyles(HTML_HEADER_CELL_STYLE, currentTh));
       });
       table.querySelectorAll("td").forEach((td) => {
-        td.setAttribute("style", HTML_BODY_CELL_STYLE);
+        const currentTd = td.getAttribute("style") || "";
+        td.setAttribute("style", mergeStyles(HTML_BODY_CELL_STYLE, currentTd));
       });
     });
     return doc.body.innerHTML;
   } catch (err) {
-    console.warn("sanitizeTableHtml", err);
+    console.warn("sanitizeRichTextHtml", err);
     return html;
   }
 };
@@ -2711,7 +2795,7 @@ const renderMathSegments = (text, block) => {
 
 function MathText({ value, block = false }) {
   const raw = value == null ? "" : String(value).trim();
-  if (!raw) return <span>—</span>;
+  if (!raw) return <span>�</span>;
 
   const decoded = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   const normalized = decoded.replace(/\\\\/g, "\\").replace(/\r\n/g, "\n");
@@ -2730,30 +2814,15 @@ function MathText({ value, block = false }) {
     );
   }
 
-  const tableRegex = /<table[\s\S]*?<\/table>/gi;
-  if (tableRegex.test(normalized)) {
-    const nodes = [];
-    let lastIndex = 0;
-    normalized.replace(tableRegex, (match, offset) => {
-      if (offset > lastIndex) {
-        const textPart = normalized.slice(lastIndex, offset);
-        nodes.push(...renderMathSegments(textPart, block));
-      }
-      const sanitized = sanitizeTableHtml(match);
-      nodes.push(
-        <div
-          key={`table-${nodes.length}`}
-          style={{ overflowX: "auto" }}
-          dangerouslySetInnerHTML={{ __html: sanitized }}
-        />
-      );
-      lastIndex = offset + match.length;
-      return match;
-    });
-    if (lastIndex < normalized.length) {
-      nodes.push(...renderMathSegments(normalized.slice(lastIndex), block));
-    }
-    return <>{nodes}</>;
+  const htmlRegex = /<\s*(table|img|div|p|span|br|figure|figcaption|ul|ol|li|mark|strong|em|u|small|blockquote|hr|a)\b/i;
+  if (htmlRegex.test(normalized)) {
+    const sanitized = sanitizeRichTextHtml(normalized);
+    return (
+      <div
+        style={{ overflowX: sanitized.includes("<table") ? "auto" : "visible" }}
+        dangerouslySetInnerHTML={{ __html: sanitized }}
+      />
+    );
   }
 
   return <>{renderMathSegments(normalized, block)}</>;
@@ -2765,15 +2834,20 @@ MathText.propTypes = {
 };
 
 function firstWords(text, count = 3) {
-  if (!text) return "—";
-  const words = text.trim().split(/\s+/);
+  if (!text) return "-";
+  const plain = String(text)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .trim();
+  if (!plain) return "-";
+  const words = plain.split(/\s+/);
   if (words.length <= count) return words.join(" ");
   return `${words.slice(0, count).join(" ")}...`;
 }
 
 function subjectLabel(value, lang) {
   const option = SUBJECT_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "—";
+  if (!option) return value || "�";
   return option.label[lang] || option.label.EN;
 }
 
@@ -2782,7 +2856,7 @@ function unitLabel(subject, value, lang) {
     const option = MATH_UNIT_OPTIONS.find((opt) => opt.value === value);
     if (option) return option.label[lang] || option.label.EN;
   }
-  return value || "—";
+  return value || "�";
 }
 
 function lessonLabel(subject, unit, value, lang) {
@@ -2791,12 +2865,12 @@ function lessonLabel(subject, unit, value, lang) {
     const option = lessons.find((opt) => opt.value === value);
     if (option) return option.label[lang] || option.label.EN;
   }
-  return value || "—";
+  return value || "�";
 }
 
 function hardnessLabel(value, lang) {
   const option = HARDNESS_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "—";
+  if (!option) return value || "�";
   return option.label[lang] || option.label.EN;
 }
 
@@ -2932,6 +3006,7 @@ function normalizeCSVRow(record = {}) {
     assignment_type: get("assignment_type") || "quiz",
   };
 }
+
 
 
 
