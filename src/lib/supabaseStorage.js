@@ -1,5 +1,14 @@
 import { supabase } from "./supabase.js";
 
+const TRAINING_KIND_WHITELIST = ["classwork", "homework", "quiz", "lecture"];
+const normalizeTrainingKind = (value) => {
+  const str = String(value || "").trim().toLowerCase();
+  if (TRAINING_KIND_WHITELIST.includes(str)) return str;
+  if (["exam", "diagnostic", "sat", "assessment", "test"].includes(str)) return "quiz";
+  if (["practice", "session"].includes(str)) return "classwork";
+  return "classwork";
+};
+
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const sanitizeUuid = (value) => {
@@ -110,10 +119,11 @@ export async function beginSatTrainingSession({
     userEmail = user?.email || null;
   } catch {}
 
+  const kindValue = normalizeTrainingKind(kind);
   const baseRow = {
     ts,
     user_email: userEmail,
-    kind,
+    kind: kindValue,
     section,
     unit,
     lesson,
@@ -147,7 +157,7 @@ export async function beginSatTrainingSession({
   const fallbackRow = cleanse({
     ts,
     user_email: userEmail,
-    kind,
+    kind: kindValue,
     section,
     unit,
     lesson,
@@ -202,10 +212,11 @@ export async function saveSatTraining({
   let userEmail = null;
   try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
 
+  const kindValue = normalizeTrainingKind(kind);
   const baseRow = {
     ts,
     user_email: userEmail,
-    kind,
+    kind: kindValue,
     section,
     unit,
     lesson,

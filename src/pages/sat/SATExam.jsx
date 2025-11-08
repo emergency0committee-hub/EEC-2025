@@ -15,6 +15,15 @@ import { renderMathText } from "../../lib/mathText.jsx";
 import { fetchQuestionBankByIds } from "../../lib/assignmentQuestions.js";
 import { BANKS, mapBankQuestionToResource } from "../../lib/questionBanks.js";
 
+const TRAINING_KIND_WHITELIST = ["classwork", "homework", "quiz", "lecture"];
+const normalizeTrainingKind = (value) => {
+  const str = String(value || "").trim().toLowerCase();
+  if (TRAINING_KIND_WHITELIST.includes(str)) return str;
+  if (["exam", "diagnostic", "sat", "assessment", "test"].includes(str)) return "quiz";
+  if (["practice", "session"].includes(str)) return "classwork";
+  return "classwork";
+};
+
 export default function SATExam({ onNavigate, practice = null, preview = false }) {
   SATExam.propTypes = {
     onNavigate: PropTypes.func.isRequired,
@@ -282,6 +291,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const [summaryModal, setSummaryModal] = useState({ open: false, stats: null, reason: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sectionActive, setSectionActive] = useState(true);
+  const [finalTimeout, setFinalTimeout] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
   const qCount = mod?.questions?.length || 0;
   const cd = useCountdown(isTimed ? mod?.durationSec : 60);
@@ -351,6 +361,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
 
   useEffect(() => {
     if (!mod) return;
+    setFinalTimeout(false);
     setPage(1);
     questionStartRef.current = null;
     prevPageRef.current = 1;
@@ -381,7 +392,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   }, [sectionActive, isTimed, mod?.durationSec]);
 
   useEffect(() => { // auto-advance on timer end
-    if (!isTimed || !sectionActive) return;
+    if (!isTimed || !sectionActive || finalTimeout) return;
     if (cd.remaining <= 0) {
       if (modIdx + 1 < totalMods) {
         handleNextModule();
@@ -389,7 +400,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
         handleNextModule("timeout");
       }
     }
-  }, [cd.remaining, isTimed, sectionActive, modIdx, totalMods]);
+  }, [cd.remaining, isTimed, sectionActive, modIdx, totalMods, finalTimeout]);
 
   // Track time spent per question
   useEffect(() => {
@@ -455,6 +466,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const currentAns = answers[mod.key] || {};
   const currentFlags = flags[mod.key] || {};
   const updateAnswer = (qid, val) => {
+    if (finalTimeout) return;
     setAnswers((s) => {
       const next = { ...(s[mod.key] || {}) };
       if (val === null || val === undefined) {
@@ -465,7 +477,10 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
       return { ...s, [mod.key]: next };
     });
   };
-  const toggleFlag = (qid) => setFlags((s) => ({ ...s, [mod.key]: { ...(s[mod.key] || {}), [qid]: !((s[mod.key] || {})[qid]) } }));
+  const toggleFlag = (qid) => {
+    if (finalTimeout) return;
+    setFlags((s) => ({ ...s, [mod.key]: { ...(s[mod.key] || {}), [qid]: !((s[mod.key] || {})[qid]) } }));
+  };
 
   const handleNextModule = (finishReason = "submit") => {
     if (modIdx + 1 < totalMods) {
@@ -473,6 +488,9 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
       setSectionActive(false);
       setModIdx(modIdx + 1);
     } else {
+      if (finishReason === "timeout") {
+        setFinalTimeout(true);
+      }
       prepareSubmit(finishReason);
     }
   };
@@ -599,7 +617,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             }
           });
         } catch {}
-        const practiceKind = practice.kind || mod?.kind || 'classwork';
+        const practiceKind = normalizeTrainingKind(practice.kind || mod?.kind || 'classwork');
         const practiceMeta = mergePracticeMeta(practiceKind, practice.meta || mod?.meta || loadedCustom?.meta, mod?.durationSec);
         await saveSatTraining({
           kind: practiceKind,
@@ -693,8 +711,12 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     }
   };
   const cancelSummary = () => {
+    const reason = summaryModal.reason;
     setSummaryModal({ open: false, stats: null, reason: null });
     pendingResultRef.current = null;
+    if (reason === "timeout") {
+      return;
+    }
     questionStartRef.current = Date.now();
     try { cd.start(); } catch {}
   };
@@ -994,7 +1016,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
         onTogglePalette={() => setShowPalette((v) => !v)}
         onBack={() => setPage((p) => Math.max(1, p - 1))}
         onNext={() => setPage((p) => Math.min(qCount, p + 1))}
-        onFinish={handleNextModule}
+        onFinish={() => handleNextModule(finalTimeout ? "timeout" : "submit")}
         canBack={page !== 1}
         canNext={page < qCount}
         isLast={page >= qCount}
@@ -1027,8 +1049,8 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
         <div
           role="dialog"
           aria-modal="true"
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={cancelSummary}
+          style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)", backdropFilter: "blur(2px)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={summaryModal.reason === "timeout" ? undefined : cancelSummary}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -1049,26 +1071,26 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
               {summaryModal.reason === "timeout"
                 ? "Time is up. Your responses will be submitted as they are."
-                : (previewMode
-                    ? "Submit to finish your preview and view the score breakdown (nothing will be saved)."
-                    : "Submit to save your work and view detailed results.")}
+                : "Submit to save your work."}
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={cancelSummary}
-                disabled={isSubmitting}
-                style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontWeight: 600 }}
-              >
-                Review Answers
-              </button>
+              {summaryModal.reason !== "timeout" && (
+                <button
+                  type="button"
+                  onClick={cancelSummary}
+                  disabled={isSubmitting}
+                  style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontWeight: 600 }}
+                >
+                  Review Answers
+                </button>
+              )}
               <button
                 type="button"
                 onClick={finalizeSubmit}
                 disabled={isSubmitting}
                 style={{ border: "none", background: "#2563eb", color: "#fff", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}
               >
-                {isSubmitting ? "Submitting…" : "Submit & View Results"}
+                {isSubmitting ? "Submitting…" : "Submit"}
               </button>
             </div>
           </div>
