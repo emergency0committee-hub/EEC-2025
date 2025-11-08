@@ -12,6 +12,8 @@ import { supabase } from "../../lib/supabase.js";
 import { saveSatResult } from "../../lib/supabaseStorage.js";
 import { loadRWModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../sat/questions.js";
 import { renderMathText } from "../../lib/mathText.jsx";
+import { fetchQuestionBankByIds } from "../../lib/assignmentQuestions.js";
+import { BANKS, mapBankQuestionToResource } from "../../lib/questionBanks.js";
 
 export default function SATExam({ onNavigate, practice = null, preview = false }) {
   SATExam.propTypes = {
@@ -111,6 +113,54 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     });
   };
 
+  const hydrateQuestionReferences = async (refs = [], meta = {}) => {
+    if (!Array.isArray(refs) || refs.length === 0) return [];
+    const groups = refs.reduce((acc, ref) => {
+      const refId = ref?.questionId != null ? String(ref.questionId) : null;
+      if (!refId) return acc;
+      const bankId = ref.bank || meta.questionBank || "math";
+      const bank = BANKS[bankId] || BANKS.math;
+      if (!bank?.table) return acc;
+      if (!acc.has(bankId)) {
+        acc.set(bankId, { bank, ids: new Set(), order: [] });
+      }
+      const group = acc.get(bankId);
+      group.ids.add(refId);
+      group.order.push(refId);
+      return acc;
+    }, new Map());
+    if (groups.size === 0) return [];
+    const fetched = new Map();
+    await Promise.all(
+      Array.from(groups.values()).map(async ({ bank, ids }) => {
+        const rows = await fetchQuestionBankByIds({
+          table: bank.table,
+          ids: Array.from(ids),
+        });
+        rows.forEach((row) => {
+          fetched.set(String(row.id), mapBankQuestionToResource(row));
+        });
+      }),
+    );
+    return refs
+      .map((ref) => {
+        const refId = ref?.questionId != null ? String(ref.questionId) : null;
+        if (!refId) return null;
+        return fetched.get(refId) || null;
+      })
+      .filter(Boolean);
+  };
+
+  const materializeQuestions = async (items = [], meta = {}) => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const refs =
+      meta?.questionRefs ||
+      items.every((item) => item && Object.prototype.hasOwnProperty.call(item, "questionId"));
+    if (!refs) return normalizeQuestions(items);
+    const hydrated = await hydrateQuestionReferences(items, meta);
+    return normalizeQuestions(hydrated);
+  };
+
   // If practice came only with a resourceId, fetch questions from Supabase
   useEffect(() => {
     (async () => {
@@ -133,11 +183,20 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
           } catch {}
         }
         if (items.length) {
-          const normalized = normalizeQuestions(items);
+          const payloadMeta = data?.payload?.meta || data?.payload?.settings || {};
+          const refMeta = practice.meta || payloadMeta || {};
+          const questionMeta = {
+            questionRefs:
+              refMeta.questionRefs ??
+              payloadMeta.questionRefs ??
+              items.every((item) => item && item.questionId),
+            questionBank: refMeta.questionBank || payloadMeta.questionBank || null,
+          };
+          const normalized = await materializeQuestions(items, questionMeta);
           const kind = practice.kind || data?.kind || "classwork";
-          const metaSource = practice.meta || data?.payload?.meta || data?.payload?.settings || null;
           const fallbackDuration = practice.custom?.durationSec != null ? Number(practice.custom.durationSec) : null;
-          const meta = mergePracticeMeta(kind, metaSource, fallbackDuration);
+          const meta = mergePracticeMeta(kind, practice.meta || payloadMeta || null, fallbackDuration);
+          meta.questionRefs = questionMeta.questionRefs || undefined;
           setLoadedCustom({
             questions: normalized,
             durationSec: meta.durationSec,
@@ -150,10 +209,31 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     })();
   }, [practice, loadedCustom]);
 
+  useEffect(() => {
+    (async () => {
+      if (!practice?.custom || loadedCustom || !practice.custom.questionRefs) return;
+      const normalized = await materializeQuestions(practice.custom.questions || [], practice.custom);
+      const kind = practice.kind || practice.custom.kind || "classwork";
+      const meta = mergePracticeMeta(kind, practice.meta || practice.custom.meta, practice.custom.durationSec);
+      setLoadedCustom({
+        questions: normalized,
+        durationSec: meta.durationSec,
+        meta,
+        kind,
+        title: practice.custom.title || "Custom Quiz",
+      });
+    })();
+  }, [practice, loadedCustom]);
+
   const modules = useMemo(() => {
     if (practice) {
       // Custom quiz (from Classwork/Homework/Quiz CSV) or loaded by id
-      const customSource = (practice.custom && Array.isArray(practice.custom.questions)) ? practice.custom : loadedCustom;
+      const customSource =
+        (loadedCustom && Array.isArray(loadedCustom.questions))
+          ? loadedCustom
+          : (practice.custom && Array.isArray(practice.custom.questions))
+            ? practice.custom
+            : null;
       if (customSource && Array.isArray(customSource.questions)) {
         const qs = normalizeQuestions(customSource.questions || []);
         const kind = practice.kind || customSource.kind || "classwork";
@@ -183,7 +263,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
       { key: "m1",  title: "Math - Module 1",              durationSec: 35 * 60, questions: MATH_MODULES[0] || [] },
       { key: "m2",  title: "Math - Module 2",              durationSec: 35 * 60, questions: MATH_MODULES[1] || [] },
     ];
-  }, [rwMods, practice]);
+  }, [rwMods, practice, loadedCustom]);
 
   const [modIdx, setModIdx] = useState(0);
   const mod = modules[modIdx];
@@ -544,29 +624,11 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             if (isAnswerCorrect(q, a[q.id])) rec.correct += 1;
             bySkill.set(label, rec);
           });
-          const customSkills = Array.from(bySkill.values()).map((r) => ({
-            label: r.label,
-            pct: r.total ? Math.round((r.correct / r.total) * 100) : 0,
-            correct: r.correct,
-            total: r.total,
-          }));
           const count = qs.length;
           setSummaryModal({ open: false, stats: null });
           pendingResultRef.current = null;
-          const moduleTitle = modules[0]?.title || practice.custom?.title || mod.title || 'Custom Quiz';
-          onNavigate('sat-results', {
-            submission: {
-              ts: new Date().toISOString(),
-              pillar_agg: { summary },
-              pillar_counts: {
-                modules: [{ key: 'custom', title: moduleTitle, count }],
-                elapsedSec,
-                avgSec: stats?.avgSec ?? (count ? Math.round(elapsedSec / count) : 0),
-              },
-              customSkills,
-              meta: practiceMeta,
-            },
-          });
+          alert("Thanks! Your responses were submitted.");
+          onNavigate("sat-training");
           return;
         }
         setSummaryModal({ open: false, stats: null });
@@ -595,12 +657,9 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
           elapsedSec,
         });
         pendingResultRef.current = null;
-        onNavigate('sat-results', {
-          submission: {
-            pillar_agg: { summary, skills: skillPercents, difficulty: difficultyPercents },
-            pillar_counts: { modules: moduleMeta, elapsedSec },
-          },
-        });
+        setSummaryModal({ open: false, stats: null });
+        alert("Thanks! Your responses were submitted.");
+        onNavigate('sat-training');
       }
     } catch (e) {
       console.error("SAT save failed:", e);

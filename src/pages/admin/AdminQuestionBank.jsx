@@ -1096,10 +1096,10 @@ const validate = () => {
     } else {
       const fill = form.fillAnswer.trim();
       const fillPayload = {
-        answer_a: null,
-        answer_b: null,
-        answer_c: null,
-        answer_d: null,
+        answer_a: fill,
+        answer_b: "",
+        answer_c: "",
+        answer_d: "",
       };
       if (correctColumn) {
         fillPayload[correctColumn] = fill;

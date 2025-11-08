@@ -68,7 +68,7 @@ const formatUnitLabel = (subject, unit) => {
 };
 
 const formatLessonLabel = (subject, unit, lesson) => {
-  if (!lesson) return "—";
+  if (!lesson) return "-";
   return normalizeKeyValue(subject) === "math" ? findMathLessonLabel(unit, lesson) : lesson;
 };
 
@@ -485,14 +485,25 @@ export default function SATTraining({ onNavigate }) {
     });
   };
 
+  const listLooksLikeRefs = (items) => Array.isArray(items) && items.length > 0 && items.every((item) => item && typeof item === "object" && Object.prototype.hasOwnProperty.call(item, "questionId"));
+
+  const cloneItems = (items) => (Array.isArray(items) ? items.map((item) => ({ ...item })) : []);
+
   const getResourceQuestions = (resource) => {
     try {
-      if (Array.isArray(resource?.payload?.items)) return normalizeResourceItems(resource.payload.items);
+      if (Array.isArray(resource?.payload?.items)) {
+        const raw = resource.payload.items;
+        if (listLooksLikeRefs(raw)) return cloneItems(raw);
+        return normalizeResourceItems(raw);
+      }
       if (resource?.url && String(resource.url).startsWith("data:application/json")) {
         const base64 = String(resource.url).split(",")[1] || "";
         const json = decodeURIComponent(escape(window.atob(base64)));
         const obj = JSON.parse(json);
-        if (Array.isArray(obj.items)) return normalizeResourceItems(obj.items);
+        if (Array.isArray(obj.items)) {
+          if (listLooksLikeRefs(obj.items)) return cloneItems(obj.items);
+          return normalizeResourceItems(obj.items);
+        }
       }
     } catch (e) {
       console.warn("read resource questions", e);
@@ -537,7 +548,9 @@ export default function SATTraining({ onNavigate }) {
     (resources || []).forEach((resource) => {
       const questions = getResourceQuestions(resource) || [];
       questions.forEach((question) => {
-        const key = question?.id != null ? String(question.id) : null;
+        let key = null;
+        if (question?.id != null) key = String(question.id);
+        else if (question?.questionId != null) key = String(question.questionId);
         if (key) ids.add(key);
       });
     });
@@ -839,6 +852,13 @@ export default function SATTraining({ onNavigate }) {
           return;
         }
       }
+      const referenceItems = items.map((item) => ({
+        id: item.id,
+        questionId: item.id,
+        bank: bank.id,
+        subject,
+        difficulty: showDifficultySelector ? difficultyValue : null,
+      }));
 
       const subjectLabel =
         SUBJECT_OPTIONS.find((opt) => opt.value === subject)?.label?.EN || subject || "";
@@ -861,13 +881,13 @@ export default function SATTraining({ onNavigate }) {
       };
 
       const inserted = await saveResource({
-        items,
+        items: referenceItems,
         kind: kindLabel,
         title,
         unit: supportsMathUnits ? unitValue : null,
         lesson: supportsMathUnits ? lessonValue : null,
         durationInput,
-        metaExtras,
+        metaExtras: { ...metaExtras, questionRefs: true },
       });
       setResources((list) => [inserted, ...list]);
       setAutoAssign((prev) => ({
@@ -1126,6 +1146,14 @@ export default function SATTraining({ onNavigate }) {
     const items = decodeResourceQuestions(resource) || [];
     const meta = extractResourceMeta(resource);
     const practiceMeta = { ...meta };
+    const questionMetaSource =
+      (resource?.payload && typeof resource.payload === "object" && typeof resource.payload.meta === "object" && resource.payload.meta) ||
+      (resource?.payload && typeof resource.payload === "object" && typeof resource.payload.settings === "object" && resource.payload.settings) ||
+      {};
+    const refsLikely = Array.isArray(items) && items.length > 0 && items.every((item) => item && item.questionId);
+    const questionRefs = Boolean(questionMetaSource.questionRefs || refsLikely);
+    const referenceBank = Array.isArray(items) ? items.find((item) => item?.bank)?.bank : null;
+    const questionBank = questionMetaSource.questionBank || questionMetaSource.bank || referenceBank || null;
     const kindLower = String(resource.kind || "classwork").toLowerCase();
     if (kindLower === "homework") {
       practiceMeta.resumeMode = "restart";
@@ -1155,6 +1183,9 @@ export default function SATTraining({ onNavigate }) {
     const launchPractice = () => {
       if (!canStart) return;
       const durationSec = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0) ? practiceMeta.durationSec : null;
+      const metaForPractice = { ...practiceMeta };
+      if (questionRefs) metaForPractice.questionRefs = true;
+      if (questionBank && !metaForPractice.questionBank) metaForPractice.questionBank = questionBank;
       onNavigate(routeTarget, {
         practice: {
           kind: resource.kind || "classwork",
@@ -1163,13 +1194,15 @@ export default function SATTraining({ onNavigate }) {
           section: resource.section || null,
           unit: resource.unit || null,
           lesson: resource.lesson || null,
-          meta: practiceMeta,
+          meta: metaForPractice,
           attemptIndex: startAttemptIndex,
           custom: {
             questions: items,
             durationSec,
             title: resource.title || prettyKind,
-            meta: practiceMeta,
+            meta: metaForPractice,
+            questionRefs,
+            questionBank,
           },
         },
       });
@@ -1753,6 +1786,14 @@ export default function SATTraining({ onNavigate }) {
                             const meta = extractResourceMeta(r);
                             const questions = decodeResourceQuestions(r) || [];
                             const practiceMeta = { ...meta };
+                            const questionMetaSource =
+                              (r?.payload && typeof r.payload === "object" && typeof r.payload.meta === "object" && r.payload.meta) ||
+                              (r?.payload && typeof r.payload === "object" && typeof r.payload.settings === "object" && r.payload.settings) ||
+                              {};
+                            const refsLikely = Array.isArray(questions) && questions.length > 0 && questions.every((item) => item && item.questionId);
+                            const questionRefs = Boolean(questionMetaSource.questionRefs || refsLikely);
+                            const referenceBank = Array.isArray(questions) ? questions.find((item) => item?.bank)?.bank : null;
+                            const questionBank = questionMetaSource.questionBank || questionMetaSource.bank || referenceBank || null;
                             const kindLower = String(r.kind || "classwork").toLowerCase();
                             if (kindLower === "homework") {
                               practiceMeta.resumeMode = "restart";
@@ -1793,22 +1834,29 @@ export default function SATTraining({ onNavigate }) {
                                   {questions.length > 0 && (
                                     <Btn
                                       variant="secondary"
-                                      onClick={() => onNavigate(previewRoute, {
-                                        practice: {
-                                          kind: r.kind,
-                                          resourceId: r.id,
-                                          className: selectedClass,
-                                          unit: r.unit || null,
-                                          lesson: r.lesson || null,
-                                          meta: practiceMeta,
-                                          custom: {
-                                            questions,
-                                            title: r.title,
-                                            durationSec: practiceDuration,
-                                            meta: practiceMeta,
+                                      onClick={() => {
+                                        const metaForPreview = { ...practiceMeta };
+                                        if (questionRefs) metaForPreview.questionRefs = true;
+                                        if (questionBank && !metaForPreview.questionBank) metaForPreview.questionBank = questionBank;
+                                        onNavigate(previewRoute, {
+                                          practice: {
+                                            kind: r.kind,
+                                            resourceId: r.id,
+                                            className: selectedClass,
+                                            unit: r.unit || null,
+                                            lesson: r.lesson || null,
+                                            meta: metaForPreview,
+                                            custom: {
+                                              questions,
+                                              title: r.title,
+                                              durationSec: practiceDuration,
+                                              meta: metaForPreview,
+                                              questionRefs,
+                                              questionBank,
+                                            },
                                           },
-                                        },
-                                      })}
+                                        });
+                                      }}
                                     >
                                       Preview
                                     </Btn>

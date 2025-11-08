@@ -159,3 +159,24 @@ export async function uploadQuestionImage(file, { prefix = "questions" } = {}) {
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
   return data?.publicUrl || null;
 }
+
+export async function fetchQuestionBankByIds({ table, ids = [] } = {}) {
+  const unique = Array.from(
+    new Set(
+      (Array.isArray(ids) ? ids : [])
+        .map((id) => (id == null ? null : String(id).trim()))
+        .filter(Boolean),
+    ),
+  );
+  if (unique.length === 0) return [];
+  const target = resolveTable(table);
+  const chunkSize = 1000;
+  const results = [];
+  for (let offset = 0; offset < unique.length; offset += chunkSize) {
+    const chunk = unique.slice(offset, offset + chunkSize);
+    const { data, error } = await supabase.from(target).select("*").in("id", chunk);
+    if (error) throw error;
+    if (Array.isArray(data)) results.push(...data);
+  }
+  return results;
+}
