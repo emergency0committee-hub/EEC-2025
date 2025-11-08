@@ -825,11 +825,11 @@ const {
     updateAnswer(currentQuestion.id, event.target.value);
   };
 
-  const handleResumeHomework = () => {
+  function handleResumeHomework() {
     submittedRef.current = false;
     setSubmitted(false);
     setSaveError("");
-  };
+  }
 
   return (
     <PageWrap>

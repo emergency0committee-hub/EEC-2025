@@ -1,10 +1,10 @@
 import { supabase } from "./supabase.js";
 
-const TRAINING_KIND_WHITELIST = ["classwork", "homework", "quiz", "lecture"];
+const TRAINING_KIND_WHITELIST = ["classwork", "homework", "quiz", "lecture", "test"];
 const normalizeTrainingKind = (value) => {
   const str = String(value || "").trim().toLowerCase();
   if (TRAINING_KIND_WHITELIST.includes(str)) return str;
-  if (["exam", "diagnostic", "sat", "assessment", "test"].includes(str)) return "quiz";
+  if (["exam", "diagnostic", "sat", "assessment"].includes(str)) return "test";
   if (["practice", "session"].includes(str)) return "classwork";
   return "classwork";
 };
