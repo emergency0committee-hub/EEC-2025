@@ -1189,26 +1189,25 @@ export default function SATTraining({ onNavigate }) {
       const metaForPractice = { ...practiceMeta };
       if (questionRefs) metaForPractice.questionRefs = true;
       if (questionBank && !metaForPractice.questionBank) metaForPractice.questionBank = questionBank;
-      onNavigate(routeTarget, {
-        practice: {
-          kind: resource.kind || "classwork",
-          resourceId: resource.id || null,
-          className: studentClass || null,
-          section: resource.section || null,
-          unit: resource.unit || null,
-          lesson: resource.lesson || null,
+      const practicePayload = {
+        kind: resource.kind || "classwork",
+        resourceId: resource.id || null,
+        className: studentClass || null,
+        section: resource.section || null,
+        unit: resource.unit || null,
+        lesson: resource.lesson || null,
+        meta: metaForPractice,
+        attemptIndex: startAttemptIndex,
+      };
+      if (!questionRefs) {
+        practicePayload.custom = {
+          questions: items,
+          durationSec,
+          title: resource.title || prettyKind,
           meta: metaForPractice,
-          attemptIndex: startAttemptIndex,
-          custom: {
-            questions: items,
-            durationSec,
-            title: resource.title || prettyKind,
-            meta: metaForPractice,
-            questionRefs,
-            questionBank,
-          },
-        },
-      });
+        };
+      }
+      onNavigate(routeTarget, { practice: practicePayload });
     };
     const pill = (variant, text) => (
       <span key={`${key}_${variant}_${text}`} style={{ ...pillStyles.base, ...(pillStyles[variant] || {}) }}>{text}</span>
@@ -1841,24 +1840,24 @@ export default function SATTraining({ onNavigate }) {
                                         const metaForPreview = { ...practiceMeta };
                                         if (questionRefs) metaForPreview.questionRefs = true;
                                         if (questionBank && !metaForPreview.questionBank) metaForPreview.questionBank = questionBank;
-                                        onNavigate(previewRoute, {
-                                          practice: {
-                                            kind: r.kind,
-                                            resourceId: r.id,
-                                            className: selectedClass,
-                                            unit: r.unit || null,
-                                            lesson: r.lesson || null,
+                                        const practicePayload = {
+                                          kind: r.kind,
+                                          resourceId: r.id,
+                                          className: selectedClass,
+                                          unit: r.unit || null,
+                                          lesson: r.lesson || null,
+                                          meta: metaForPreview,
+                                          preview: true,
+                                        };
+                                        if (!questionRefs) {
+                                          practicePayload.custom = {
+                                            questions,
+                                            title: r.title,
+                                            durationSec: practiceDuration,
                                             meta: metaForPreview,
-                                            custom: {
-                                              questions,
-                                              title: r.title,
-                                              durationSec: practiceDuration,
-                                              meta: metaForPreview,
-                                              questionRefs,
-                                              questionBank,
-                                            },
-                                          },
-                                        });
+                                          };
+                                        }
+                                        onNavigate(previewRoute, { practice: practicePayload });
                                       }}
                                     >
                                       Preview
