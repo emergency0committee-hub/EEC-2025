@@ -37,7 +37,7 @@ const EDITOR_STYLE = {
   background: "#ffffff",
 };
 
-function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
+function RichTextEditor({ value, onChange, placeholder = "Start typing...", variant = "full" }) {
   const editorRef = useRef(null);
   const lastHtmlRef = useRef("");
   const toolbarStateRef = useRef({});
@@ -46,6 +46,7 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
   const [tableConfig, setTableConfig] = useState({ rows: 2, cols: 2 });
   const fileInputRef = useRef(null);
   const toolbarWrapperRef = useRef(null);
+  const [toolbarVisible, setToolbarVisible] = useState(() => hasVisualContent(value || ""));
 
   const updateToolbarState = () => {
     if (!editorRef.current || typeof document.queryCommandState !== "function") return;
@@ -63,6 +64,12 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
       states.highlight = hilite === HIGHLIGHT_COLOR || hilite === "rgb(237, 233, 254)";
     } catch {
       states.highlight = false;
+    }
+    try {
+      const block = (document.queryCommandValue("formatBlock") || "").toString().toLowerCase();
+      states.blockTag = block.replace(/[<>]/g, "");
+    } catch {
+      states.blockTag = "";
     }
     toolbarStateRef.current = states;
     setToolbarState(states);
@@ -95,6 +102,8 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
     const sanitized = sanitizeRichTextHtml(html);
     lastHtmlRef.current = sanitized;
     onChange?.(sanitized);
+    const isFocused = document.activeElement === editorRef.current;
+    setToolbarVisible(hasVisualContent(sanitized) || isFocused);
   };
 
   const runCommand = (command, valueArg = null) => {
@@ -194,7 +203,84 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
     event.target.value = "";
   };
 
+  const resetToPlainText = () => {
+    if (!editorRef.current) return;
+    const clone = editorRef.current.cloneNode(true);
+    const walker = document.createTreeWalker(clone, NodeFilter.SHOW_ELEMENT, null);
+    const disallowed = ["B", "STRONG", "I", "EM", "U", "SPAN", "MARK", "FONT", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE"];
+    while (walker.nextNode()) {
+      const el = walker.currentNode;
+      if (disallowed.includes(el.tagName)) {
+        const fragment = document.createDocumentFragment();
+        while (el.firstChild) {
+          fragment.appendChild(el.firstChild);
+        }
+        el.parentNode.replaceChild(fragment, el);
+      } else if (el.tagName === "P" || el.tagName === "DIV") {
+        el.removeAttribute("style");
+        el.style.margin = "0 0 8px";
+        el.style.fontSize = "14px";
+        el.style.lineHeight = "1.5";
+      }
+    }
+    clone.querySelectorAll("br").forEach((br) => br.removeAttribute("style"));
+    clone.querySelectorAll("li").forEach((li) => li.removeAttribute("style"));
+
+    const html = clone.innerHTML || "<p><br /></p>";
+    editorRef.current.innerHTML = html;
+    lastHtmlRef.current = html;
+    onChange?.(html);
+    setToolbarVisible(hasVisualContent(html));
+    updateToolbarState();
+  };
+
   const formattingButtons = [
+    {
+      id: "toggle-heading",
+      title: "Heading / Normal",
+      action: () => {
+        const current = (toolbarStateRef.current?.blockTag || "").toLowerCase();
+        const next = current === "h3" ? "<p>" : "<h3>";
+        runCommand("formatBlock", next);
+        if (next === "<h3>") {
+          ensureSelection();
+          try {
+            document.execCommand("styleWithCSS", false, true);
+          } catch {}
+          try {
+            document.execCommand("foreColor", false, "#111827");
+          } catch {}
+          try {
+            document.execCommand("styleWithCSS", false, false);
+          } catch {}
+          if (editorRef.current) {
+            const selection = document.getSelection();
+            if (selection && selection.anchorNode) {
+              let element = selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
+              while (element && element !== editorRef.current && element.tagName !== "H3") {
+                element = element.parentElement;
+              }
+              if (element && element.tagName === "H3") {
+                element.style.fontSize = "14px";
+                element.style.fontWeight = "700";
+                element.style.color = "#111827";
+                element.style.lineHeight = "1.5";
+                element.style.margin = "0 0 8px";
+              }
+            }
+          }
+        }
+      },
+      icon: (
+        <svg width="20" height="18" viewBox="0 0 20 18" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M3 4v10" />
+          <path d="M3 9h6" />
+          <path d="M11 4h6" />
+          <path d="M11 9h6" />
+          <path d="M11 13h6" />
+        </svg>
+      ),
+    },
     {
       id: "bold",
       title: "Bold (Ctrl+B)",
@@ -278,6 +364,18 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
       ),
     },
     {
+      id: "clear-format",
+      title: "Remove formatting",
+      action: () => {
+        resetToPlainText();
+      },
+      icon: (
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M4 4h10M6 4v10M12 4l-6 6M10 10l4 4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
       id: "attach",
       title: "Insert media",
       action: handleAttachmentToggle,
@@ -303,6 +401,7 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
       lastHtmlRef.current = targetHtml;
       editorRef.current.innerHTML = targetHtml;
     }
+    setToolbarVisible(hasVisualContent(targetHtml) || isFocused);
     updateToolbarState();
   }, [value]);
 
@@ -343,15 +442,17 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
-      <div ref={toolbarWrapperRef} style={{ position: "relative" }}>
+      <div ref={toolbarWrapperRef} style={{ position: "relative", display: toolbarVisible || menuOpen ? "block" : "none" }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {formattingButtons.map((btn) => {
-            const active =
-              btn.command && toolbarState[btn.command] !== undefined
-                ? !!toolbarState[btn.command]
-                : btn.id === "highlight"
-                  ? !!toolbarState.highlight
-                  : false;
+            let active = false;
+            if (btn.id === "toggle-heading") {
+              active = (toolbarState.blockTag || "") === "h3";
+            } else if (btn.id === "highlight") {
+              active = !!toolbarState.highlight;
+            } else if (btn.command && toolbarState[btn.command] !== undefined) {
+              active = !!toolbarState[btn.command];
+            }
             return (
               <button
                 key={btn.id}
@@ -436,11 +537,12 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing..." }) {
           contentEditable
           suppressContentEditableWarning
           onInput={syncEditor}
+          onFocus={() => setToolbarVisible(true)}
           onBlur={syncEditor}
-          style={EDITOR_STYLE}
+          style={{ ...EDITOR_STYLE, minHeight: variant === "compact" ? 100 : 140, padding: variant === "compact" ? 10 : 12 }}
         />
       </div>
-      <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>Toolbar applies formatting directly; HTML is stored automatically.</p>
+      {variant !== "compact" && <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>Toolbar applies formatting directly; HTML is stored automatically.</p>}
     </div>
   );
 }
@@ -449,6 +551,7 @@ RichTextEditor.propTypes = {
   value: PropTypes.string,
   onChange: PropTypes.func,
   placeholder: PropTypes.string,
+  variant: PropTypes.oneOf(["full", "compact"]),
 };
 
 export default RichTextEditor;

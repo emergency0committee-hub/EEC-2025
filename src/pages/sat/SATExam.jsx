@@ -719,9 +719,9 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             </div>
           )}
           <div>
-            <h3 style={{ margin: 0, color: "#111827", lineHeight: 1.4 }}>
+            <div style={{ margin: 0, color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
               {renderMathText(q?.text || "No question available.")}
-            </h3>
+            </div>
           </div>
         </div>
 

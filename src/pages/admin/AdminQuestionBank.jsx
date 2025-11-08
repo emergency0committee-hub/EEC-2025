@@ -1,4 +1,4 @@
-// src/pages/admin/AdminQuestionBank.jsx
+﻿// src/pages/admin/AdminQuestionBank.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
@@ -23,6 +23,7 @@ import {
   createDefaultForm,
   normalizeSubjectValue,
 } from "../../lib/questionBanks.js";
+import { toEditorHtml } from "../../lib/richText.js";
 
 const LOCAL_IMAGE_STORE_KEY = "cg_question_images_v1";
 const LOCAL_IMAGE_PREFIX = "local-image://";
@@ -47,23 +48,35 @@ const BANK_TAB_META = {
   math: { accent: "#2563eb" },
   english: { accent: "#ea580c" },
   tests: { accent: "#16a34a" },
+  diagnostic: { accent: "#0ea5e9" },
+  career: { accent: "#a855f7" },
 };
 
 const BANK_TAB_DESCRIPTIONS = {
   math: {
     EN: "SAT-style math questions organized by units and lessons.",
-    AR: "????? ??????? ?????? SAT ??? ????? ????? ?????.",
-    FR: "Questions de math�matiques type SAT class�es par unit�s.",
+    AR: "أسئلة رياضيات SAT منظمة حسب الوحدات والدروس.",
+    FR: "Questions de mathématiques type SAT classées par unités.",
   },
   english: {
     EN: "Reading & writing prompts with evidence-based answers.",
-    AR: "????? ????? ?????? ?? ?????? ????? ??? ??????.",
-    FR: "Sujets de lecture/�criture avec r�ponses fond�es sur des preuves.",
+    AR: "محفزات القراءة والكتابة مع إجابات مستندة إلى الأدلة.",
+    FR: "Sujets de lecture/écriture avec réponses fondées sur des preuves.",
   },
   tests: {
     EN: "Full mixed-subject exams for diagnostics and practice.",
-    AR: "???????? ????? ????? ?????? ??????? ?????????.",
+    AR: "امتحانات شاملة متعددة المواد للتشخيص والمراجعة.",
     FR: "Examens mixtes pour un diagnostic complet.",
+  },
+  diagnostic: {
+    EN: "Catalog of diagnostic test questions by difficulty.",
+    AR: "بنك أسئلة للاختبارات التشخيصية مرتب حسب الصعوبة.",
+    FR: "Banque d'items pour tests de diagnostic classés par difficulté.",
+  },
+  career: {
+    EN: "Career guidance scenarios and counseling prompts.",
+    AR: "سيناريوهات التوجيه المهني ومداخل النقاش.",
+    FR: "Scénarios d’orientation professionnelle et sujets de coaching.",
   },
 };
 
@@ -134,6 +147,8 @@ const COPY = {
     tabMath: "Math Bank",
     tabEnglish: "English Bank",
     tabTests: "Test Bank",
+    tabDiagnostic: "Diagnostic Bank",
+    tabCareer: "Career Guidance",
     tableBuilderTitle: "Table Builder",
     tableBuilderInstructions: "Configure rows and columns, fill the cells, then insert the table into the question or an answer.",
     tableBuilderRows: "Rows",
@@ -235,9 +250,11 @@ const COPY = {
     importFinished: "????? ?????????.",
     importPreviewTitle: "?????? ?????? ????????",
     importSkipped: "?? ???? ??????.",
-   tabMath: "??? ?????????",
+    tabMath: "??? ?????????",
     tabEnglish: "??? ????? ??????????",
     tabTests: "??? ??????????",
+    tabDiagnostic: "بنك التشخيص",
+    tabCareer: "بنك الإرشاد المهني",
     tableBuilderTitle: "???? ???????",
     tableBuilderInstructions: "???? ??? ?????? ???????? ????? ??????? ?? ???? ?????? ?? ?????? ?? ???????.",
     tableBuilderRows: "??? ??????",
@@ -278,107 +295,109 @@ const COPY = {
   },
   FR: {
     title: "Banque de questions",
-    subtitle: "Ajoutez et g�rez des questions pour les quiz, devoirs et travaux en classe.",
+    subtitle: "Ajoutez et g�rez des questions pour les quiz, devoirs et travaux en classe.",
     questionType: "Type de question",
     mcqLabel: "Choix multiples (A/B/C/D)",
-    fillLabel: "R�ponse libre",
-    subject: "Mati�re",
-    unit: "Unit�",
-    lesson: "Le�on",
-    hardness: "Difficult�",
-    skill: "Comp�tence",
+    fillLabel: "R�ponse libre",
+    subject: "Mati�re",
+    unit: "Unit�",
+    lesson: "Le�on",
+    hardness: "Difficult�",
+    skill: "Comp�tence",
     question: "Question",
-    answers: "R�ponses",
-    answer: (label) => `R�ponse ${label}`,
-    fillAnswerLabel: "Bonne r�ponse",
+    answers: "R�ponses",
+    answer: (label) => `R�ponse ${label}`,
+    fillAnswerLabel: "Bonne r�ponse",
     correctAnswer: "Choix correct",
     imageLabel: "URL de l'image",
-    imageUpload: "T�l�verser une image",
-    imageUploading: "T�l�versement...",
+    imageUpload: "T�l�verser une image",
+    imageUploading: "T�l�versement...",
     imageAlt: "Image de la question (optionnel)",
     removeImage: "Supprimer l'image",
     optional: "optionnel",
     create: "Enregistrer",
-    reset: "R�initialiser",
+    reset: "R�initialiser",
     filters: "Filtres",
     filterQuestionType: "Type de question",
     filterAll: "Tous",
     tableQuestion: "Question",
-    tableSubject: "Mati�re",
-    tableUnit: "Unit�",
-    tableLesson: "Le�on",
+    tableSubject: "Mati�re",
+    tableUnit: "Unit�",
+    tableLesson: "Le�on",
     tableType: "Type",
-    tableHardness: "Difficult�",
-    tableSkill: "Comp�tence",
+    tableHardness: "Difficult�",
+    tableSkill: "Comp�tence",
     tableImage: "Image",
-    tableCreated: "Cr�� le",
+    tableCreated: "Cr�� le",
     tableActions: "Actions",
     delete: "Supprimer",
     deleteConfirm: "Supprimer cette question ?",
     noResults: "Aucune question pour le moment. Ajoutez-en une ci-dessus.",
     loadError: "Impossible de charger les questions.",
-    createSuccess: "Question enregistr�e.",
-    updateSuccess: "Question mise � jour.",
-    uploadTip: "Glissez-d�posez une image ou cliquez pour la t�l�verser. Vous pouvez aussi coller une URL publique.",
+    createSuccess: "Question enregistr�e.",
+    updateSuccess: "Question mise � jour.",
+    uploadTip: "Glissez-d�posez une image ou cliquez pour la t�l�verser. Vous pouvez aussi coller une URL publique.",
     refresh: "Actualiser",
-    update: "Mettre � jour la question",
+    update: "Mettre � jour la question",
     cancelEdit: "Annuler la modification",
     editingNotice: "Modification d'une question existante",
     edit: "Modifier",
-    preview: "Aper�u",
+    preview: "Aper�u",
     close: "Fermer",
-    previewTitle: "Aper�u de la question",
+    previewTitle: "Aper�u de la question",
     importLabel: "Importer un CSV",
-    importHint: "T�l�versez un fichier CSV pour ajouter plusieurs questions.",
+    importHint: "T�l�versez un fichier CSV pour ajouter plusieurs questions.",
     importingStatus: "Import de la question {current} sur {total}",
     importSubmit: "Enregistrer et continuer",
     skip: "Ignorer",
     cancelImport: "Annuler l'import",
     importError: "Impossible de traiter le fichier CSV.",
-    importEmpty: "Aucune ligne trouv�e dans le CSV.",
-    importFinished: "Import termin�.",
-    importPreviewTitle: "Aper�u de la question import�e",
-    importSkipped: "Question ignor�e.",
+    importEmpty: "Aucune ligne trouv�e dans le CSV.",
+    importFinished: "Import termin�.",
+    importPreviewTitle: "Aper�u de la question import�e",
+    importSkipped: "Question ignor�e.",
     tabMath: "Banque Maths",
     tabEnglish: "Banque Anglais",
     tabTests: "Banque Tests",
-    tableBuilderTitle: "Cr�ateur de tableau",
-    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis ins�rez le tableau dans la question ou la r�ponse.",
+    tabDiagnostic: "Banque Diagnostic",
+    tabCareer: "Banque Orientation",
+    tableBuilderTitle: "Cr�ateur de tableau",
+    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis ins�rez le tableau dans la question ou la r�ponse.",
     tableBuilderRows: "Lignes",
     tableBuilderCols: "Colonnes",
-    tableBuilderIncludeHeader: "Utiliser la premi�re ligne comme en-t�te",
-    tableBuilderTarget: "Ins�rer dans",
+    tableBuilderIncludeHeader: "Utiliser la premi�re ligne comme en-t�te",
+    tableBuilderTarget: "Ins�rer dans",
     tableBuilderCellsLabel: "Cellules",
     tableBuilderCellPlaceholder: "Cellule",
-    tableBuilderPreview: "Aper�u",
-    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aper�u du tableau.",
-    tableBuilderInsert: "Ins�rer le tableau",
+    tableBuilderPreview: "Aper�u",
+    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aper�u du tableau.",
+    tableBuilderInsert: "Ins�rer le tableau",
     tableBuilderClear: "Effacer les cellules",
-    tableBuilderInsertSuccess: "Tableau ins�r�.",
-    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'ins�rer le tableau.",
-    tableBuilderHide: "Masquer le cr�ateur de tableau",
+    tableBuilderInsertSuccess: "Tableau ins�r�.",
+    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'ins�rer le tableau.",
+    tableBuilderHide: "Masquer le cr�ateur de tableau",
     addTable: "Ajouter un tableau",
     addImage: "Ajouter une image",
     hideImage: "Masquer les options d'image",
-    tableBuilderMergedCell: "Fusionn�",
-    tableBuilderSelectedCell: (row, col) => `Cellule s�lectionn�e : ligne ${row + 1}, colonne ${col + 1}`,
+    tableBuilderMergedCell: "Fusionn�",
+    tableBuilderSelectedCell: (row, col) => `Cellule s�lectionn�e : ligne ${row + 1}, colonne ${col + 1}`,
     tableBuilderMergeRight: "Fusionner vers la droite",
     tableBuilderMergeDown: "Fusionner vers le bas",
-    tableBuilderSplitCell: "S�parer la cellule",
+    tableBuilderSplitCell: "S�parer la cellule",
     sectionSetup: "Configuration",
-    sectionSetupDesc: "Choisissez le type de question, la mati�re et les m�tadonn�es.",
-    sectionPrompt: "�nonc� et m�dias",
-    sectionPromptDesc: "R�digez l'�nonc� et ajoutez des notes facultatives.",
-    sectionAnswers: "Choix de r�ponses",
-    sectionAnswersDesc: "Saisissez les options et indiquez la bonne r�ponse.",
-    sectionAssets: "Outils et pi�ces jointes",
-    sectionAssetsDesc: "Utilisez le g�n�rateur de tableaux ou l'import d'images.",
-    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions r�centes.",
-    questionTypeRequired: "Veuillez s�lectionner un type de question.",
-    subjectRequired: "Veuillez choisir la mati�re.",
-    correctAnswerRequired: "Veuillez indiquer la r�ponse correcte.",
-    unitRequired: "Veuillez choisir l'unit�.",
-    lessonRequired: "Veuillez choisir la le�on.",
+    sectionSetupDesc: "Choisissez le type de question, la mati�re et les m�tadonn�es.",
+    sectionPrompt: "�nonc� et m�dias",
+    sectionPromptDesc: "R�digez l'�nonc� et ajoutez des notes facultatives.",
+    sectionAnswers: "Choix de r�ponses",
+    sectionAnswersDesc: "Saisissez les options et indiquez la bonne r�ponse.",
+    sectionAssets: "Outils et pi�ces jointes",
+    sectionAssetsDesc: "Utilisez le g�n�rateur de tableaux ou l'import d'images.",
+    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions r�centes.",
+    questionTypeRequired: "Veuillez s�lectionner un type de question.",
+    subjectRequired: "Veuillez choisir la mati�re.",
+    correctAnswerRequired: "Veuillez indiquer la r�ponse correcte.",
+    unitRequired: "Veuillez choisir l'unit�.",
+    lessonRequired: "Veuillez choisir la le�on.",
   },
 };
 
@@ -397,9 +416,38 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
   const copy = COPY[lang] || COPY.EN;
+  const isAdmin = (() => {
+    try {
+      if (typeof window === "undefined") return false;
+      if (localStorage.getItem("cg_admin_ok_v1") === "1") return true;
+      const raw = localStorage.getItem("cg_current_user_v1");
+      if (!raw) return false;
+      const stored = JSON.parse(raw);
+      const role = String(stored.role || "").toLowerCase();
+      return role === "admin" || role === "administrator";
+    } catch {
+      return false;
+    }
+  })();
 
   const [activeBank, setActiveBank] = useState("math");
+  const visibleBanks = useMemo(
+    () =>
+      Object.values(BANKS).filter((cfg) => {
+        if (cfg.id === "diagnostic" || cfg.id === "career") {
+          return isAdmin;
+        }
+        return true;
+      }),
+    [isAdmin]
+  );
+  const visibleBankIds = useMemo(() => visibleBanks.map((cfg) => cfg.id), [visibleBanks]);
   const bank = BANKS[activeBank] || BANKS.math;
+
+  useEffect(() => {
+    if (visibleBankIds.length === 0) return;
+    setActiveBank((prev) => (visibleBankIds.includes(prev) ? prev : visibleBankIds[0]));
+  }, [visibleBankIds]);
 
   const [form, setForm] = useState(() => createDefaultForm(bank));
   const [questions, setQuestions] = useState([]);
@@ -913,31 +961,45 @@ const validate = () => {
     }
 
     if (form.questionType === "mcq") {
-      if (!form.answerA.trim() || !form.answerB.trim() || !form.answerC.trim() || !form.answerD.trim()) {
+      if (
+        !promptHasContent(form.answerA || "") ||
+        !promptHasContent(form.answerB || "") ||
+        !promptHasContent(form.answerC || "") ||
+        !promptHasContent(form.answerD || "")
+      ) {
         return "All four answers are required for MCQ.";
       }
       if (!form.correctAnswer) return copy.correctAnswerRequired || COPY.EN.correctAnswerRequired;
     } else {
-      if (!form.fillAnswer.trim()) return copy.correctAnswerRequired || COPY.EN.correctAnswerRequired;
+      if (!promptHasContent(form.fillAnswer || "")) return copy.correctAnswerRequired || COPY.EN.correctAnswerRequired;
     }
     return "";
   };
 
   const buildFormFromRow = (row, targetBank = bank) => {
     const type = row.question_type === "fill" ? "fill" : "mcq";
-    const subjectValue = targetBank.subjectLocked
-      ? targetBank.defaultSubject
-      : row.subject || targetBank.defaultSubject || SUBJECT_OPTIONS[0].value;
-    const includeUnitLesson = targetBank.supportsUnitLesson && subjectValue === "math";
+    const rowSubjectRaw = row.subject || targetBank.defaultSubject || SUBJECT_OPTIONS[0].value;
+    const normalizedRowSubject = normalizeSubjectValue(rowSubjectRaw);
+    const subjectValue = targetBank.subjectLocked ? targetBank.defaultSubject : normalizedRowSubject;
+    const includeUnitLesson = targetBank.supportsUnitLesson && normalizedRowSubject === "math";
+    const rawCorrect =
+      row.correct_answer ??
+      row.correct ??
+      row.correctChoice ??
+      row.correct_choice ??
+      row.fill_answer ??
+      row.fillAnswer ??
+      "";
+
     return {
       questionType: type,
-      question: row.question || "",
-      answerA: row.answer_a || "",
-      answerB: row.answer_b || "",
-      answerC: row.answer_c || "",
-      answerD: row.answer_d || "",
-      fillAnswer: type === "fill" ? row.correct_answer || "" : "",
-      correctAnswer: type === "mcq" ? row.correct_answer || "" : "",
+      question: toEditorHtml(row.question || ""),
+      answerA: toEditorHtml(row.answer_a || ""),
+      answerB: toEditorHtml(row.answer_b || ""),
+      answerC: toEditorHtml(row.answer_c || ""),
+      answerD: toEditorHtml(row.answer_d || ""),
+      fillAnswer: type === "fill" ? toEditorHtml(rawCorrect || "") : "",
+      correctAnswer: type === "mcq" ? rawCorrect || "" : "",
       subject: subjectValue,
       unit: includeUnitLesson ? row.unit || "" : "",
       lesson: includeUnitLesson ? row.lesson || "" : "",
@@ -977,45 +1039,72 @@ const validate = () => {
       return;
     }
 
-    const assignmentType =
-      (isImportingActive && currentImportRow?.assignment_type ? currentImportRow.assignment_type : null) ||
-      editingRow?.assignment_type ||
-      "quiz";
+    const supportsAssignmentType = bank.supportsAssignmentType !== false;
+    const supportsHardness = bank.supportsHardness !== false;
+    const supportsSkill = bank.supportsSkill !== false;
+    const supportsQuestionType = bank.supportsQuestionType !== false;
+    const supportsImageUrl = bank.supportsImageUrl !== false;
+    const assignmentType = supportsAssignmentType
+      ? (isImportingActive && currentImportRow?.assignment_type
+          ? currentImportRow.assignment_type
+          : editingRow?.assignment_type || "quiz")
+      : null;
     const fallbackSubject = bank.defaultSubject || SUBJECT_OPTIONS[0].value;
-    const subjectValue = bank.subjectLocked ? fallbackSubject : (form.subject || "");
+    const baseSubject = bank.subjectLocked ? fallbackSubject : (form.subject || "");
+    const normalizedSubject = normalizeSubjectValue(baseSubject || fallbackSubject);
+    const subjectValue = bank.subjectUppercase ? normalizedSubject.toUpperCase() : normalizedSubject;
+
+    const correctColumn = bank.correctColumn || "correct_answer";
 
     const payload = {
-      question_type: form.questionType,
       question: form.question.trim(),
-      assignment_type: assignmentType,
       subject: subjectValue,
-      hardness: form.hardness || null,
-      skill: form.skill.trim() || null,
-      image_url: form.imageUrl.trim() || null,
     };
 
-    if (bank.supportsUnitLesson && subjectValue === "math") {
+    if (supportsAssignmentType) {
+      payload.assignment_type = assignmentType;
+    }
+    if (supportsQuestionType) {
+      payload.question_type = form.questionType;
+    }
+    if (supportsImageUrl) {
+      payload.image_url = form.imageUrl.trim() || null;
+    }
+    if (supportsHardness) {
+      payload.hardness = form.hardness || null;
+    }
+    if (supportsSkill) {
+      payload.skill = form.skill.trim() || null;
+    }
+
+    if (bank.supportsUnitLesson && normalizedSubject === "math") {
       payload.unit = (form.unit || "").trim();
       payload.lesson = (form.lesson || "").trim();
     }
 
     if (form.questionType === "mcq") {
-      Object.assign(payload, {
+      const mcqPayload = {
         answer_a: form.answerA.trim(),
         answer_b: form.answerB.trim(),
         answer_c: form.answerC.trim(),
         answer_d: form.answerD.trim(),
-        correct_answer: form.correctAnswer,
-      });
+      };
+      if (correctColumn) {
+        mcqPayload[correctColumn] = form.correctAnswer;
+      }
+      Object.assign(payload, mcqPayload);
     } else {
       const fill = form.fillAnswer.trim();
-      Object.assign(payload, {
+      const fillPayload = {
         answer_a: fill,
         answer_b: "",
         answer_c: "",
         answer_d: "",
-        correct_answer: fill,
-      });
+      };
+      if (correctColumn) {
+        fillPayload[correctColumn] = fill;
+      }
+      Object.assign(payload, fillPayload);
     }
 
     try {
@@ -1094,7 +1183,7 @@ const validate = () => {
           gap: 16,
         }}
       >
-        {Object.values(BANKS).map((cfg) => {
+        {visibleBanks.map((cfg) => {
           const active = cfg.id === bank.id;
           const meta = BANK_TAB_META[cfg.id] || BANK_TAB_META.math;
           const desc = bankTabDescription(cfg.id, lang);
@@ -1203,16 +1292,15 @@ const validate = () => {
 
           <FormSection title={copy.sectionAnswers || COPY.EN.sectionAnswers} description={copy.sectionAnswersDesc || COPY.EN.sectionAnswersDesc}>
             {form.questionType === "mcq" ? (
-              <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gap: 16 }}>
                 {["A", "B", "C", "D"].map((label) => (
-                  <div key={label} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ width: 20, fontWeight: 600 }}>{label}</span>
-                    <input
-                      type="text"
+                  <div key={label} style={{ display: "grid", gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>{`${copy.answer(label)}`}</span>
+                    <RichTextEditor
                       value={form[`answer${label}`]}
-                      onChange={(e) => handleChange(`answer${label}`, e.target.value)}
-                      style={inputStyle}
-                      required
+                      onChange={(html) => handleChange(`answer${label}`, html)}
+                      placeholder={`Answer ${label}`}
+                      variant="compact"
                     />
                   </div>
                 ))}
@@ -1236,124 +1324,14 @@ const validate = () => {
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
                 <label style={{ fontWeight: 600 }}>{copy.fillAnswerLabel}</label>
-                <input
-                  type="text"
+                <RichTextEditor
                   value={form.fillAnswer}
-                  onChange={(e) => handleChange("fillAnswer", e.target.value)}
-                  style={inputStyle}
-                  required
+                  onChange={(html) => handleChange("fillAnswer", html)}
+                  placeholder={copy.fillAnswerLabel}
+                  variant="compact"
                 />
               </div>
             )}
-          </FormSection>
-
-          <FormSection title={copy.sectionAssets || COPY.EN.sectionAssets} description={copy.sectionAssetsDesc || COPY.EN.sectionAssetsDesc}>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              {!showTableBuilder && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowTableBuilder(true);
-                    setSuccessMessage("");
-                  }}
-                  style={secondaryButtonStyle}
-                >
-                  {copy.addTable}
-                </button>
-              )}
-              {!showImageTools && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowImageTools(true);
-                    setSuccessMessage("");
-                  }}
-                  style={secondaryButtonStyle}
-                >
-                  {copy.addImage}
-                </button>
-              )}
-            </div>
-
-            {showTableBuilder && (
-              <TableBuilderSection
-                copy={copy}
-                builder={tableBuilder}
-                targets={tableTargets}
-                onDimensionChange={handleTableDimensionChange}
-                onCellChange={handleTableCellChange}
-                onSelectCell={handleSelectTableCell}
-                onMergeRight={handleMergeRight}
-                onMergeDown={handleMergeDown}
-                onSplitCell={handleSplitCell}
-                onToggleHeader={handleToggleTableHeader}
-                onTargetChange={handleTableTargetChange}
-                onClear={handleClearTableCells}
-                onInsert={handleInsertTable}
-                activeCell={tableBuilder.activeCell}
-                previewHtml={tablePreviewHtml}
-                canInsert={canInsertTable}
-                onClose={() => setShowTableBuilder(false)}
-              />
-            )}
-
-            {showImageTools ? (
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600 }}>
-                    {copy.imageLabel} <span style={{ color: "#9ca3af" }}>({copy.optional})</span>
-                  </span>
-                  <button type="button" style={inlineLinkButtonStyle} onClick={() => setShowImageTools(false)}>
-                    {copy.hideImage}
-                  </button>
-                </div>
-                <input
-                  type="url"
-                  value={form.imageUrl}
-                  onChange={(e) => handleChange("imageUrl", e.target.value)}
-                  placeholder="https://..."
-                  style={inputStyle}
-                />
-                <div
-                  onDragOver={handleImageDragOver}
-                  onDragLeave={handleImageDragLeave}
-                  onDrop={handleImageDrop}
-                  style={{
-                    border: `2px dashed ${isImageDragOver ? "#2563eb" : "#d1d5db"}`,
-                    borderRadius: 12,
-                    padding: 16,
-                    background: isImageDragOver ? "#eff6ff" : "#f9fafb",
-                    transition: "background 0.2s ease, border-color 0.2s ease",
-                    display: "grid",
-                    gap: 10,
-                  }}
-                >
-                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", justifySelf: "flex-start" }}>
-                    <input type="file" accept="image/png" style={{ display: "none" }} onChange={handleFileUpload} />
-                    <span style={{ padding: "6px 12px", borderRadius: 6, background: "#e0f2fe", border: "1px solid #bfdbfe", color: "#1d4ed8", fontWeight: 600 }}>
-                      {uploading ? copy.imageUploading : copy.imageUpload}
-                    </span>
-                  </label>
-                  <small style={{ color: "#6b7280" }}>{copy.uploadTip}</small>
-                </div>
-                {form.imageUrl && resolveImageUrl(form.imageUrl) && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 8 }}>
-                    <img
-                      src={resolveImageUrl(form.imageUrl)}
-                      alt={copy.imageAlt}
-                      style={{ maxWidth: 200, borderRadius: 12, border: "1px solid #d1d5db" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #ef4444", background: "#fee2e2", color: "#b91c1c", fontWeight: 600, cursor: "pointer" }}
-                    >
-                      {copy.removeImage || "Remove Image"}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : null}
           </FormSection>
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -1400,7 +1378,7 @@ const validate = () => {
               </ol>
             ) : (
               <div style={{ background: "#e0f2fe", borderRadius: 6, padding: "6px 10px", color: "#0c4a6e" }}>
-                {currentImportRow.correct_answer || "�"}
+                {currentImportRow.correct_answer || "�"}
               </div>
             )}
             {currentImportRow.image_url && (
@@ -1484,17 +1462,17 @@ const validate = () => {
                     <td style={tdStyle}>{subjectLabel(row.subject, lang)}</td>
                     {bank.supportsUnitLesson && (
                       <>
-                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "�"}</td>
-                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "�"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "�"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "�"}</td>
                       </>
                     )}
                     <td style={tdStyle}>{row.question_type === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
                     <td style={tdStyle}>{hardnessLabel(row.hardness, lang)}</td>
-                    <td style={tdStyle}>{row.skill || "�"}</td>
+                    <td style={tdStyle}>{row.skill || "�"}</td>
                     <td style={tdStyle}>
                       {row.image_url ? (() => {
                         const href = resolveImageUrl(row.image_url);
-                        if (!href) return "�";
+                        if (!href) return "�";
                         const isLocal = row.image_url.startsWith(LOCAL_IMAGE_PREFIX);
                         if (isLocal) {
                           return (
@@ -1513,7 +1491,7 @@ const validate = () => {
                           </a>
                         );
                       })() : (
-                        "�"
+                        "�"
                       )}
                     </td>
                     <td style={tdStyle}>{new Date(row.created_at).toLocaleString()}</td>
@@ -1872,8 +1850,8 @@ function TableBuilderSection({
                       />
                       {(cell.rowspan > 1 || cell.colspan > 1) && (
                         <div style={tableBuilderSpanBadgeStyle}>
-                          {cell.rowspan > 1 && <span>{`rowspan �${cell.rowspan}`}</span>}
-                          {cell.colspan > 1 && <span>{`colspan �${cell.colspan}`}</span>}
+                          {cell.rowspan > 1 && <span>{`rowspan �${cell.rowspan}`}</span>}
+                          {cell.colspan > 1 && <span>{`colspan �${cell.colspan}`}</span>}
                         </div>
                       )}
                     </>
@@ -2795,7 +2773,7 @@ const renderMathSegments = (text, block) => {
 
 function MathText({ value, block = false }) {
   const raw = value == null ? "" : String(value).trim();
-  if (!raw) return <span>�</span>;
+  if (!raw) return <span>�</span>;
 
   const decoded = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   const normalized = decoded.replace(/\\\\/g, "\\").replace(/\r\n/g, "\n");
@@ -2847,7 +2825,7 @@ function firstWords(text, count = 3) {
 
 function subjectLabel(value, lang) {
   const option = SUBJECT_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "�";
+  if (!option) return value || "�";
   return option.label[lang] || option.label.EN;
 }
 
@@ -2856,7 +2834,7 @@ function unitLabel(subject, value, lang) {
     const option = MATH_UNIT_OPTIONS.find((opt) => opt.value === value);
     if (option) return option.label[lang] || option.label.EN;
   }
-  return value || "�";
+  return value || "�";
 }
 
 function lessonLabel(subject, unit, value, lang) {
@@ -2865,12 +2843,12 @@ function lessonLabel(subject, unit, value, lang) {
     const option = lessons.find((opt) => opt.value === value);
     if (option) return option.label[lang] || option.label.EN;
   }
-  return value || "�";
+  return value || "�";
 }
 
 function hardnessLabel(value, lang) {
   const option = HARDNESS_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "�";
+  if (!option) return value || "�";
   return option.label[lang] || option.label.EN;
 }
 
