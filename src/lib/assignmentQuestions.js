@@ -69,6 +69,7 @@ export async function fetchQuestionBankSample({
   lesson,
   hardness,
   limit = 20,
+  strictFilters = false,
 } = {}) {
   const target = resolveTable(table);
   const PAGE_SIZE = 500;
@@ -121,25 +122,25 @@ export async function fetchQuestionBankSample({
 
   let rows = await pagedFetch({ subject, unit, lesson, hardness });
 
-  if (rows.length < limit && lesson) {
+  if (!strictFilters && rows.length < limit && lesson) {
     rows = rows.concat(await pagedFetch({ subject, unit, hardness }));
   }
 
-  if (rows.length < limit && unit) {
+  if (!strictFilters && rows.length < limit && unit) {
     rows = rows.concat(await pagedFetch({ subject, hardness }));
   }
 
-  if (rows.length < limit && subject) {
+  if (!strictFilters && rows.length < limit && subject) {
     rows = rows.concat(await pagedFetch({ hardness }));
   }
 
   let deduped = dedupeRows(rows);
 
-  if (deduped.length < limit) {
+  if (!strictFilters && deduped.length < limit) {
     deduped = dedupeRows(deduped.concat(await pagedFetch({ subject, unit, lesson, hardness }, baseFetchLimit * 2)));
   }
 
-  if (deduped.length < limit) {
+  if (!strictFilters && deduped.length < limit) {
     deduped = dedupeRows(deduped.concat(await pagedFetch({ hardness }, Math.min(baseFetchLimit * 3, HARD_ROW_LIMIT))));
   }
 

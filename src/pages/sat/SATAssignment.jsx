@@ -8,6 +8,8 @@ import { supabase } from "../../lib/supabase.js";
 import { beginSatTrainingSession, saveSatTraining, updateSatTrainingSession } from "../../lib/supabaseStorage.js";
 import "katex/dist/katex.min.css";
 import { renderMathText } from "../../lib/mathText.jsx";
+import { fetchQuestionBankByIds } from "../../lib/assignmentQuestions.js";
+import { BANKS, mapBankQuestionToResource } from "../../lib/questionBanks.js";
 
 const DEFAULT_META = {
   classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
@@ -64,6 +66,53 @@ const buildSummary = ({ correctCount, total, section }) => {
     return { rw: entry };
   }
   return { total: entry };
+};
+
+const looksLikeRefs = (items) =>
+  Array.isArray(items) &&
+  items.length > 0 &&
+  items.every((item) => item && Object.prototype.hasOwnProperty.call(item, "questionId"));
+
+const hydrateQuestionReferences = async (refs = [], meta = {}) => {
+  if (!looksLikeRefs(refs)) return [];
+  const groups = refs.reduce((acc, ref) => {
+    const refId = ref?.questionId != null ? String(ref.questionId) : null;
+    if (!refId) return acc;
+    const bankId = ref.bank || meta.questionBank || "math";
+    const bank = BANKS[bankId] || BANKS.math;
+    if (!bank?.table) return acc;
+    if (!acc.has(bankId)) acc.set(bankId, { bank, ids: new Set() });
+    acc.get(bankId).ids.add(refId);
+    return acc;
+  }, new Map());
+  if (groups.size === 0) return [];
+  const fetched = new Map();
+  await Promise.all(
+    Array.from(groups.values()).map(async ({ bank, ids }) => {
+      const rows = await fetchQuestionBankByIds({ table: bank.table, ids: Array.from(ids) });
+      rows.forEach((row) => {
+        const mapped = mapBankQuestionToResource(row);
+        if (mapped && row?.id != null) fetched.set(String(row.id), mapped);
+      });
+    }),
+  );
+  return refs
+    .map((ref) => {
+      const refId = ref?.questionId != null ? String(ref.questionId) : null;
+      if (!refId) return null;
+      return fetched.get(refId) || null;
+    })
+    .filter(Boolean);
+};
+
+const materializeQuestionItems = async (items = [], meta = {}) => {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const requiresHydration =
+    meta?.questionRefs ||
+    looksLikeRefs(items);
+  if (!requiresHydration) return items;
+  const hydrated = await hydrateQuestionReferences(items, meta);
+  return hydrated.length ? hydrated : [];
 };
 
 function SATAssignment({ onNavigate, practice = null }) {
@@ -199,7 +248,18 @@ const {
         } else if (custom?.meta) {
           setMeta((prev) => buildMeta(practice?.kind, { ...practice?.meta, ...custom.meta }, custom.durationSec ?? prev?.durationSec));
         }
-        const list = (custom && Array.isArray(custom.questions) ? custom.questions : practice?.questions) || [];
+        let list = (custom && Array.isArray(custom.questions) ? custom.questions : practice?.questions) || [];
+        const metaSource = custom?.meta || practice?.custom?.meta || practice?.meta || {};
+        const questionMeta = {
+          questionRefs:
+            metaSource.questionRefs != null
+              ? Boolean(metaSource.questionRefs)
+              : looksLikeRefs(list),
+          questionBank: metaSource.questionBank || practice?.custom?.questionBank || null,
+        };
+        if (questionMeta.questionRefs || looksLikeRefs(list)) {
+          list = await materializeQuestionItems(list, questionMeta);
+        }
         if (!list.length) throw new Error("This assignment has no questions yet.");
         const normalized = list.map((item, idx) => normalizeQuestion(item, idx));
         if (!cancelled) {
@@ -825,11 +885,11 @@ const {
     updateAnswer(currentQuestion.id, event.target.value);
   };
 
-  function handleResumeHomework() {
+  const handleResumeHomework = () => {
     submittedRef.current = false;
     setSubmitted(false);
     setSaveError("");
-  }
+  };
 
   return (
     <PageWrap>
