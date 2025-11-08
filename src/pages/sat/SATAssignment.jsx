@@ -534,6 +534,15 @@ const {
     return norm(expected) === norm(actual);
   };
 
+  const formatAnswerForDisplay = (question, value) => {
+    if (value == null || value === "") return "—";
+    if (question?.choices?.length) {
+      const match = question.choices.find((choice) => String(choice.value) === String(value));
+      return match ? `${value} - ${match.label}` : String(value);
+    }
+    return String(value);
+  };
+
   const recordTimeForCurrent = () => {
     const question = questions[currentIndex];
     if (!question) return;
@@ -548,6 +557,7 @@ const {
   };
 
   const handleSubmit = async () => {
+    if (reviewOnly) return;
     recordTimeForCurrent();
     if (unanswered.length > 0) {
       const proceed = window.confirm(
@@ -720,14 +730,7 @@ const {
     );
   }
 
-  if (reviewOnly) {
-    return renderReadOnlyLayout();
-  }
-
-  if (submitted) {
-    if (reviewOnly) {
-      return renderReadOnlyLayout();
-    }
+  if (submitted && !reviewOnly) {
     const correctCount = Object.entries(answers).reduce((sum, [id, value]) => {
       const q = questions.find((item) => item.id === id);
       if (!q) return sum;
@@ -761,6 +764,12 @@ const {
   const totalQuestions = questions.length;
   const currentQuestion = questions[currentIndex] || null;
   const qNumber = currentIndex + 1;
+  const currentCorrectValue = currentQuestion ? (currentQuestion.correct ?? currentQuestion.answer ?? null) : null;
+  const currentUserAnswer = currentQuestion ? answers[currentQuestion.id] : null;
+  const currentAnswerCorrect =
+    currentCorrectValue != null ? compareAnswer(currentCorrectValue, currentUserAnswer) : null;
+  const currentCorrectDisplay =
+    currentQuestion && currentCorrectValue != null ? formatAnswerForDisplay(currentQuestion, currentCorrectValue) : null;
   const timeLabel = meta && Number(meta.durationSec) > 0 ? fmtTimer(Math.max(0, timerRemaining)) : `${qNumber}/${totalQuestions}`;
   const isLastQuestion = currentIndex >= totalQuestions - 1;
   const submitDisabled = saving || totalQuestions === 0;
@@ -835,52 +844,14 @@ const {
     </div>
   );
 
-  const formatAnswerForDisplay = (question, value) => {
-    if (value == null || value === "") return "—";
-    if (question?.choices?.length) {
-      const match = question.choices.find((choice) => String(choice.value) === String(value));
-      return match ? `${value} — ${match.label}` : String(value);
-    }
-    return String(value);
-  };
-
-  const renderReadOnlyLayout = () => (
-    <PageWrap>
-      <HeaderBar title={title} right={null} />
-      <Card>
-        <h3 style={{ marginTop: 0, color: "#111827" }}>Homework Review</h3>
-        {deadlineLabel && <p style={{ color: "#6b7280", marginBottom: 4 }}>Deadline: {deadlineLabel}</p>}
-        <p style={{ color: "#6b7280" }}>
-          Editing is disabled because the deadline has passed. Review your answers below.
-        </p>
-      </Card>
-      <div style={{ display: "grid", gap: 12 }}>
-        {questions.map((question, idx) => (
-          <Card key={question.id}>
-            <div style={{ fontWeight: 700, color: "#111827" }}>Question {idx + 1}</div>
-            <div style={{ marginTop: 6, color: "#111827", lineHeight: 1.6 }}>
-              {renderMathText(question?.prompt || "Untitled question")}
-            </div>
-            <div style={{ marginTop: 10, color: "#111827" }}>
-              <strong>Your answer: </strong>
-              {formatAnswerForDisplay(question, answers[question.id])}
-            </div>
-          </Card>
-        ))}
-      </div>
-      <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Btn variant="secondary" onClick={() => onNavigate("sat-training")}>Back to Training</Btn>
-        <Btn variant="primary" onClick={() => onNavigate("home")}>Back Home</Btn>
-      </div>
-    </PageWrap>
-  );
-
   const handleChoice = (value) => {
+    if (reviewOnly) return;
     if (!currentQuestion) return;
     updateAnswer(currentQuestion.id, value);
   };
 
   const handleTextChange = (event) => {
+    if (reviewOnly) return;
     if (!currentQuestion) return;
     updateAnswer(currentQuestion.id, event.target.value);
   };
@@ -962,6 +933,21 @@ const {
         </div>
       )}
       <Card>
+        {reviewOnly && (
+          <div
+            style={{
+              background: "#fefce8",
+              border: "1px solid #facc15",
+              color: "#92400e",
+              padding: "10px 12px",
+              borderRadius: 10,
+              marginBottom: 12,
+              fontWeight: 600,
+            }}
+          >
+            Review mode — answers are locked. Correct answers are highlighted in green.
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: "#6b7280" }}>
@@ -987,19 +973,43 @@ const {
           <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
             {currentQuestion.choices.map((choice) => {
               const selected = answers[currentQuestion.id] === choice.value;
+              const isCorrectChoice =
+                currentCorrectValue != null ? compareAnswer(currentCorrectValue, choice.value) : null;
+              const showReview = reviewOnly && currentCorrectValue != null;
+              let border = selected ? "2px solid #2563eb" : "1px solid #d1d5db";
+              let background = selected ? "rgba(37,99,235,0.08)" : "#fff";
+              let textColor = "#111827";
+              let cursor = "pointer";
+              if (showReview) {
+                cursor = "default";
+                if (isCorrectChoice) {
+                  border = "2px solid #16a34a";
+                  background = "rgba(34,197,94,0.12)";
+                  textColor = "#065f46";
+                } else if (selected && isCorrectChoice === false) {
+                  border = "2px solid #dc2626";
+                  background = "rgba(248,113,113,0.12)";
+                  textColor = "#991b1b";
+                } else {
+                  border = "1px solid #e5e7eb";
+                  background = "#fff";
+                  textColor = "#111827";
+                }
+              }
               return (
                 <button
                   key={choice.value}
                   type="button"
                   onClick={() => handleChoice(choice.value)}
+                  disabled={reviewOnly}
                   style={{
                     textAlign: "left",
                     borderRadius: 10,
                     padding: "12px 14px",
-                    border: selected ? "2px solid #2563eb" : "1px solid #d1d5db",
-                    background: selected ? "rgba(37,99,235,0.08)" : "#fff",
-                    color: "#111827",
-                    cursor: "pointer",
+                    border,
+                    background,
+                    color: textColor,
+                    cursor,
                     transition: "border-color 0.15s ease",
                   }}
                 >
@@ -1010,6 +1020,7 @@ const {
                 </button>
               );
             })}
+            {null}
           </div>
         ) : (
           <div style={{ marginTop: 16 }}>
@@ -1018,9 +1029,28 @@ const {
               type="text"
               value={answers[currentQuestion?.id] ?? ""}
               onChange={handleTextChange}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #d1d5db" }}
+              readOnly={reviewOnly}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 10,
+                border:
+                  reviewOnly && currentCorrectValue != null
+                    ? currentAnswerCorrect
+                      ? "2px solid #16a34a"
+                      : "2px solid #dc2626"
+                    : "1px solid #d1d5db",
+                background: reviewOnly ? "#f8fafc" : "#fff",
+                color:
+                  reviewOnly && currentCorrectValue != null
+                    ? currentAnswerCorrect
+                      ? "#065f46"
+                      : "#991b1b"
+                    : "#111827",
+              }}
               placeholder="Type your answer"
             />
+            {null}
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, gap: 12, flexWrap: "wrap" }}>
@@ -1029,12 +1059,14 @@ const {
             {!isLastQuestion && (
               <Btn variant="secondary" onClick={goNext}>Next</Btn>
             )}
-            <Btn variant="primary" disabled={submitDisabled} onClick={handleSubmit}>
-              {saving ? "Saving..." : unansweredCount > 0 ? "Submit Anyway" : "Submit"}
-            </Btn>
+            {!reviewOnly && (
+              <Btn variant="primary" disabled={submitDisabled} onClick={handleSubmit}>
+                {saving ? "Saving..." : unansweredCount > 0 ? "Submit Anyway" : "Submit"}
+              </Btn>
+            )}
           </div>
         </div>
-        {unansweredCount > 0 && !submitDisabled && (
+        {unansweredCount > 0 && !submitDisabled && !reviewOnly && (
           <div style={{ marginTop: 12, color: "#f97316", fontSize: 13 }}>
             {unansweredCount} unanswered question{unansweredCount === 1 ? "" : "s"} remaining.
           </div>

@@ -1185,6 +1185,13 @@ export default function SATTraining({ onNavigate }) {
       practiceMeta.resumeMode = "restart";
       practiceMeta.durationSec = null;
     }
+    const isHomeworkKind = kindLower === "homework";
+    const resolvedSubject =
+      resource.subject ||
+      (resource.payload && typeof resource.payload === "object" && resource.payload.meta?.subject) ||
+      resource.section ||
+      null;
+    const normalizedSubject = resolvedSubject ? String(resolvedSubject).trim().toLowerCase() : "";
     const attemptInfo = resource?.id ? studentAttempts[resource.id] || null : null;
     const attemptCount = attemptInfo?.attempts?.length || 0;
     const latestStatus = attemptInfo?.latest?.status || null;
@@ -1192,18 +1199,39 @@ export default function SATTraining({ onNavigate }) {
     const attemptLimit = practiceMeta?.attemptLimit != null ? practiceMeta.attemptLimit : null;
     const allowRetake = practiceMeta?.allowRetake !== false;
     const limitReached = items.length > 0 && completed && ((!allowRetake && attemptLimit == null) || (attemptLimit != null && attemptCount >= attemptLimit));
-    const canStart = items.length > 0 && !limitReached;
+    const baseCanStart = items.length > 0 && !limitReached;
     const kindLabel = (resource.kind || "classwork").toLowerCase();
     const prettyKind = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
     const durationLabel = items.length > 0 ? formatDuration(practiceMeta?.durationSec) : null;
+    const deadlineIso =
+      practiceMeta?.deadline ||
+      (resource.payload && typeof resource.payload === "object" && resource.payload.meta?.deadline) ||
+      (resource.payload && typeof resource.payload === "object" && resource.payload.settings?.deadline) ||
+      resource.deadline ||
+      null;
+    const deadlineDate = deadlineIso ? new Date(deadlineIso) : null;
+    const deadlineValid = deadlineDate && !Number.isNaN(deadlineDate.getTime());
+    const deadlinePassed = Boolean(isHomeworkKind && deadlineValid && Date.now() > deadlineDate.getTime());
+    const deadlineLabel = deadlineValid ? deadlineDate.toLocaleString() : "";
     const attemptLabel = attemptCount > 0 ? `Attempts: ${attemptCount}${attemptLimit ? `/${attemptLimit}` : ""}` : null;
     let hasResume = false;
     if (practiceMeta?.resumeMode === "resume" && resource?.id) {
       try { hasResume = Boolean(localStorage.getItem(`cg_sat_resume_${resource.id}`)); } catch {}
     }
-    const startLabel = limitReached
+    const homeworkViewMode = isHomeworkKind && completed && deadlinePassed;
+    const previewMode = completed && !isHomeworkKind;
+    const startLabel = !items.length
+      ? ""
+      : homeworkViewMode
+      ? "View"
+      : previewMode
+      ? "Preview"
+      : completed && isHomeworkKind
+      ? "Edit Homework"
+      : limitReached
       ? "Completed"
       : (practiceMeta?.resumeMode === "resume" && hasResume ? "Resume" : `Start ${prettyKind}`);
+    const canStart = homeworkViewMode ? items.length > 0 : baseCanStart;
     const startAttemptIndex = attemptCount + 1;
     const routeTarget = ["exam", "sat", "diagnostic", "test"].includes(kindLower) ? "sat-exam" : "sat-assignment";
     const launchPractice = () => {
@@ -1212,16 +1240,20 @@ export default function SATTraining({ onNavigate }) {
       const metaForPractice = { ...practiceMeta };
       if (questionRefs) metaForPractice.questionRefs = true;
       if (questionBank && !metaForPractice.questionBank) metaForPractice.questionBank = questionBank;
+      if (deadlineIso && !metaForPractice.deadline) metaForPractice.deadline = deadlineIso;
       const practicePayload = {
         kind: resource.kind || "classwork",
         resourceId: resource.id || null,
         className: studentClass || null,
+        subject: normalizedSubject || null,
         section: resource.section || null,
         unit: resource.unit || null,
         lesson: resource.lesson || null,
         meta: metaForPractice,
         attemptIndex: startAttemptIndex,
       };
+      if (deadlineIso) practicePayload.deadline = deadlineIso;
+      if (homeworkViewMode) practicePayload.reviewOnly = true;
       if (!questionRefs) {
         practicePayload.custom = {
           questions: items,
@@ -1245,6 +1277,11 @@ export default function SATTraining({ onNavigate }) {
         {(resource.unit || resource.lesson) && (
           <div style={{ color: '#6b7280', fontSize: 12 }}>
             {[resource.unit, resource.lesson].filter(Boolean).join(' - ')}
+          </div>
+        )}
+        {deadlineLabel && (
+          <div style={{ color: deadlinePassed ? '#dc2626' : '#6b7280', fontSize: 12 }}>
+            Due: {deadlineLabel}
           </div>
         )}
         {(resource.url && (!resource.payload || !items.length)) && (
