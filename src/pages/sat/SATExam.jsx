@@ -282,6 +282,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const [summaryModal, setSummaryModal] = useState({ open: false, stats: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sectionActive, setSectionActive] = useState(true);
+  const [showCalculator, setShowCalculator] = useState(false);
   const qCount = mod?.questions?.length || 0;
   const cd = useCountdown(isTimed ? mod?.durationSec : 60);
   const startedAtRef = useRef(Date.now());
@@ -289,6 +290,22 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const prevPageRef = useRef(1);
   const timesRef = useRef({}); // { qid: seconds }
   const pendingResultRef = useRef(null);
+
+  const isMathSection = useMemo(() => {
+    if (!mod) return false;
+    const key = String(mod.key || "").toLowerCase();
+    if (key.startsWith("m")) return true;
+    const title = String(mod.title || "").toLowerCase();
+    if (title.includes("math")) return true;
+    const subject = String(
+      mod.meta?.subject ||
+        practice?.meta?.subject ||
+        practice?.custom?.meta?.subject ||
+        practice?.section ||
+        "",
+    ).toLowerCase();
+    return subject.includes("math");
+  }, [mod, practice]);
   useEffect(() => {
     if (!resumeEnabled || resumeLoaded || !resumeKey || !mod || !Array.isArray(mod.questions)) return;
     try {
@@ -340,6 +357,12 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     timesRef.current = {};
     persistProgress();
   }, [modIdx, mod?.durationSec]);
+
+  useEffect(() => {
+    if (!isMathSection) {
+      setShowCalculator(false);
+    }
+  }, [isMathSection, modIdx]);
 
   useEffect(() => {
     if (!mod) return;
@@ -719,6 +742,73 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   return (
     <PageWrap>
       {previewBanner}
+      {isMathSection && showCalculator && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Desmos Calculator"
+          onClick={() => setShowCalculator(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.75)",
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: 16,
+              width: "min(960px, 95vw)",
+              height: "min(640px, 90vh)",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 70px rgba(15,23,42,0.35)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "12px 18px",
+                borderBottom: "1px solid #e5e7eb",
+              }}
+            >
+              <strong style={{ fontSize: 16 }}>Desmos Calculator</strong>
+              <button
+                type="button"
+                onClick={() => setShowCalculator(false)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#2563eb",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              title="Desmos Graphing Calculator"
+              src="https://www.desmos.com/calculator?lang=en"
+              style={{
+                flex: 1,
+                border: "none",
+                borderBottomLeftRadius: 16,
+                borderBottomRightRadius: 16,
+              }}
+              allowFullScreen
+            />
+          </div>
+        </div>
+      )}
       {/* Bluebook-style header */}
       <div style={{ padding: "6px 0 4px" }}>
         <div style={{
@@ -761,8 +851,17 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             </div>
           </div>
 
-          {/* Right: Annotate / More */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          {/* Right: Annotate / More / Calculator */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+            {isMathSection && (
+              <button
+                type="button"
+                onClick={() => setShowCalculator(true)}
+                style={{ border: "1px solid #d1d5db", background: "#fff", color: "#2563eb", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontWeight: 600 }}
+              >
+                Calculator
+              </button>
+            )}
             <button type="button" onClick={() => openOverlay("Annotate", "Annotation tools are coming soon.")} style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>Annotate</button>
             <button type="button" onClick={() => openOverlay("More", "Additional options are coming soon.")} style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>More</button>
           </div>

@@ -614,9 +614,12 @@ export default function SATTraining({ onNavigate }) {
       }
 
       const isTestBank = activeBank.id === "tests";
+      const editingDuration = field === "durationMin";
       if (isTestBank) {
         next.kind = "test";
-        next.durationMin = defaultDurationForKind("test");
+        if (!editingDuration && !next.durationMin) {
+          next.durationMin = defaultDurationForKind("test");
+        }
         if (subjectValue === "math" && !next.difficulty) {
           next.difficulty = DEFAULT_DIFFICULTY;
         } else if (subjectValue !== "math") {
