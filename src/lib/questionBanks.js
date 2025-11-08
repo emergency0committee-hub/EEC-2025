@@ -149,18 +149,20 @@ export const normalizeSubjectValue = (value) => {
   return match ? match.value : SUBJECT_OPTIONS[0].value;
 };
 
-export const mapBankQuestionToResource = (row = {}) => {
-  const question = String(row.question || row.prompt || "").trim();
-  if (!question) return null;
-  const type = String(row.question_type || row.type || "mcq").toLowerCase();
-  const isFill = type === "fill" || type === "text" || type === "free";
-  const choiceEntries = [
-    { value: "A", label: row.answer_a || row.answerA || "" },
-    { value: "B", label: row.answer_b || row.answerB || "" },
-    { value: "C", label: row.answer_c || row.answerC || "" },
-    { value: "D", label: row.answer_d || row.answerD || "" },
-  ].filter((choice) => String(choice.label || "").trim().length > 0);
-  const hasChoices = choiceEntries.length > 0;
+export const mapBankQuestionToResource = (row = {}) => {
+  const question = String(row.question || row.prompt || "").trim();
+  if (!question) return null;
+  const type = String(row.question_type || row.type || "mcq").toLowerCase();
+  const isFill = type === "fill" || type === "text" || type === "free";
+  const choiceEntries = isFill
+    ? []
+    : [
+        { value: "A", label: row.answer_a || row.answerA || "" },
+        { value: "B", label: row.answer_b || row.answerB || "" },
+        { value: "C", label: row.answer_c || row.answerC || "" },
+        { value: "D", label: row.answer_d || row.answerD || "" },
+      ].filter((choice) => String(choice.label || "").trim().length > 0);
+  const hasChoices = choiceEntries.length > 0;
   const fallbackId = row.id || row.uuid || row.question_id || `bank_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const item = {
     id: fallbackId,

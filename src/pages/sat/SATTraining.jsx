@@ -11,6 +11,7 @@ import {
   SUBJECT_OPTIONS,
   MATH_UNIT_OPTIONS,
   MATH_LESSON_OPTIONS,
+  HARDNESS_OPTIONS,
 } from "../../lib/questionBanks.js";
 
 const FIRST_MATH_UNIT = MATH_UNIT_OPTIONS[0]?.value || "";
@@ -28,6 +29,7 @@ const defaultDurationForKind = (kind) => {
   const value = String(kind || "quiz").toLowerCase();
   if (value === "homework") return "";
   if (value === "quiz") return "15";
+  if (value === "test") return "35";
   return "20";
 };
 
@@ -70,6 +72,9 @@ const formatLessonLabel = (subject, unit, lesson) => {
   return normalizeKeyValue(subject) === "math" ? findMathLessonLabel(unit, lesson) : lesson;
 };
 
+const DEFAULT_DIFFICULTY =
+  (HARDNESS_OPTIONS.find((opt) => opt.value === "medium") || HARDNESS_OPTIONS[0] || {}).value || "";
+
 const createDefaultAutoAssign = (bankId = "math") => {
   const bank = resolveBankConfig(bankId);
   const subject = bank.subjectLocked
@@ -81,12 +86,13 @@ const createDefaultAutoAssign = (bankId = "math") => {
   return {
     bank: bank.id,
     subject,
-    kind: "quiz",
+    kind: bank.id === "tests" ? "test" : "quiz",
     questionCount: "10",
-    durationMin: defaultDurationForKind("quiz"),
+    durationMin: defaultDurationForKind(bank.id === "tests" ? "test" : "quiz"),
     title: "",
     unit,
     lesson,
+    difficulty: bank.id === "tests" ? DEFAULT_DIFFICULTY : "",
   };
 };
 
@@ -209,6 +215,7 @@ export default function SATTraining({ onNavigate }) {
     classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
     homework: { durationSec: null, allowRetake: true, resumeMode: "resume", attemptLimit: null },
     quiz: { durationSec: 15 * 60, allowRetake: false, resumeMode: "restart", attemptLimit: 1 },
+    test: { durationSec: 35 * 60, allowRetake: false, resumeMode: "restart", attemptLimit: 1 },
   };
 
   const baseMeta = (kind) => {
@@ -556,6 +563,17 @@ export default function SATTraining({ onNavigate }) {
             ? bank.defaultSubject
             : next.subject || bank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math",
         };
+        if (bank.id === "tests") {
+          next.kind = "test";
+          next.durationMin = defaultDurationForKind("test");
+          next.difficulty = next.difficulty || DEFAULT_DIFFICULTY;
+        } else {
+          if (next.kind === "test") {
+            next.kind = "quiz";
+            next.durationMin = defaultDurationForKind("quiz");
+          }
+          next.difficulty = "";
+        }
       } else if (field === "subject") {
         next.subject = String(value || "");
       } else if (field === "kind") {
@@ -568,6 +586,8 @@ export default function SATTraining({ onNavigate }) {
         next.unit = String(value || "");
       } else if (field === "lesson") {
         next.lesson = String(value || "");
+      } else if (field === "difficulty") {
+        next.difficulty = String(value || "");
       }
 
       const activeBank = resolveBankConfig(next.bank);
@@ -580,7 +600,34 @@ export default function SATTraining({ onNavigate }) {
         next.subject = subjectValue;
       }
 
-      const supportsMathUnits = activeBank.supportsUnitLesson && subjectValue === "math";
+      const isTestBank = activeBank.id === "tests";
+      if (isTestBank) {
+        next.kind = "test";
+        next.durationMin = defaultDurationForKind("test");
+        if (subjectValue === "math" && !next.difficulty) {
+          next.difficulty = DEFAULT_DIFFICULTY;
+        } else if (subjectValue !== "math") {
+          next.difficulty = "";
+        }
+      } else {
+        if (next.kind === "test") {
+          next.kind = "quiz";
+          next.durationMin = defaultDurationForKind("quiz");
+        }
+        if (next.difficulty && subjectValue !== "math") {
+          next.difficulty = "";
+        }
+      }
+
+      if (field === "bank") {
+        if (isTestBank) {
+          next.difficulty = next.difficulty || DEFAULT_DIFFICULTY;
+        } else {
+          next.difficulty = "";
+        }
+      }
+
+      const supportsMathUnits = activeBank.supportsUnitLesson && subjectValue === "math" && !isTestBank;
       if (!supportsMathUnits) {
         next.unit = "";
         next.lesson = "";
@@ -721,7 +768,9 @@ export default function SATTraining({ onNavigate }) {
     const subject = bank.subjectLocked
       ? bank.defaultSubject
       : autoAssign.subject || bank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
-    const supportsMathUnits = bank.supportsUnitLesson && subject === "math";
+    const isTestBank = bank.id === "tests";
+    const supportsMathUnits = bank.supportsUnitLesson && subject === "math" && !isTestBank;
+    const showDifficultySelector = isTestBank && subject === "math";
     const unitValue = supportsMathUnits ? autoAssign.unit : "";
     const lessonValue = supportsMathUnits ? autoAssign.lesson : "";
     const requestedCount = Number.parseInt(autoAssign.questionCount, 10);
@@ -737,6 +786,13 @@ export default function SATTraining({ onNavigate }) {
       alert("Pick a lesson.");
       return;
     }
+    const difficultyValue = showDifficultySelector
+      ? autoAssign.difficulty || DEFAULT_DIFFICULTY
+      : "";
+    if (showDifficultySelector && !difficultyValue) {
+      alert("Pick a difficulty level.");
+      return;
+    }
 
     const questionLimit = Math.min(Math.max(requestedCount, 1), 200);
     setAutoGenerating(true);
@@ -746,6 +802,7 @@ export default function SATTraining({ onNavigate }) {
         subject,
         unit: supportsMathUnits ? unitValue : undefined,
         lesson: supportsMathUnits ? lessonValue : undefined,
+        hardness: difficultyValue || undefined,
         limit: questionLimit,
       });
       const candidates = (rows || []).map(mapBankQuestionToResource).filter(Boolean);
@@ -800,6 +857,7 @@ export default function SATTraining({ onNavigate }) {
         unit: supportsMathUnits ? unitValue : null,
         lesson: supportsMathUnits ? lessonValue : null,
         source: "question-bank",
+        difficulty: showDifficultySelector ? difficultyValue : null,
       };
 
       const inserted = await saveResource({
@@ -830,7 +888,9 @@ export default function SATTraining({ onNavigate }) {
   const activeSubject = activeBank.subjectLocked
     ? activeBank.defaultSubject
     : autoAssign.subject || activeBank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
-  const showMathSelectors = activeBank.supportsUnitLesson && activeSubject === "math";
+  const isTestBank = activeBank.id === "tests";
+  const showMathSelectors = activeBank.supportsUnitLesson && activeSubject === "math" && !isTestBank;
+  const showDifficultySelector = isTestBank && activeSubject === "math";
   const activeLessons = MATH_LESSON_OPTIONS[autoAssign.unit] || [];
   const subjectDisplayLabel =
     SUBJECT_OPTIONS.find((opt) => opt.value === activeSubject)?.label?.EN || activeSubject;
@@ -1444,15 +1504,31 @@ export default function SATTraining({ onNavigate }) {
                               </option>
                             ))}
                           </select>
-                          <select
-                            value={autoAssign.kind}
-                            onChange={(e) => handleAutoAssignChange("kind", e.target.value)}
-                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                          >
-                            <option value="classwork">Classwork</option>
-                            <option value="homework">Homework</option>
-                            <option value="quiz">Quiz</option>
-                          </select>
+                          {isTestBank ? (
+                            <div
+                              style={{
+                                padding: '10px 12px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: 8,
+                                minWidth: 140,
+                                background: '#f9fafb',
+                                color: '#374151',
+                                fontWeight: 600,
+                              }}
+                            >
+                              Test
+                            </div>
+                          ) : (
+                            <select
+                              value={autoAssign.kind}
+                              onChange={(e) => handleAutoAssignChange("kind", e.target.value)}
+                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
+                            >
+                              <option value="classwork">Classwork</option>
+                              <option value="homework">Homework</option>
+                              <option value="quiz">Quiz</option>
+                            </select>
+                          )}
                           {activeBank.subjectLocked ? (
                             <div
                               style={{
@@ -1534,6 +1610,23 @@ export default function SATTraining({ onNavigate }) {
                             }}
                           />
                         </div>
+
+                        {showDifficultySelector && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 13, color: '#475569' }}>Difficulty</label>
+                            <select
+                              value={autoAssign.difficulty || DEFAULT_DIFFICULTY}
+                              onChange={(e) => handleAutoAssignChange("difficulty", e.target.value)}
+                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, minWidth: 180 }}
+                            >
+                              {HARDNESS_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label.EN || opt.value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
                         <input
                           type="text"

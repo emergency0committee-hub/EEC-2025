@@ -1,11 +1,15 @@
 // src/lib/mathText.jsx
 import React from "react";
 import { InlineMath, BlockMath } from "react-katex";
+import { sanitizeRichTextHtml } from "./richText.js";
 
 const INLINE_REGEX = /\\\[(.+?)\\\]|\\\((.+?)\\\)|\$\$(.+?)\$\$|\$([^$]+?)\$/gs;
 const MATH_HINT_REGEX =
   /\\[a-zA-Z]+|\\frac|\\sqrt|\\sum|\\int|\\left|\\right|\\times|\\div|\\pm|\\pi|\\alpha|\\beta|\\gamma|\^|_|=|\\\(|\\\)|\\\[|\\\]|\$\$/;
 const HTML_ENTITY_REGEX = /&(?:nbsp|lt|gt|amp|quot|apos|#39);/g;
+const HTML_CONTENT_REGEX =
+  /<\s*(table|img|div|p|br|figure|figcaption|ul|ol|li|mark|strong|em|u|span|h[1-6]|blockquote|hr|a)\b/i;
+
 const ENTITY_MAP = {
   "&nbsp;": " ",
   "&lt;": "<",
@@ -66,8 +70,8 @@ const stripBasicHtml = (value) =>
     .replace(/<[^>]+>/g, "");
 
 const normalizeText = (value) => {
-  const withEntities = decodeEntities(value);
-  const withTokens = injectFormattingTokens(withEntities);
+  const decoded = decodeEntities(value);
+  const withTokens = injectFormattingTokens(decoded);
   const stripped = stripBasicHtml(withTokens);
   return stripped
     .replace(/\u00a0/g, " ")
@@ -236,7 +240,23 @@ const renderSegmentNode = (segment, idx) => {
 
 export const renderMathText = (value) => {
   if (value == null) return null;
-  const normalized = normalizeText(value);
+  const decoded = decodeEntities(String(value ?? ""));
+  const trimmed = decoded.trim();
+  if (!trimmed) return null;
+
+  if (HTML_CONTENT_REGEX.test(trimmed)) {
+    const sanitized = sanitizeRichTextHtml(trimmed);
+    const overflow = sanitized.includes("<table") ? "auto" : "visible";
+    return [
+      <div
+        key="html"
+        style={{ overflowX: overflow }}
+        dangerouslySetInnerHTML={{ __html: sanitized }}
+      />,
+    ];
+  }
+
+  const normalized = normalizeText(trimmed);
   if (!normalized) return null;
   const segments = renderSegments(normalized);
   if (segments.some((segment) => segment.type !== "text")) {

@@ -67,6 +67,7 @@ export async function fetchQuestionBankSample({
   subject,
   unit,
   lesson,
+  hardness,
   limit = 20,
 } = {}) {
   const target = resolveTable(table);
@@ -102,6 +103,10 @@ export async function fetchQuestionBankSample({
         const pattern = normalizeFilter(filters.lesson);
         query = query.ilike("lesson", pattern);
       }
+      if (filters.hardness) {
+        const pattern = normalizeFilter(filters.hardness);
+        query = query.ilike("hardness", pattern);
+      }
       const { data, error } = await query;
       if (error) throw error;
       if (Array.isArray(data) && data.length > 0) {
@@ -114,28 +119,28 @@ export async function fetchQuestionBankSample({
     return rows;
   };
 
-  let rows = await pagedFetch({ subject, unit, lesson });
+  let rows = await pagedFetch({ subject, unit, lesson, hardness });
 
   if (rows.length < limit && lesson) {
-    rows = rows.concat(await pagedFetch({ subject, unit }));
+    rows = rows.concat(await pagedFetch({ subject, unit, hardness }));
   }
 
   if (rows.length < limit && unit) {
-    rows = rows.concat(await pagedFetch({ subject }));
+    rows = rows.concat(await pagedFetch({ subject, hardness }));
   }
 
   if (rows.length < limit && subject) {
-    rows = rows.concat(await pagedFetch({}));
+    rows = rows.concat(await pagedFetch({ hardness }));
   }
 
   let deduped = dedupeRows(rows);
 
   if (deduped.length < limit) {
-    deduped = dedupeRows(deduped.concat(await pagedFetch({ subject, unit, lesson }, baseFetchLimit * 2)));
+    deduped = dedupeRows(deduped.concat(await pagedFetch({ subject, unit, lesson, hardness }, baseFetchLimit * 2)));
   }
 
   if (deduped.length < limit) {
-    deduped = dedupeRows(deduped.concat(await pagedFetch({}, Math.min(baseFetchLimit * 3, HARD_ROW_LIMIT))));
+    deduped = dedupeRows(deduped.concat(await pagedFetch({ hardness }, Math.min(baseFetchLimit * 3, HARD_ROW_LIMIT))));
   }
 
   const shuffled = shuffleRows(deduped);

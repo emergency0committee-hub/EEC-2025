@@ -57,10 +57,13 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     const k = (kind || "classwork").toLowerCase();
     const base = {
       durationSec: k === "homework" ? null : 15 * 60,
-      allowRetake: k !== "quiz",
+      allowRetake: k !== "quiz" && k !== "test",
       resumeMode: k === "homework" ? "resume" : "restart",
-      attemptLimit: k === "quiz" ? 1 : null,
+      attemptLimit: k === "quiz" || k === "test" ? 1 : null,
     };
+    if (k === "test") {
+      base.durationSec = 35 * 60;
+    }
     return base;
   };
 
@@ -750,27 +753,46 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
 
           <div style={{ display: "grid", gap: 10 }}>
              {(() => {
-              const isNumeric = (q?.answerType === 'numeric') || !((q?.choices || []).some((ch) => ch && ch.label));
-              if (isNumeric) {
-                const value = currentAns[q.id] ?? '';
-                return (
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <label htmlFor={`numeric_${q.id}`} style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>Enter your answer</label>
-                    <input
-                      id={`numeric_${q.id}`}
-                      type="number"
-                      step="any"
-                      value={value}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        updateAnswer(q.id, raw === '' ? null : raw);
-                      }}
-                      style={{ padding: '12px 14px', borderRadius: 10, border: '2px solid #2563eb', fontSize: 16 }}
-                    />
-                  </div>
-                );
-              }
-              return (q?.choices || []).map((ch, idx) => {
+            const hasChoices = Array.isArray(q?.choices) && q.choices.some((ch) => ch && ch.label);
+            const type = q?.answerType || (hasChoices ? "choice" : "numeric");
+            if (type === "text") {
+              const value = currentAns[q.id] ?? "";
+              return (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label htmlFor={`text_${q.id}`} style={{ fontSize: 14, color: "#374151", fontWeight: 600 }}>Enter your answer</label>
+                  <input
+                    id={`text_${q.id}`}
+                    type="text"
+                    value={value}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      updateAnswer(q.id, raw === "" ? null : raw);
+                    }}
+                    style={{ padding: "12px 14px", borderRadius: 10, border: "2px solid #2563eb", fontSize: 16 }}
+                  />
+                </div>
+              );
+            }
+            if (type === "numeric" || !hasChoices) {
+              const value = currentAns[q.id] ?? "";
+              return (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label htmlFor={`numeric_${q.id}`} style={{ fontSize: 14, color: "#374151", fontWeight: 600 }}>Enter your answer</label>
+                  <input
+                    id={`numeric_${q.id}`}
+                    type="text"
+                    inputMode="decimal"
+                    value={value}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      updateAnswer(q.id, raw === "" ? null : raw);
+                    }}
+                    style={{ padding: "12px 14px", borderRadius: 10, border: "2px solid #2563eb", fontSize: 16 }}
+                  />
+                </div>
+              );
+            }
+            return (q?.choices || []).map((ch, idx) => {
                 const isSelected = currentAns[q.id] === ch.value;
                 return (
                   <button
