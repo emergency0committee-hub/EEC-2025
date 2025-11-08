@@ -279,7 +279,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   const [showTimer, setShowTimer] = useState(() => isTimed);
   const [page, setPage] = useState(1);
   const [overlay, setOverlay] = useState({ open: false, title: "", message: "" });
-  const [summaryModal, setSummaryModal] = useState({ open: false, stats: null });
+  const [summaryModal, setSummaryModal] = useState({ open: false, stats: null, reason: null });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [sectionActive, setSectionActive] = useState(true);
   const [showCalculator, setShowCalculator] = useState(false);
@@ -383,9 +383,13 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   useEffect(() => { // auto-advance on timer end
     if (!isTimed || !sectionActive) return;
     if (cd.remaining <= 0) {
-      handleNextModule();
+      if (modIdx + 1 < totalMods) {
+        handleNextModule();
+      } else {
+        handleNextModule("timeout");
+      }
     }
-  }, [cd.remaining, isTimed, sectionActive]);
+  }, [cd.remaining, isTimed, sectionActive, modIdx, totalMods]);
 
   // Track time spent per question
   useEffect(() => {
@@ -463,13 +467,13 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
   };
   const toggleFlag = (qid) => setFlags((s) => ({ ...s, [mod.key]: { ...(s[mod.key] || {}), [qid]: !((s[mod.key] || {})[qid]) } }));
 
-  const handleNextModule = () => {
+  const handleNextModule = (finishReason = "submit") => {
     if (modIdx + 1 < totalMods) {
       captureCurrentQuestionTime();
       setSectionActive(false);
       setModIdx(modIdx + 1);
     } else {
-      prepareSubmit();
+      prepareSubmit(finishReason);
     }
   };
 
@@ -548,7 +552,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     catch {}
   };
 
-  const prepareSubmit = () => {
+  const prepareSubmit = (reason = "submit") => {
     if (summaryModal.open) return;
     const finishedAt = Date.now();
     try { cd.stop(); } catch {}
@@ -563,19 +567,16 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
       if (section !== "rw") return null;
       return q.difficultyKey || normalizeDifficulty(q.difficulty || "");
     });
-    let totalCorrect = 0;
     let totalQuestions = 0;
     modules.forEach((m) => {
       const a = answers[m.key] || {};
       (m.questions || []).forEach((q) => {
         totalQuestions += 1;
-        if (isAnswerCorrect(q, a[q.id])) totalCorrect += 1;
       });
     });
-    const avgSec = totalQuestions ? Math.round(elapsedSec / totalQuestions) : 0;
-    const stats = { totalCorrect, totalQuestions, avgSec };
+    const stats = { totalQuestions, elapsedSec };
     pendingResultRef.current = { finishedAt, elapsedSec, summary, stats, skillPercents, difficultyPercents };
-    setSummaryModal({ open: true, stats });
+    setSummaryModal({ open: true, stats, reason });
   };
 
   const finalizeSubmit = async () => {
@@ -648,13 +649,13 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             bySkill.set(label, rec);
           });
           const count = qs.length;
-          setSummaryModal({ open: false, stats: null });
+          setSummaryModal({ open: false, stats: null, reason: null });
           pendingResultRef.current = null;
           alert("Thanks! Your responses were submitted.");
           onNavigate("sat-training");
           return;
         }
-        setSummaryModal({ open: false, stats: null });
+        setSummaryModal({ open: false, stats: null, reason: null });
         pendingResultRef.current = null;
         onNavigate('sat-training');
       } else {
@@ -680,7 +681,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
           elapsedSec,
         });
         pendingResultRef.current = null;
-        setSummaryModal({ open: false, stats: null });
+        setSummaryModal({ open: false, stats: null, reason: null });
         alert("Thanks! Your responses were submitted.");
         onNavigate('sat-training');
       }
@@ -692,7 +693,7 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
     }
   };
   const cancelSummary = () => {
-    setSummaryModal({ open: false, stats: null });
+    setSummaryModal({ open: false, stats: null, reason: null });
     pendingResultRef.current = null;
     questionStartRef.current = Date.now();
     try { cd.start(); } catch {}
@@ -1033,19 +1034,24 @@ export default function SATExam({ onNavigate, practice = null, preview = false }
             onClick={(e) => e.stopPropagation()}
             style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 12px 30px rgba(15,23,42,0.25)", width: "min(520px, 92vw)", padding: 20, display: "grid", gap: 14 }}
           >
-            <h3 style={{ margin: 0, color: "#111827" }}>Ready to Submit?</h3>
+            <h3 style={{ margin: 0, color: "#111827" }}>
+              {summaryModal.reason === "timeout" ? "Time's Up" : "Ready to Submit?"}
+            </h3>
             {(() => {
-              const stats = summaryModal.stats || { totalCorrect: 0, totalQuestions: 0, avgSec: 0 };
+              const stats = summaryModal.stats || { totalQuestions: 0, elapsedSec: 0 };
               return (
                 <div style={{ color: "#374151", fontSize: 15, lineHeight: 1.6 }}>
-                  <div><strong>Total correct:</strong> {stats.totalCorrect}</div>
                   <div><strong>Total questions:</strong> {stats.totalQuestions}</div>
-                  <div><strong>Average time per question:</strong> {fmtSeconds(stats.avgSec)}</div>
+                  <div><strong>Time spent:</strong> {fmtSeconds(stats.elapsedSec)}</div>
                 </div>
               );
             })()}
             <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
-              {previewMode ? "Submit to finish your preview and view the score breakdown (nothing will be saved)." : "Submit to save your work and view detailed results."}
+              {summaryModal.reason === "timeout"
+                ? "Time is up. Your responses will be submitted as they are."
+                : (previewMode
+                    ? "Submit to finish your preview and view the score breakdown (nothing will be saved)."
+                    : "Submit to save your work and view detailed results.")}
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
               <button
