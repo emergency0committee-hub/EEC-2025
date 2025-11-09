@@ -556,6 +556,24 @@ const {
     questionStartRef.current = performance.now();
   };
 
+  const handleChoice = (value) => {
+    if (reviewOnly) return;
+    if (!currentQuestion) return;
+    updateAnswer(currentQuestion.id, value);
+  };
+
+  const handleTextChange = (event) => {
+    if (reviewOnly) return;
+    if (!currentQuestion) return;
+    updateAnswer(currentQuestion.id, event.target.value);
+  };
+
+  const handleResumeHomework = () => {
+    submittedRef.current = false;
+    setSubmitted(false);
+    setSaveError("");
+  };
+
   const handleSubmit = async () => {
     if (reviewOnly) return;
     recordTimeForCurrent();
@@ -843,24 +861,6 @@ const {
       )}
     </div>
   );
-
-  const handleChoice = (value) => {
-    if (reviewOnly) return;
-    if (!currentQuestion) return;
-    updateAnswer(currentQuestion.id, value);
-  };
-
-  const handleTextChange = (event) => {
-    if (reviewOnly) return;
-    if (!currentQuestion) return;
-    updateAnswer(currentQuestion.id, event.target.value);
-  };
-
-  const handleResumeHomework = () => {
-    submittedRef.current = false;
-    setSubmitted(false);
-    setSaveError("");
-  };
 
   return (
     <PageWrap>
