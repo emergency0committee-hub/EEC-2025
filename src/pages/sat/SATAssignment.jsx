@@ -788,6 +788,10 @@ const {
     currentCorrectValue != null ? compareAnswer(currentCorrectValue, currentUserAnswer) : null;
   const currentCorrectDisplay =
     currentQuestion && currentCorrectValue != null ? formatAnswerForDisplay(currentQuestion, currentCorrectValue) : null;
+  const userAnswerDisplay =
+    currentQuestion && currentUserAnswer != null && currentUserAnswer !== ""
+      ? formatAnswerForDisplay(currentQuestion, currentUserAnswer)
+      : "—";
   const timeLabel = meta && Number(meta.durationSec) > 0 ? fmtTimer(Math.max(0, timerRemaining)) : `${qNumber}/${totalQuestions}`;
   const isLastQuestion = currentIndex >= totalQuestions - 1;
   const submitDisabled = saving || totalQuestions === 0;
@@ -1051,6 +1055,34 @@ const {
               placeholder="Type your answer"
             />
             {null}
+          </div>
+        )}
+        {reviewOnly && currentCorrectValue != null && (
+          <div
+            style={{
+              marginTop: 18,
+              padding: "12px 14px",
+              borderRadius: 10,
+              background: "#f8fafc",
+              border: "1px solid #e5e7eb",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 600,
+                color:
+                  currentAnswerCorrect === null
+                    ? "#374151"
+                    : currentAnswerCorrect
+                    ? "#15803d"
+                    : "#b91c1c",
+              }}
+            >
+              Your answer: {userAnswerDisplay}
+            </div>
+            <div style={{ fontWeight: 600, color: "#15803d", marginTop: 4 }}>
+              Correct answer: {currentCorrectDisplay || "—"}
+            </div>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, gap: 12, flexWrap: "wrap" }}>
