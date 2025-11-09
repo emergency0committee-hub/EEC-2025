@@ -1,10 +1,10 @@
-// src/pages/sat/SATTraining.jsx
+﻿// src/pages/sat/training/SATTraining.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
-import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
-import Btn from "../../components/Btn.jsx";
-import { supabase } from "../../lib/supabase.js";
-import { fetchQuestionBankSample } from "../../lib/assignmentQuestions.js";
+import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
+import Btn from "../../../components/Btn.jsx";
+import { supabase } from "../../../lib/supabase.js";
+import { fetchQuestionBankSample } from "../../../lib/assignmentQuestions.js";
 import {
   BANKS,
   mapBankQuestionToResource,
@@ -12,7 +12,17 @@ import {
   MATH_UNIT_OPTIONS,
   MATH_LESSON_OPTIONS,
   HARDNESS_OPTIONS,
-} from "../../lib/questionBanks.js";
+} from "../../../lib/questionBanks.js";
+import StreamAnnouncementCard from "./components/StreamAnnouncementCard.jsx";
+import StudentClassChatCard from "./components/StudentClassChatCard.jsx";
+import PeopleCard from "./components/PeopleCard.jsx";
+import CheckingAccessCard from "./components/CheckingAccessCard.jsx";
+import AssignmentGateCard from "./components/AssignmentGateCard.jsx";
+import AdminClassStreamCard from "./components/AdminClassStreamCard.jsx";
+import AdminClassListCard from "./components/AdminClassListCard.jsx";
+import AdminClassDetail from "./components/AdminClassDetail.jsx";
+import ClassSubmissionModal from "./components/ClassSubmissionModal.jsx";
+import StudentClassworkPanel from "./components/StudentClassworkPanel.jsx";
 
 const FIRST_MATH_UNIT = MATH_UNIT_OPTIONS[0]?.value || "";
 const firstLessonForUnit = (unit) => {
@@ -46,24 +56,24 @@ const parseStatKey = (key = "") => {
 const findSubjectLabel = (value) => {
   const normalized = normalizeKeyValue(value);
   const match = SUBJECT_OPTIONS.find((opt) => normalizeKeyValue(opt.value) === normalized);
-  return match?.label?.EN || (value ? String(value) : "—");
+  return match?.label?.EN || (value ? String(value) : "G");
 };
 
 const findMathUnitLabel = (value) => {
-  if (!value) return "—";
+  if (!value) return "G";
   const match = MATH_UNIT_OPTIONS.find((opt) => opt.value === value);
   return match?.label?.EN || value;
 };
 
 const findMathLessonLabel = (unit, lesson) => {
-  if (!lesson) return "—";
+  if (!lesson) return "G";
   const list = MATH_LESSON_OPTIONS[unit] || [];
   const match = list.find((opt) => opt.value === lesson);
   return match?.label?.EN || lesson;
 };
 
 const formatUnitLabel = (subject, unit) => {
-  if (!unit) return "—";
+  if (!unit) return "G";
   return normalizeKeyValue(subject) === "math" ? findMathUnitLabel(unit) : unit;
 };
 
@@ -135,6 +145,7 @@ export default function SATTraining({ onNavigate }) {
   // Admin: classes management
   const [classesLoading, setClassesLoading] = useState(false);
   const [classes, setClasses] = useState([]); // [{ name, count }]
+  const [classDeleteBusy, setClassDeleteBusy] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
   const [classEmails, setClassEmails] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -149,20 +160,20 @@ export default function SATTraining({ onNavigate }) {
   const [loadingEmails, setLoadingEmails] = useState(false);
 
   const fmtDate = (iso, time = false) => {
-    if (!iso) return "—";
+    if (!iso) return "G";
     try {
       const d = new Date(iso);
-      if (Number.isNaN(d.getTime())) return "—";
+      if (Number.isNaN(d.getTime())) return "G";
       if (time) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       return d.toLocaleDateString();
     } catch {
-      return "—";
+      return "G";
     }
   };
 
   const fmtDuration = (sec) => {
     const n = Number(sec);
-    if (!Number.isFinite(n) || n < 0) return "—";
+    if (!Number.isFinite(n) || n < 0) return "G";
     const mm = Math.floor(n / 60).toString().padStart(2, "0");
     const ss = Math.floor(n % 60).toString().padStart(2, "0");
     return `${mm}:${ss}`;
@@ -280,6 +291,45 @@ export default function SATTraining({ onNavigate }) {
       setClassesLoading(false);
     }
   }, [isAdmin]);
+
+  const handleDeleteClass = useCallback(
+    async (className) => {
+      if (!isAdmin || !className || className === "(Unassigned)") return;
+      const ok = window.confirm(
+        `Delete class "${className}"? This removes its roster assignments, resources, and class chat.`
+      );
+      if (!ok) return;
+      setClassDeleteBusy(className);
+      try {
+        const assignTable = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+        await supabase.from(assignTable).delete().eq("class_name", className);
+
+        const resTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
+        await supabase.from(resTable).delete().eq("class_name", className);
+
+        const streamTable = import.meta.env.VITE_CLASS_STREAM_TABLE || "cg_class_stream";
+        try {
+          await supabase.from(streamTable).delete().eq("class_name", className);
+        } catch (err) {
+          console.warn("delete class stream", err);
+        }
+
+        setClasses((list) => list.filter((cls) => cls.name !== className));
+        if (selectedClass === className) {
+          setSelectedClass("");
+          setClassLogs([]);
+          setClassEmails([]);
+        }
+        alert(`Class "${className}" deleted.`);
+      } catch (error) {
+        console.error(error);
+        alert(error?.message || "Failed to delete class.");
+      } finally {
+        setClassDeleteBusy("");
+      }
+    },
+    [isAdmin, selectedClass]
+  );
 
   const loadKnownEmails = useCallback(async () => {
     if (!isAdmin) {
@@ -1321,55 +1371,22 @@ export default function SATTraining({ onNavigate }) {
 
   const renderStreamTab = () => (
     <div style={{ display: "grid", gap: 12 }}>
-      {streamPosts.map((p) => (
-        <Card key={p.id}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <h3 style={{ marginTop: 0 }}>{p.title}</h3>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>{p.ts}</div>
-          </div>
-          <p style={{ color: "#374151" }}>{p.body}</p>
-        </Card>
+      {streamPosts.map((post) => (
+        <StreamAnnouncementCard key={post.id} title={post.title} timestamp={post.ts} body={post.body} />
       ))}
-      <Card>
-        <h3 style={{ marginTop: 0 }}>Class Chat</h3>
-        {studentClass ? (
-          <>
-            <p style={{ color: "#6b7280", marginTop: 4 }}>Chat with classmates in {studentClass}.</p>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, maxHeight: 240, overflowY: 'auto', marginBottom: 12 }}>
-              <ClassStreamList className={studentClass} refreshKey={studentChatRefresh} />
-            </div>
-            <StreamPostComposer
-              className={studentClass}
-              userEmail={userEmail}
-              onPosted={() => setStudentChatRefresh((key) => key + 1)}
-            />
-          </>
-        ) : (
-          <p style={{ color: "#6b7280" }}>Join a class to start chatting.</p>
-        )}
-      </Card>
+      <StudentClassChatCard
+        className={studentClass}
+        refreshKey={studentChatRefresh}
+        userEmail={userEmail}
+        onRefresh={() => setStudentChatRefresh((key) => key + 1)}
+      />
       <div>
         <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
       </div>
     </div>
   );
 
-  const renderPeopleTab = () => (
-    <Card>
-      <h3 style={{ marginTop: 0 }}>People</h3>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-        {people.map((p, i) => (
-          <div key={i} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-            <div style={{ fontWeight: 700 }}>{p.name}</div>
-            <div style={{ color: '#6b7280' }}>{p.role}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-      </div>
-    </Card>
-  );
+  const renderPeopleTab = () => <PeopleCard people={people} onNavigateHome={() => onNavigate("home")} />;
 
 
   const resourceGroupOrder = [
@@ -1465,7 +1482,7 @@ export default function SATTraining({ onNavigate }) {
     return (
       <PageWrap>
         <HeaderBar title="SAT Training" right={null} />
-        <Card><p style={{ color: "#6b7280" }}>Checking access...</p></Card>
+        <CheckingAccessCard message="Checking access..." />
       </PageWrap>
     );
   }
@@ -1474,28 +1491,11 @@ export default function SATTraining({ onNavigate }) {
     return (
       <PageWrap>
         <HeaderBar title="SAT Training" right={null} />
-        <Card>
-          {!userEmail ? (
-            <>
-              <p style={{ color: "#6b7280" }}>
-                You need to sign in to access SAT Training.
-              </p>
-              <Btn variant="primary" onClick={() => onNavigate("login")}>Go to Login</Btn>
-            </>
-          ) : (
-            <>
-              <p style={{ color: "#6b7280" }}>
-                Your administrator needs to assign you a class before you can use SAT Training.
-              </p>
-              <p style={{ color: "#9ca3af", fontSize: 12 }}>
-                Ask your admin to assign a class to {userEmail} in the Admin dashboard.
-              </p>
-            </>
-          )}
-          <div style={{ marginTop: 12 }}>
-            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-          </div>
-        </Card>
+        <AssignmentGateCard
+          userEmail={userEmail}
+          onNavigateHome={() => onNavigate("home")}
+          onNavigateLogin={() => onNavigate("login")}
+        />
       </PageWrap>
     );
   }
@@ -1527,677 +1527,89 @@ export default function SATTraining({ onNavigate }) {
         )}
         {adminViewTab === 'stream' && selectedClass && (
           <div style={{ display: 'grid', gap: 12 }}>
-            <Card>
-              <h3 style={{ marginTop: 0 }}>Class Stream</h3>
-              <p style={{ color: '#6b7280', marginTop: 4 }}>Chat with {selectedClass}.</p>
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, maxHeight: 260, overflowY: 'auto', marginBottom: 12 }}>
-                <ClassStreamList className={selectedClass} refreshKey={adminChatRefresh} />
-              </div>
-              <StreamPostComposer
-                className={selectedClass}
-                userEmail={userEmail}
-                onPosted={() => setAdminChatRefresh((key) => key + 1)}
-              />
-            </Card>
+            <AdminClassStreamCard
+              className={selectedClass}
+              refreshKey={adminChatRefresh}
+              userEmail={userEmail}
+              onRefresh={() => setAdminChatRefresh((key) => key + 1)}
+            />
           </div>
         )}
         {adminViewTab === 'people' && renderPeopleTab()}
         {adminViewTab === 'classwork' && (
-        <div style={{ display: 'grid', gap: 16 }}>
-          {!selectedClass ? (
-            <Card>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <h3 style={{ marginTop: 0 }}>Your Classes</h3>
-                <div style={{ color: '#6b7280', fontSize: 12 }}>{classesLoading ? 'Loading…' : `${classes.length} class${classes.length === 1 ? '' : 'es'}`}</div>
-              </div>
-              <div
-                style={{
-                  marginTop: 12,
-                  border: '1px dashed #dbeafe',
-                  borderRadius: 12,
-                  padding: 16,
-                  background: '#f8fafc',
-                  display: 'grid',
-                  gap: 12,
+          <div style={{ display: 'grid', gap: 16 }}>
+            {!selectedClass ? (
+              <AdminClassListCard
+                classes={classes}
+                classesLoading={classesLoading}
+                assignForm={assignForm}
+                knownEmails={knownEmails}
+                loadingEmails={loadingEmails}
+                savingAssign={savingAssign}
+                classDeleteBusy={classDeleteBusy}
+                onAssignChange={handleAssignInput}
+                onSaveAssignment={saveAssignment}
+                onRefreshClasses={loadClasses}
+                onSelectClass={(name) => setSelectedClass(name)}
+                onDeleteClass={handleDeleteClass}
+                onNavigateHome={() => onNavigate('home')}
+              />
+            ) : (
+              <AdminClassDetail
+                selectedClass={selectedClass}
+                onBackToClasses={() => {
+                  setSelectedClass('')
+                  setClassLogs([])
+                  setClassEmails([])
                 }}
-              >
-                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 600 }}>Create or Assign a Class</div>
-                    <p style={{ margin: '4px 0 0', color: '#6b7280', fontSize: 13 }}>
-                      Add a student email and class name. New names create classes automatically.
-                    </p>
-                  </div>
-                  <Btn
-                    variant="secondary"
-                    onClick={() => loadClasses()}
-                    style={{ minWidth: 150 }}
-                    disabled={classesLoading}
-                  >
-                    {classesLoading ? 'Refreshing…' : 'Refresh list'}
-                  </Btn>
-                </div>
-                <div
-                  style={{
-                    display: 'grid',
-                    gap: 12,
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                    alignItems: 'flex-end',
-                  }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontWeight: 600, fontSize: 13 }}>Student Email</label>
-                    <input
-                      type="email"
-                      list="sat-training-email-options"
-                      placeholder="student@example.com"
-                      value={assignForm.email}
-                      onChange={(e) => handleAssignInput("email", e.target.value)}
-                      style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontWeight: 600, fontSize: 13 }}>Class Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Cohort A"
-                      value={assignForm.className}
-                      onChange={(e) => handleAssignInput("className", e.target.value)}
-                      style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                    <Btn
-                      variant="primary"
-                      onClick={saveAssignment}
-                      disabled={savingAssign}
-                      style={{ width: '100%' }}
-                    >
-                      {savingAssign ? 'Saving...' : 'Save Assignment'}
-                    </Btn>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>
-                  {loadingEmails ? 'Loading known student emails…' : 'Suggestions appear as you type.'}
-                </div>
-                <datalist id="sat-training-email-options">
-                  {knownEmails.map((email) => (
-                    <option key={email} value={email} />
-                  ))}
-                </datalist>
-              </div>
-              {classes.length === 0 ? (
-                <p style={{ color: '#6b7280' }}>No classes found yet. Use the form above to create your first class.</p>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                  {classes.map((c) => (
-                    <div key={c.name} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, color: '#111827' }}>{c.name}</div>
-                      <div style={{ color: '#6b7280', fontSize: 13 }}>{c.count} student{c.count === 1 ? '' : 's'}</div>
-                      <div style={{ marginTop: 10 }}>
-                        <Btn variant="secondary" onClick={() => setSelectedClass(c.name)}>Open</Btn>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div style={{ marginTop: 16 }}>
-                <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-              </div>
-            </Card>
-          ) : (
-            <>
-              <Card>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <h3 style={{ marginTop: 0 }}>Class: {selectedClass}</h3>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <Btn variant="back" onClick={() => { setSelectedClass(""); setClassLogs([]); setClassEmails([]); }}>Back to Classes</Btn>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  {['classwork', 'analytics'].map((id) => (
-                    <button
-                      key={id}
-                      onClick={() => setClassTab(id)}
-                      style={{
-                        border: 'none',
-                        borderRadius: 999,
-                        padding: '6px 12px',
-                        cursor: 'pointer',
-                        background: classTab === id ? '#111827' : '#fff',
-                        color: classTab === id ? '#fff' : '#374151',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {id === 'classwork' ? 'Classwork' : 'Analysis'}
-                    </button>
-                  ))}
-                </div>
-
-                {classTab === 'classwork' && (
-                  <div style={{ display: 'grid', gap: 12 }}>
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Build From Question Bank</div>
-                      <div style={{ display: 'grid', gap: 10 }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          <select
-                            value={activeBank.id}
-                            onChange={(e) => handleAutoAssignChange("bank", e.target.value)}
-                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                          >
-                            {Object.values(BANKS).map((bank) => (
-                              <option key={bank.id} value={bank.id}>
-                                {BANK_LABELS[bank.id] || bank.id}
-                              </option>
-                            ))}
-                          </select>
-                          {isTestBank ? (
-                            <div
-                              style={{
-                                padding: '10px 12px',
-                                border: '1px solid #d1d5db',
-                                borderRadius: 8,
-                                minWidth: 140,
-                                background: '#f9fafb',
-                                color: '#374151',
-                                fontWeight: 600,
-                              }}
-                            >
-                              Test
-                            </div>
-                          ) : (
-                            <select
-                              value={autoAssign.kind}
-                              onChange={(e) => handleAutoAssignChange("kind", e.target.value)}
-                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                            >
-                              <option value="classwork">Classwork</option>
-                              <option value="homework">Homework</option>
-                              <option value="quiz">Quiz</option>
-                            </select>
-                          )}
-                          {activeBank.subjectLocked ? (
-                            <div
-                              style={{
-                                padding: '10px 12px',
-                                border: '1px solid #d1d5db',
-                                borderRadius: 8,
-                                background: '#f9fafb',
-                                color: '#374151',
-                                minWidth: 140,
-                              }}
-                            >
-                              {subjectDisplayLabel}
-                            </div>
-                          ) : (
-                            <select
-                              value={activeSubject}
-                              onChange={(e) => handleAutoAssignChange("subject", e.target.value)}
-                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                            >
-                              {SUBJECT_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label.EN || opt.value}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-
-                        {showMathSelectors && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            <select
-                              value={autoAssign.unit}
-                              onChange={(e) => handleAutoAssignChange("unit", e.target.value)}
-                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                            >
-                              {MATH_UNIT_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label.EN || opt.value}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              value={autoAssign.lesson}
-                              onChange={(e) => handleAutoAssignChange("lesson", e.target.value)}
-                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                            >
-                              {activeLessons.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label.EN || opt.value}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          <input
-                            type="number"
-                            min="1"
-                            placeholder="Questions"
-                            value={autoAssign.questionCount}
-                            onChange={(e) => handleAutoAssignChange("questionCount", e.target.value)}
-                            style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, minWidth: 140 }}
-                          />
-                          <input
-                            type="number"
-                            min="1"
-                            placeholder="Duration (min)"
-                            value={autoAssign.kind === "homework" ? "" : autoAssign.durationMin}
-                            onChange={(e) => handleAutoAssignChange("durationMin", e.target.value)}
-                            disabled={autoAssign.kind === "homework"}
-                            style={{
-                              padding: '10px 12px',
-                              border: '1px solid #d1d5db',
-                              borderRadius: 8,
-                              minWidth: 160,
-                              background: autoAssign.kind === "homework" ? '#f9fafb' : '#ffffff',
-                              color: autoAssign.kind === "homework" ? '#9ca3af' : '#111827',
-                            }}
-                          />
-                        </div>
-
-                        {showDifficultySelector && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <label style={{ fontSize: 13, color: '#475569' }}>Difficulty</label>
-                            <select
-                              value={autoAssign.difficulty || DEFAULT_DIFFICULTY}
-                              onChange={(e) => handleAutoAssignChange("difficulty", e.target.value)}
-                              style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8, minWidth: 180 }}
-                            >
-                              {HARDNESS_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label.EN || opt.value}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        <input
-                          type="text"
-                          value={autoAssign.title}
-                          onChange={(e) => handleAutoAssignChange("title", e.target.value)}
-                          placeholder="Title (optional)"
-                          style={{ padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }}
-                        />
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                          <Btn
-                            variant="secondary"
-                            onClick={handleAutoGenerate}
-                            disabled={autoGenerating}
-                          >
-                            {autoGenerating ? "Building..." : "Build Assignment"}
-                          </Btn>
-                          <span style={{ fontSize: 12, color: '#6b7280' }}>
-                            We will pick random questions from the {activeBankLabel.toLowerCase()} based on your filters.
-                          </span>
-                        </div>
-                    </div>
-                  </div>
-
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                        <div>
-                          <div style={{ fontWeight: 700 }}>Question Availability</div>
-                          <div style={{ color: '#6b7280', fontSize: 12 }}>
-                            Tracking unique questions already assigned in {selectedClassLabel}.
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span style={{ fontSize: 12, color: '#6b7280' }}>{usedQuestionCount} used</span>
-                          <Btn variant="secondary" disabled={catalogBusy} onClick={refreshQuestionStats}>
-                            {catalogBusy ? 'Loading...' : 'Refresh'}
-                          </Btn>
-                        </div>
-                      </div>
-                      {catalogError && (
-                        <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 12 }}>{catalogError}</div>
-                      )}
-                      {highlightStats ? (
-                        <div style={{ marginTop: 10, fontSize: 13, color: '#374151' }}>
-                          Current selection:&nbsp;
-                          <strong>{findSubjectLabel(highlightStats.subject)}</strong>
-                          {highlightStats.unit ? (
-                            <>
-                              {' · '}
-                              <strong>{formatUnitLabel(highlightStats.subject, highlightStats.unit)}</strong>
-                            </>
-                          ) : null}
-                          {highlightStats.lesson ? (
-                            <>
-                              {' · '}
-                              <strong>{formatLessonLabel(highlightStats.subject, highlightStats.unit, highlightStats.lesson)}</strong>
-                            </>
-                          ) : null}
-                          <div style={{ marginTop: 4 }}>
-                            <span style={{ color: '#15803d', fontWeight: 600 }}>{highlightStats.remaining}</span>
-                            {' '}of {highlightStats.total} remain unused in this class.
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280' }}>
-                          Select a unit and lesson to highlight its availability.
-                        </div>
-                      )}
-                      {(!catalogLoaded && catalogBusy) ? (
-                        <div style={{ marginTop: 12, color: '#6b7280' }}>Loading question counts...</div>
-                      ) : questionStats.length === 0 ? (
-                        <div style={{ marginTop: 12, color: '#6b7280' }}>
-                          Question stats will appear once the {activeBankLabel.toLowerCase()} loads.
-                        </div>
-                      ) : (
-                        <div style={{ marginTop: 12, overflowX: 'auto', overflowY: 'auto', maxHeight: 260 }}>
-                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                            <thead>
-                              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                                <th style={{ padding: 8, textAlign: 'left' }}>Subject</th>
-                                <th style={{ padding: 8, textAlign: 'left' }}>Unit</th>
-                                <th style={{ padding: 8, textAlign: 'left' }}>Lesson</th>
-                                <th style={{ padding: 8, textAlign: 'left' }}>Total</th>
-                                <th style={{ padding: 8, textAlign: 'left' }}>Used (class)</th>
-                                <th style={{ padding: 8, textAlign: 'left' }}>Remaining</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {questionStats.map((row) => {
-                                const isHighlight = highlightKey && row.key === highlightKey;
-                                return (
-                                  <tr
-                                    key={row.key}
-                                    style={{
-                                      borderBottom: '1px solid #e5e7eb',
-                                      background: isHighlight ? '#fefce8' : 'transparent',
-                                    }}
-                                  >
-                                    <td style={{ padding: 8 }}>{findSubjectLabel(row.subject)}</td>
-                                    <td style={{ padding: 8 }}>{formatUnitLabel(row.subject, row.unit)}</td>
-                                    <td style={{ padding: 8 }}>{formatLessonLabel(row.subject, row.unit, row.lesson)}</td>
-                                    <td style={{ padding: 8 }}>{row.total}</td>
-                                    <td style={{ padding: 8 }}>{row.used}</td>
-                                    <td style={{ padding: 8 }}>{row.remaining}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources</div>
-                      {resLoading ? (
-                        <div style={{ color: '#6b7280' }}>Loading…</div>
-                      ) : resources.length === 0 ? (
-                        <div style={{ color: '#6b7280' }}>No resources yet.</div>
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-                          {resources.map((r) => {
-                            const key = r.id || `${r.title}_${r.url}`;
-                            const meta = extractResourceMeta(r);
-                            const questions = decodeResourceQuestions(r) || [];
-                            const practiceMeta = { ...meta };
-                            const questionMetaSource =
-                              (r?.payload && typeof r.payload === "object" && typeof r.payload.meta === "object" && r.payload.meta) ||
-                              (r?.payload && typeof r.payload === "object" && typeof r.payload.settings === "object" && r.payload.settings) ||
-                              {};
-                            const refsLikely = Array.isArray(questions) && questions.length > 0 && questions.every((item) => item && item.questionId);
-                            const questionRefs = Boolean(questionMetaSource.questionRefs || refsLikely);
-                            const referenceBank = Array.isArray(questions) ? questions.find((item) => item?.bank)?.bank : null;
-                            const questionBank = questionMetaSource.questionBank || questionMetaSource.bank || referenceBank || null;
-                            const kindLower = String(r.kind || "classwork").toLowerCase();
-                            if (kindLower === "homework") {
-                              practiceMeta.resumeMode = "restart";
-                              practiceMeta.durationSec = null;
-                            }
-                            const practiceDuration = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0)
-                              ? practiceMeta.durationSec
-                              : null;
-                            const previewRoute = ["exam", "sat", "diagnostic", "test"].includes(kindLower) ? "sat-exam" : "sat-assignment";
-                            return (
-                              <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <div style={{ fontWeight: 700 }}>{r.title || 'Untitled Resource'}</div>
-                                  <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{r.kind || 'classwork'}</span>
-                                </div>
-                                {(r.unit || r.lesson) && (
-                                  <div style={{ color: '#6b7280', fontSize: 12 }}>
-                                    {[r.unit, r.lesson].filter(Boolean).join(' - ')}
-                                  </div>
-                                )}
-                                {r.url && (
-                                  <div style={{ wordBreak: 'break-word', fontSize: 12 }}>
-                                    <a href={r.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{r.url}</a>
-                                  </div>
-                                )}
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 11 }}>
-                                  {questions.length > 0 && <span style={{ ...pillStyles.base, ...pillStyles.info }}>Questions: {questions.length}</span>}
-                                  <span style={{ ...pillStyles.base, ...pillStyles.info }}>Time: {formatDuration(practiceMeta?.durationSec)}</span>
-                                  <span style={{ ...pillStyles.base, ...(practiceMeta?.allowRetake === false ? pillStyles.warn : pillStyles.info) }}>
-                                    {practiceMeta?.allowRetake === false ? 'Single attempt' : 'Retakes allowed'}
-                                  </span>
-                                  <span style={{ ...pillStyles.base, ...(practiceMeta?.resumeMode === 'resume' ? pillStyles.complete : pillStyles.info) }}>
-                                    {practiceMeta?.resumeMode === 'resume' ? 'Resume enabled' : 'Restart each time'}
-                                  </span>
-                                </div>
-                                <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
-                                  {r.url && <Btn variant="secondary" onClick={() => window.open(r.url, '_blank')}>Open</Btn>}
-                                  {questions.length > 0 && (
-                                    <Btn
-                                      variant="secondary"
-                                      onClick={() => {
-                                        const metaForPreview = { ...practiceMeta };
-                                        if (questionRefs) metaForPreview.questionRefs = true;
-                                        if (questionBank && !metaForPreview.questionBank) metaForPreview.questionBank = questionBank;
-                                        const practicePayload = {
-                                          kind: r.kind,
-                                          resourceId: r.id,
-                                          className: selectedClass,
-                                          unit: r.unit || null,
-                                          lesson: r.lesson || null,
-                                          meta: metaForPreview,
-                                          preview: true,
-                                        };
-                                        if (!questionRefs) {
-                                          practicePayload.custom = {
-                                            questions,
-                                            title: r.title,
-                                            durationSec: practiceDuration,
-                                            meta: metaForPreview,
-                                          };
-                                        }
-                                        onNavigate(previewRoute, { practice: practicePayload });
-                                      }}
-                                    >
-                                      Preview
-                                    </Btn>
-                                  )}
-                                  <Btn variant="back" onClick={() => deleteResource(r)}>Delete</Btn>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {classTab === 'analytics' && (
-                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <div style={{ fontWeight: 700 }}>Recent Training Results</div>
-                      <div style={{ color: '#6b7280', fontSize: 12 }}>{logsLoading ? 'Loading…' : `${classLogs.length} record${classLogs.length === 1 ? '' : 's'}`}</div>
-                    </div>
-                    {classLogs.length === 0 ? (
-                      <div style={{ color: '#6b7280', marginTop: 6 }}>No activity yet.</div>
-                    ) : (
-                      <div style={{ overflowX: 'auto', marginTop: 6 }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                          <thead>
-                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Date</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Time</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Student</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Section</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Unit/Lesson</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Score</th>
-                              <th style={{ padding: 10, textAlign: 'left' }}>Manage</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {classLogs.map((r) => {
-                              const rw = r.summary?.rw;
-                              const m = r.summary?.math;
-                              let score = '-';
-                              if (rw?.total || rw?.correct) score = `${rw.correct || 0}/${rw.total || 0}`;
-                              if (m?.total || m?.correct) score = `${m.correct || 0}/${m.total || 0}`;
-                              return (
-                                <tr key={`${r.id || ''}_${r.ts}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                  <td style={{ padding: 10 }}>{fmtDate(r.ts)}</td>
-                                  <td style={{ padding: 10 }}>{fmtDate(r.ts, true)}</td>
-                                  <td style={{ padding: 10 }}>{r.user_email || '-'}</td>
-                                  <td style={{ padding: 10 }}>{r.section || '-'}</td>
-                                  <td style={{ padding: 10 }}>{r.unit || r.lesson || '-'}</td>
-                                  <td style={{ padding: 10 }}>{score}</td>
-                                  <td style={{ padding: 10 }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => openClassLog(r)}
-                                      style={{ border: '1px solid #d1d5db', background: '#ffffff', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
-                                    >
-                                      View
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Card>
-            </>
-          )}
-        </div>
+                classTab={classTab}
+                setClassTab={setClassTab}
+                activeBank={activeBank}
+                isTestBank={isTestBank}
+                subjectDisplayLabel={subjectDisplayLabel}
+                activeSubject={activeSubject}
+                autoAssign={autoAssign}
+                handleAutoAssignChange={handleAutoAssignChange}
+                showMathSelectors={showMathSelectors}
+                activeLessons={activeLessons}
+                handleAutoGenerate={handleAutoGenerate}
+                autoGenerating={autoGenerating}
+                questionStats={questionStats}
+                highlightStats={highlightStats}
+                highlightKey={highlightKey}
+                selectedClassLabel={selectedClassLabel}
+                usedQuestionCount={usedQuestionCount}
+                catalogBusy={catalogBusy}
+                catalogError={catalogError}
+                catalogLoaded={catalogLoaded}
+                refreshQuestionStats={refreshQuestionStats}
+                findSubjectLabel={findSubjectLabel}
+                formatUnitLabel={formatUnitLabel}
+                formatLessonLabel={formatLessonLabel}
+                resources={resources}
+                resLoading={resLoading}
+                extractResourceMeta={extractResourceMeta}
+                decodeResourceQuestions={decodeResourceQuestions}
+                formatDuration={formatDuration}
+                pillStyles={pillStyles}
+                deleteResource={deleteResource}
+                onNavigate={onNavigate}
+                classLogs={classLogs}
+                logsLoading={logsLoading}
+                fmtDate={fmtDate}
+                openClassLog={openClassLog}
+              />
+            )}
+          </div>
         )}
         {viewClassLog && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={closeClassLog}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 12, width: 'min(820px, 94vw)', maxHeight: '85vh', overflowY: 'auto', padding: 20 }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                <h3 style={{ margin: 0 }}>Submission Details</h3>
-                <button
-                  type="button"
-                  onClick={closeClassLog}
-                  style={{ border: '1px solid #d1d5db', background: '#ffffff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-                >
-                  Close
-                </button>
-              </div>
-
-              <div style={{ marginTop: 10, color: '#6b7280', display: 'grid', gap: 4 }}>
-                <div><strong>Student:</strong> {viewClassLog.user_email || '—'}</div>
-                <div>
-                  <strong>Section:</strong> {viewClassLog.section || '—'} &nbsp;•&nbsp;
-                  <strong>Unit:</strong> {viewClassLog.unit || '—'} &nbsp;•&nbsp;
-                  <strong>Lesson:</strong> {viewClassLog.lesson || '—'}
-                </div>
-                <div>
-                  <strong>Date:</strong> {fmtDate(viewClassLog.ts)} &nbsp;•&nbsp;
-                  <strong>Time:</strong> {fmtDate(viewClassLog.ts, true)}
-                </div>
-                <div><strong>Duration:</strong> {fmtDuration(Number(viewClassLog.elapsed_sec || 0))}</div>
-              </div>
-
-              {(() => {
-                const cards = [];
-                const addCard = (label, data) => {
-                  if (!data) return;
-                  const total = data.total || 0;
-                  const correct = data.correct || 0;
-                  const percent = total ? Math.round((correct / total) * 100) : null;
-                  cards.push(
-                    <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#f9fafb' }}>
-                      <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{correct}/{total}</div>
-                      <div style={{ color: '#6b7280', marginTop: 2 }}>{percent != null ? `${percent}% correct` : 'No data'}</div>
-                    </div>
-                  );
-                };
-                addCard('Reading & Writing', viewClassLog.summary?.rw);
-                addCard('Math', viewClassLog.summary?.math);
-                if (!cards.length) return null;
-                return (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 16 }}>
-                    {cards}
-                  </div>
-                );
-              })()}
-
-              {viewClassLog.metrics && Object.keys(viewClassLog.metrics).length > 0 && (
-                <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
-                  <h4 style={{ marginBottom: 8 }}>Per-question Metrics</h4>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <thead>
-                      <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                        <th style={{ padding: 8, textAlign: 'left' }}>Question</th>
-                        <th style={{ padding: 8, textAlign: 'left' }}>Answer</th>
-                        <th style={{ padding: 8, textAlign: 'left' }}>Result</th>
-                        <th style={{ padding: 8, textAlign: 'left' }}>Time</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        const metrics = viewClassLog.metrics || {};
-                        const choices = metrics.choices || {};
-                        const correct = metrics.correct || {};
-                        const times = metrics.times || {};
-                        const keys = Object.keys(choices || {});
-                        if (!keys.length) {
-                          return (
-                            <tr>
-                              <td style={{ padding: 8, color: '#6b7280' }} colSpan={4}>No per-question data available.</td>
-                            </tr>
-                          );
-                        }
-                        return keys.map((key) => {
-                          const chosen = choices[key];
-                          const answer = correct[key];
-                          const isCorrect =
-                            chosen != null &&
-                            answer != null &&
-                            String(chosen).trim().toLowerCase() === String(answer).trim().toLowerCase();
-                          return (
-                            <tr key={key} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                              <td style={{ padding: 8 }}>{key}</td>
-                              <td style={{ padding: 8 }}>{chosen ?? '—'}</td>
-                              <td style={{ padding: 8, color: chosen == null || answer == null ? '#6b7280' : isCorrect ? '#16a34a' : '#ef4444' }}>
-                                {chosen == null || answer == null ? '—' : isCorrect ? 'Correct' : `Wrong (Ans: ${answer})`}
-                              </td>
-                              <td style={{ padding: 8 }}>{fmtDuration(Number(times[key] || 0))}</td>
-                            </tr>
-                          );
-                        });
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+          <ClassSubmissionModal
+            log={viewClassLog}
+            onClose={closeClassLog}
+            fmtDate={fmtDate}
+            fmtDuration={fmtDuration}
+          />
+        )}
         )}
       </PageWrap>
     );
@@ -2229,38 +1641,15 @@ export default function SATTraining({ onNavigate }) {
               </Card>
             ))
           ) : (
-            <>
-              {studentResLoading ? (
-                <Card>
-                  <p style={{ color: "#6b7280" }}>Loading assignments…</p>
-                </Card>
-              ) : (
-                <>
-                  {resourceGroupOrder.map((group) => {
-                    const list = groupedStudentResources[group.key] || [];
-                    if (!list.length) return null;
-                    return (
-                      <Card key={group.key}>
-                        <h3 style={{ marginTop: 0 }}>{group.title}</h3>
-                        {group.subtitle && <p style={{ color: "#6b7280", marginTop: 4 }}>{group.subtitle}</p>}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-                          {list.map((res) => renderStudentResourceCard(res))}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                  {!hasAnyStudentResource && (
-                    <Card>
-                      <p style={{ color: "#6b7280" }}>No assignments yet. Check back soon!</p>
-                    </Card>
-                  )}
-                </>
-              )}
-            </>
+            <StudentClassworkPanel
+              isLoading={studentResLoading}
+              resourceGroupOrder={resourceGroupOrder}
+              groupedResources={groupedStudentResources}
+              renderResourceCard={renderStudentResourceCard}
+              hasAnyResource={hasAnyStudentResource}
+              onBackHome={() => onNavigate("home")}
+            />
           )}
-          <div>
-            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-          </div>
         </div>
       )}{/* PEOPLE */}
       {tab === "people" && renderPeopleTab()}
@@ -2288,14 +1677,14 @@ export default function SATTraining({ onNavigate }) {
             </div>
 
             <div style={{ marginTop: 10, color: '#6b7280', display: 'grid', gap: 4 }}>
-              <div><strong>Student:</strong> {viewClassLog.user_email || '—'}</div>
+              <div><strong>Student:</strong> {viewClassLog.user_email || 'G'}</div>
               <div>
-                <strong>Section:</strong> {viewClassLog.section || '—'} &nbsp;·&nbsp;
-                <strong>Unit:</strong> {viewClassLog.unit || '—'} &nbsp;·&nbsp;
-                <strong>Lesson:</strong> {viewClassLog.lesson || '—'}
+                <strong>Section:</strong> {viewClassLog.section || 'G'} &nbsp;-+&nbsp;
+                <strong>Unit:</strong> {viewClassLog.unit || 'G'} &nbsp;-+&nbsp;
+                <strong>Lesson:</strong> {viewClassLog.lesson || 'G'}
               </div>
               <div>
-                <strong>Date:</strong> {fmtDate(viewClassLog.ts)} &nbsp;·&nbsp;
+                <strong>Date:</strong> {fmtDate(viewClassLog.ts)} &nbsp;-+&nbsp;
                 <strong>Time:</strong> {fmtDate(viewClassLog.ts, true)}
               </div>
               <div><strong>Duration:</strong> {fmtDuration(Number(viewClassLog.elapsed_sec || 0))}</div>
@@ -2386,9 +1775,9 @@ export default function SATTraining({ onNavigate }) {
                         return (
                           <tr key={key} style={{ borderBottom: '1px solid #f3f4f6' }}>
                             <td style={{ padding: 8 }}>{key}</td>
-                            <td style={{ padding: 8 }}>{chosen ?? '—'}</td>
+                            <td style={{ padding: 8 }}>{chosen ?? 'G'}</td>
                             <td style={{ padding: 8, color: chosen == null || answer == null ? '#6b7280' : isCorrect ? '#16a34a' : '#ef4444' }}>
-                              {chosen == null || answer == null ? '—' : isCorrect ? 'Correct' : `Wrong (Ans: ${answer})`}
+                              {chosen == null || answer == null ? 'G' : isCorrect ? 'Correct' : `Wrong (Ans: ${answer})`}
                             </td>
                             <td style={{ padding: 8 }}>{fmtDuration(Number(times[key] || 0))}</td>
                           </tr>
@@ -2407,59 +1796,5 @@ export default function SATTraining({ onNavigate }) {
 );
 }
 
-// Lightweight components for class stream (admin)
-function ClassStreamList({ className, refreshKey = 0 }) {
-  const [items, setItems] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  React.useEffect(() => { (async () => {
-    try {
-      const table = import.meta.env.VITE_CLASS_STREAM_TABLE || 'cg_class_stream';
-      const { data, error } = await supabase.from(table).select('*').eq('class_name', className).order('ts', { ascending: false }).limit(200);
-      if (error) throw error;
-      setItems(data || []);
-    } catch (e) { console.warn(e); setItems([]); }
-    finally { setLoading(false); }
-  })(); }, [className, refreshKey]);
-  if (loading) return <div style={{ color: '#6b7280' }}>Loading stream…</div>;
-  if (!items.length) return <div style={{ color: '#6b7280' }}>No posts yet.</div>;
-  return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      {items.map(p => (
-        <div key={p.id || p.ts} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontWeight: 700 }}>{p.author_email || 'Teacher'}</div>
-            <div style={{ color: '#6b7280', fontSize: 12 }}>{p.ts ? new Date(p.ts).toLocaleString() : ''}</div>
-          </div>
-          <div style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{p.text}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StreamPostComposer({ className, userEmail, onPosted }) {
-  const [text, setText] = React.useState('');
-  const [saving, setSaving] = React.useState(false);
-  const submit = async () => {
-    const t = (text || '').trim();
-    if (!t) return;
-    setSaving(true);
-    try {
-      const table = import.meta.env.VITE_CLASS_STREAM_TABLE || 'cg_class_stream';
-      const { error } = await supabase.from(table).insert({ class_name: className, text: t, author_email: userEmail });
-      if (error) throw error;
-      setText('');
-      onPosted && onPosted({ text: t });
-    } catch (e) { console.error(e); alert(e?.message || 'Failed to post'); }
-    finally { setSaving(false); }
-  };
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <textarea placeholder="Share an update with the class" value={text} onChange={(e)=>setText(e.target.value)}
-        style={{ flex: 1, minHeight: 60, padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 8 }} />
-      <Btn variant="primary" onClick={submit} disabled={saving}>Post</Btn>
-    </div>
-  );
-}
 
 

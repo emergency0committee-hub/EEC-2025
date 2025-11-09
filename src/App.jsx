@@ -21,7 +21,7 @@ import Account from "./pages/Account.jsx";
 import SATIntro from "./pages/sat/SATIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
 import SATAssignment from "./pages/sat/SATAssignment.jsx";
-import SATTraining from "./pages/sat/SATTraining.jsx";
+import SATTraining from "./pages/sat/training/SATTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
