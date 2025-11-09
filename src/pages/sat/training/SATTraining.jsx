@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
-import Btn from "../../../components/Btn.jsx";
 import { supabase } from "../../../lib/supabase.js";
 import { fetchQuestionBankSample } from "../../../lib/assignmentQuestions.js";
 import {
@@ -13,16 +12,13 @@ import {
   MATH_LESSON_OPTIONS,
   HARDNESS_OPTIONS,
 } from "../../../lib/questionBanks.js";
-import StreamAnnouncementCard from "./components/StreamAnnouncementCard.jsx";
-import StudentClassChatCard from "./components/StudentClassChatCard.jsx";
 import PeopleCard from "./components/PeopleCard.jsx";
 import CheckingAccessCard from "./components/CheckingAccessCard.jsx";
 import AssignmentGateCard from "./components/AssignmentGateCard.jsx";
-import AdminClassStreamCard from "./components/AdminClassStreamCard.jsx";
-import AdminClassListCard from "./components/AdminClassListCard.jsx";
-import AdminClassDetail from "./components/AdminClassDetail.jsx";
 import ClassSubmissionModal from "./components/ClassSubmissionModal.jsx";
-import StudentClassworkPanel from "./components/StudentClassworkPanel.jsx";
+import StudentResourceCard from "./components/StudentResourceCard.jsx";
+import AdminTabsPanel from "./components/AdminTabsPanel.jsx";
+import StudentTabsPanel from "./components/StudentTabsPanel.jsx";
 
 const FIRST_MATH_UNIT = MATH_UNIT_OPTIONS[0]?.value || "";
 const firstLessonForUnit = (unit) => {
@@ -151,6 +147,11 @@ export default function SATTraining({ onNavigate }) {
   const [logsLoading, setLogsLoading] = useState(false);
   const [classLogs, setClassLogs] = useState([]);
   const [viewClassLog, setViewClassLog] = useState(null);
+  const handleBackToClasses = () => {
+    setSelectedClass("");
+    setClassLogs([]);
+    setClassEmails([]);
+  };
   // Class sub-tabs (admin view)
   const [classTab, setClassTab] = useState("classwork"); // classwork | analytics
   const [adminViewTab, setAdminViewTab] = useState("classwork"); // stream | classwork | people
@@ -1179,214 +1180,81 @@ export default function SATTraining({ onNavigate }) {
     { role: "Student", name: "You" },
   ]), []);
 
-  const TabButton = ({ id, children }) => (
-    <button
-      onClick={() => setTab(id)}
-      style={{
-        border: "none",
-        background: tab === id ? "#111827" : "#fff",
-        color: tab === id ? "#fff" : "#374151",
-        borderRadius: 999,
-        padding: "8px 14px",
-        cursor: "pointer",
-      }}
-    >{children}</button>
-  );
-
-  const renderTabBanner = () => (
-    <div style={{
-      borderRadius: 16,
-      background: "linear-gradient(135deg, #3b82f6, #14b8a6)",
-      color: "#fff",
-      padding: 20,
-      marginBottom: 12,
-    }}>
-      <div style={{ fontSize: 18, fontWeight: 800 }}>SAT Training</div>
-      <div style={{ opacity: 0.9 }}>Practice by section and skill</div>
-      <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-        <TabButton id="stream">Stream</TabButton>
-        <TabButton id="classwork">Classwork</TabButton>
-        <TabButton id="people">People</TabButton>
-      </div>
-    </div>
-  );
-
-
   function decodeResourceQuestions(r) {
     return getResourceQuestions(r);
   }
 
-  const renderStudentResourceCard = (resource) => {
-    if (!resource) return null;
-    const key = resource.id || `${resource.title || "resource"}_${resource.url || "link"}`;
-    const items = decodeResourceQuestions(resource) || [];
-    const meta = extractResourceMeta(resource);
-    const practiceMeta = { ...meta };
-    const questionMetaSource =
-      (resource?.payload && typeof resource.payload === "object" && typeof resource.payload.meta === "object" && resource.payload.meta) ||
-      (resource?.payload && typeof resource.payload === "object" && typeof resource.payload.settings === "object" && resource.payload.settings) ||
-      {};
-    const refsLikely = Array.isArray(items) && items.length > 0 && items.every((item) => item && item.questionId);
-    const questionRefs = Boolean(questionMetaSource.questionRefs || refsLikely);
-    const referenceBank = Array.isArray(items) ? items.find((item) => item?.bank)?.bank : null;
-    const questionBank = questionMetaSource.questionBank || questionMetaSource.bank || referenceBank || null;
-    const kindLower = String(resource.kind || "classwork").toLowerCase();
-    if (kindLower === "homework") {
-      practiceMeta.resumeMode = "restart";
-      practiceMeta.durationSec = null;
-    }
-    const isHomeworkKind = kindLower === "homework";
-    const resolvedSubject =
-      resource.subject ||
-      (resource.payload && typeof resource.payload === "object" && resource.payload.meta?.subject) ||
-      resource.section ||
-      null;
-    const normalizedSubject = resolvedSubject ? String(resolvedSubject).trim().toLowerCase() : "";
-    const attemptInfo = resource?.id ? studentAttempts[resource.id] || null : null;
-    const attemptCount = attemptInfo?.attempts?.length || 0;
-    const latestStatus = attemptInfo?.latest?.status || null;
-    const completed = attemptInfo?.completed ?? (latestStatus === "completed");
-    const attemptLimit = practiceMeta?.attemptLimit != null ? practiceMeta.attemptLimit : null;
-    const allowRetake = practiceMeta?.allowRetake !== false;
-    const limitReached = items.length > 0 && completed && ((!allowRetake && attemptLimit == null) || (attemptLimit != null && attemptCount >= attemptLimit));
-    const baseCanStart = items.length > 0 && !limitReached;
-    const kindLabel = (resource.kind || "classwork").toLowerCase();
-    const prettyKind = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
-    const durationLabel = items.length > 0 ? formatDuration(practiceMeta?.durationSec) : null;
-    const deadlineIso =
-      practiceMeta?.deadline ||
-      (resource.payload && typeof resource.payload === "object" && resource.payload.meta?.deadline) ||
-      (resource.payload && typeof resource.payload === "object" && resource.payload.settings?.deadline) ||
-      resource.deadline ||
-      null;
-    const deadlineDate = deadlineIso ? new Date(deadlineIso) : null;
-    const deadlineValid = deadlineDate && !Number.isNaN(deadlineDate.getTime());
-    const deadlinePassed = Boolean(isHomeworkKind && deadlineValid && Date.now() > deadlineDate.getTime());
-    const deadlineLabel = deadlineValid ? deadlineDate.toLocaleString() : "";
-    const attemptLabel = attemptCount > 0 ? `Attempts: ${attemptCount}${attemptLimit ? `/${attemptLimit}` : ""}` : null;
-    let hasResume = false;
-    if (practiceMeta?.resumeMode === "resume" && resource?.id) {
-      try { hasResume = Boolean(localStorage.getItem(`cg_sat_resume_${resource.id}`)); } catch {}
-    }
-    const homeworkViewMode = isHomeworkKind && completed && deadlinePassed;
-    const previewMode = completed && !isHomeworkKind;
-    const startLabel = !items.length
-      ? ""
-      : homeworkViewMode
-      ? "View"
-      : previewMode
-      ? "Preview"
-      : completed && isHomeworkKind
-      ? "Edit Homework"
-      : limitReached
-      ? "Completed"
-      : (practiceMeta?.resumeMode === "resume" && hasResume ? "Resume" : `Start ${prettyKind}`);
-    const canStart = homeworkViewMode ? items.length > 0 : baseCanStart;
-    const startAttemptIndex = attemptCount + 1;
-    const routeTarget = ["exam", "sat", "diagnostic", "test"].includes(kindLower) ? "sat-exam" : "sat-assignment";
-    const launchPractice = () => {
-      if (!canStart) return;
-      const durationSec = (typeof practiceMeta.durationSec === "number" && practiceMeta.durationSec > 0) ? practiceMeta.durationSec : null;
-      const metaForPractice = { ...practiceMeta };
-      if (questionRefs) metaForPractice.questionRefs = true;
-      if (questionBank && !metaForPractice.questionBank) metaForPractice.questionBank = questionBank;
-      if (deadlineIso && !metaForPractice.deadline) metaForPractice.deadline = deadlineIso;
-      const practicePayload = {
-        kind: resource.kind || "classwork",
-        resourceId: resource.id || null,
-        className: studentClass || null,
-        subject: normalizedSubject || null,
-        section: resource.section || null,
-        unit: resource.unit || null,
-        lesson: resource.lesson || null,
-        meta: metaForPractice,
-        attemptIndex: startAttemptIndex,
-      };
-      if (deadlineIso) practicePayload.deadline = deadlineIso;
-      if (homeworkViewMode) practicePayload.reviewOnly = true;
-      if (!questionRefs) {
-        practicePayload.custom = {
-          questions: items,
-          durationSec,
-          title: resource.title || prettyKind,
-          meta: metaForPractice,
-        };
-      }
-      onNavigate(routeTarget, { practice: practicePayload });
-    };
-    const pill = (variant, text) => (
-      <span key={`${key}_${variant}_${text}`} style={{ ...pillStyles.base, ...(pillStyles[variant] || {}) }}>{text}</span>
-    );
-
-    return (
-      <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, display: 'grid', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 700 }}>{resource.title || "Untitled Resource"}</div>
-          <span style={{ fontSize: 12, color: '#6b7280', textTransform: 'capitalize' }}>{prettyKind}</span>
-        </div>
-        {(resource.unit || resource.lesson) && (
-          <div style={{ color: '#6b7280', fontSize: 12 }}>
-            {[resource.unit, resource.lesson].filter(Boolean).join(' - ')}
-          </div>
-        )}
-        {deadlineLabel && (
-          <div style={{ color: deadlinePassed ? '#dc2626' : '#6b7280', fontSize: 12 }}>
-            Due: {deadlineLabel}
-          </div>
-        )}
-        {(resource.url && (!resource.payload || !items.length)) && (
-          <div style={{ marginTop: 4, wordBreak: 'break-word' }}>
-            <a href={resource.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{resource.url}</a>
-          </div>
-        )}
-        {items.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {completed && pill("complete", "Completed")}
-            {!completed && !attemptCount && pill("info", "Not started")}
-            {attemptLabel && pill("info", attemptLabel)}
-            {durationLabel && pill("info", `Time: ${durationLabel}`)}
-            {limitReached && pill("warn", "Retake locked")}
-          </div>
-        )}
-        <div style={{ marginTop: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {resource.url && <Btn variant="secondary" onClick={() => window.open(resource.url, "_blank")}>Open</Btn>}
-          {items.length > 0 && (
-            <Btn
-              variant="primary"
-              disabled={!canStart}
-              onClick={launchPractice}
-            >
-              {startLabel}
-            </Btn>
-          )}
-        </div>
-        {limitReached && (
-          <div style={{ color: '#ef4444', fontSize: 12 }}>
-            You have completed this {prettyKind.toLowerCase()}. Ask your teacher if you need another attempt.
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderStreamTab = () => (
-    <div style={{ display: "grid", gap: 12 }}>
-      {streamPosts.map((post) => (
-        <StreamAnnouncementCard key={post.id} title={post.title} timestamp={post.ts} body={post.body} />
-      ))}
-      <StudentClassChatCard
-        className={studentClass}
-        refreshKey={studentChatRefresh}
-        userEmail={userEmail}
-        onRefresh={() => setStudentChatRefresh((key) => key + 1)}
-      />
-      <div>
-        <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
-      </div>
-    </div>
+  const renderStudentResourceCard = (resource) => (
+    <StudentResourceCard
+      key={`resource_card_${resource?.id || resource?.title || resource?.url || "fallback"}`}
+      resource={resource}
+      studentClass={studentClass}
+      studentAttempts={studentAttempts}
+      onNavigate={onNavigate}
+      formatDuration={formatDuration}
+      decodeQuestions={decodeResourceQuestions}
+      extractMeta={extractResourceMeta}
+    />
   );
 
   const renderPeopleTab = () => <PeopleCard people={people} onNavigateHome={() => onNavigate("home")} />;
+
+  const adminClassListProps = {
+    classes,
+    classesLoading,
+    assignForm,
+    knownEmails,
+    loadingEmails,
+    savingAssign,
+    classDeleteBusy,
+    onAssignChange: handleAssignInput,
+    onSaveAssignment: saveAssignment,
+    onRefreshClasses: loadClasses,
+    onSelectClass: (name) => setSelectedClass(name),
+    onDeleteClass: handleDeleteClass,
+    onNavigateHome: () => onNavigate("home"),
+  };
+
+  const adminClassDetailProps = {
+    selectedClass,
+    onBackToClasses: handleBackToClasses,
+    classTab,
+    setClassTab,
+    activeBank,
+    isTestBank,
+    subjectDisplayLabel,
+    activeSubject,
+    autoAssign,
+    handleAutoAssignChange,
+    showMathSelectors,
+    activeLessons,
+    handleAutoGenerate,
+    autoGenerating,
+    questionStats,
+    highlightStats,
+    highlightKey,
+    selectedClassLabel,
+    usedQuestionCount,
+    catalogBusy,
+    catalogError,
+    catalogLoaded,
+    refreshQuestionStats,
+    findSubjectLabel,
+    formatUnitLabel,
+    formatLessonLabel,
+    resources,
+    resLoading,
+    extractResourceMeta,
+    decodeResourceQuestions,
+    formatDuration,
+    pillStyles,
+    deleteResource,
+    onNavigate,
+    classLogs,
+    logsLoading,
+    fmtDate,
+    openClassLog,
+  };
 
 
   const resourceGroupOrder = [
@@ -1504,104 +1372,19 @@ export default function SATTraining({ onNavigate }) {
     return (
       <PageWrap>
         <HeaderBar title="SAT Training" right={null} />
-        {selectedClass && (
-          <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {['stream', 'classwork', 'people'].map((id) => (
-              <button
-                key={id}
-                onClick={() => setAdminViewTab(id)}
-                style={{
-                  border: 'none',
-                  borderRadius: 999,
-                  padding: '6px 12px',
-                  cursor: 'pointer',
-                  background: adminViewTab === id ? '#111827' : '#fff',
-                  color: adminViewTab === id ? '#fff' : '#374151',
-                  fontWeight: 600,
-                }}
-              >
-                {id.charAt(0).toUpperCase() + id.slice(1)}
-              </button>
-            ))}
-          </div>
-        )}
-        {adminViewTab === 'stream' && selectedClass && (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <AdminClassStreamCard
-              className={selectedClass}
-              refreshKey={adminChatRefresh}
-              userEmail={userEmail}
-              onRefresh={() => setAdminChatRefresh((key) => key + 1)}
-            />
-          </div>
-        )}
-        {adminViewTab === 'people' && renderPeopleTab()}
-        {adminViewTab === 'classwork' && (
-          <div style={{ display: 'grid', gap: 16 }}>
-            {!selectedClass ? (
-              <AdminClassListCard
-                classes={classes}
-                classesLoading={classesLoading}
-                assignForm={assignForm}
-                knownEmails={knownEmails}
-                loadingEmails={loadingEmails}
-                savingAssign={savingAssign}
-                classDeleteBusy={classDeleteBusy}
-                onAssignChange={handleAssignInput}
-                onSaveAssignment={saveAssignment}
-                onRefreshClasses={loadClasses}
-                onSelectClass={(name) => setSelectedClass(name)}
-                onDeleteClass={handleDeleteClass}
-                onNavigateHome={() => onNavigate('home')}
-              />
-            ) : (
-              <AdminClassDetail
-                selectedClass={selectedClass}
-                onBackToClasses={() => {
-                  setSelectedClass('')
-                  setClassLogs([])
-                  setClassEmails([])
-                }}
-                classTab={classTab}
-                setClassTab={setClassTab}
-                activeBank={activeBank}
-                isTestBank={isTestBank}
-                subjectDisplayLabel={subjectDisplayLabel}
-                activeSubject={activeSubject}
-                autoAssign={autoAssign}
-                handleAutoAssignChange={handleAutoAssignChange}
-                showMathSelectors={showMathSelectors}
-                activeLessons={activeLessons}
-                handleAutoGenerate={handleAutoGenerate}
-                autoGenerating={autoGenerating}
-                questionStats={questionStats}
-                highlightStats={highlightStats}
-                highlightKey={highlightKey}
-                selectedClassLabel={selectedClassLabel}
-                usedQuestionCount={usedQuestionCount}
-                catalogBusy={catalogBusy}
-                catalogError={catalogError}
-                catalogLoaded={catalogLoaded}
-                refreshQuestionStats={refreshQuestionStats}
-                findSubjectLabel={findSubjectLabel}
-                formatUnitLabel={formatUnitLabel}
-                formatLessonLabel={formatLessonLabel}
-                resources={resources}
-                resLoading={resLoading}
-                extractResourceMeta={extractResourceMeta}
-                decodeResourceQuestions={decodeResourceQuestions}
-                formatDuration={formatDuration}
-                pillStyles={pillStyles}
-                deleteResource={deleteResource}
-                onNavigate={onNavigate}
-                classLogs={classLogs}
-                logsLoading={logsLoading}
-                fmtDate={fmtDate}
-                openClassLog={openClassLog}
-              />
-            )}
-          </div>
-        )}
+        <AdminTabsPanel
+          selectedClass={selectedClass}
+          adminViewTab={adminViewTab}
+          onChangeTab={setAdminViewTab}
+          adminChatRefresh={adminChatRefresh}
+          onRefreshStream={() => setAdminChatRefresh((key) => key + 1)}
+          userEmail={userEmail}
+          renderPeopleTab={renderPeopleTab}
+          classworkPanelProps={{
+            classListProps: adminClassListProps,
+            classDetailProps: adminClassDetailProps,
+          }}
+        />
         {viewClassLog && (
           <ClassSubmissionModal
             log={viewClassLog}
@@ -1610,49 +1393,28 @@ export default function SATTraining({ onNavigate }) {
             fmtDuration={fmtDuration}
           />
         )}
-        )}
       </PageWrap>
     );
   }
 
   return (
     <PageWrap>
-      {renderTabBanner()}
-
-      {/* STREAM */}
-      {tab === "stream" && renderStreamTab()}
-
-            {/* CLASSWORK */}
-      {tab === "classwork" && (
-        <div style={{ display: "grid", gap: 16 }}>
-          {isAdmin ? (
-            classwork.map((section) => (
-              <Card key={section.topic}>
-                <h3 style={{ marginTop: 0 }}>{section.topic}</h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
-                  {section.items.map((it) => (
-                    <div key={it.id} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
-                      <div style={{ fontWeight: 700, color: "#111827" }}>{it.title}</div>
-                      <div style={{ color: "#6b7280", fontSize: 13, margin: "6px 0 10px" }}>{it.desc}</div>
-                      <Btn variant="secondary" onClick={it.action}>Open Practice</Btn>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            ))
-          ) : (
-            <StudentClassworkPanel
-              isLoading={studentResLoading}
-              resourceGroupOrder={resourceGroupOrder}
-              groupedResources={groupedStudentResources}
-              renderResourceCard={renderStudentResourceCard}
-              hasAnyResource={hasAnyStudentResource}
-              onBackHome={() => onNavigate("home")}
-            />
-          )}
-        </div>
-      )}{/* PEOPLE */}
-      {tab === "people" && renderPeopleTab()}
+      <StudentTabsPanel
+        tab={tab}
+        setTab={setTab}
+        streamPosts={streamPosts}
+        studentClass={studentClass}
+        studentChatRefresh={studentChatRefresh}
+        onRefreshChat={() => setStudentChatRefresh((key) => key + 1)}
+        userEmail={userEmail}
+        onNavigateHome={() => onNavigate("home")}
+        studentResLoading={studentResLoading}
+        resourceGroupOrder={resourceGroupOrder}
+        groupedStudentResources={groupedStudentResources}
+        hasAnyStudentResource={hasAnyStudentResource}
+        renderResourceCard={renderStudentResourceCard}
+        people={people}
+      />
 
       {viewClassLog && (
         <div

@@ -297,6 +297,15 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   const [sectionActive, setSectionActive] = useState(true);
   const [finalTimeout, setFinalTimeout] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleResize = () => {
+      setIsNarrow(window.innerWidth <= 900);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth <= 900 : false));
 
   useEffect(() => {
     if (!reviewOnly || reviewAnswersLoaded) return;
@@ -801,6 +810,18 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     </Card>
   ) : null;
 
+  const headerGridStyle = isNarrow
+    ? { display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" }
+    : { display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 };
+
+  const questionLayoutStyle = isNarrow
+    ? { display: "flex", flexDirection: "column", gap: 16 }
+    : { display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0, minHeight: 420 };
+
+  const actionButtonsStyle = isNarrow
+    ? { display: "flex", flexWrap: "wrap", gap: 8 }
+    : { display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" };
+
   if (!sectionActive) {
     return (
       <PageWrap>
@@ -842,9 +863,9 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
             onClick={(event) => event.stopPropagation()}
             style={{
               background: "#fff",
-              borderRadius: 16,
-              width: "min(960px, 95vw)",
-              height: "min(640px, 90vh)",
+              borderRadius: isNarrow ? 12 : 16,
+              width: isNarrow ? "100%" : "min(960px, 95vw)",
+              height: isNarrow ? "90vh" : "min(640px, 90vh)",
               display: "flex",
               flexDirection: "column",
               boxShadow: "0 25px 70px rgba(15,23,42,0.35)",
@@ -880,8 +901,8 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
               style={{
                 flex: 1,
                 border: "none",
-                borderBottomLeftRadius: 16,
-                borderBottomRightRadius: 16,
+                borderBottomLeftRadius: isNarrow ? 12 : 16,
+                borderBottomRightRadius: isNarrow ? 12 : 16,
               }}
               allowFullScreen
             />
@@ -890,12 +911,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       )}
       {/* Bluebook-style header */}
       <div style={{ padding: "6px 0 4px" }}>
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto 1fr",
-          alignItems: "center",
-          gap: 12,
-        }}>
+        <div style={headerGridStyle}>
           {/* Left: Section title with Directions underneath */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ fontWeight: 700, color: "#111827" }}>{mod.title}</div>
@@ -931,7 +947,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
           </div>
 
           {/* Right: Annotate / More / Calculator */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+          <div style={actionButtonsStyle}>
             {isMathSection && (
               <button
                 type="button"
@@ -949,9 +965,9 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       </div>
 
       {/* Bluebook-like split layout with center divider */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: 0, minHeight: 420 }}>
+      <div style={questionLayoutStyle}>
         {/* Left: Passage + Stem */}
-        <div style={{ paddingRight: 16 }}>
+        <div style={{ paddingRight: isNarrow ? 0 : 16, paddingBottom: isNarrow ? 16 : 0, borderBottom: isNarrow ? "1px solid #e5e7eb" : "none" }}>
           <div style={{ marginBottom: 8, color: "#6b7280", fontSize: 13 }}>Question {page} of {qCount}</div>
           {q?.passage && showPassage && (
             <div style={{ marginBottom: 12, padding: 14, background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 8, color: "#374151" }}>
@@ -966,10 +982,10 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         </div>
 
         {/* Divider */}
-        <div style={{ background: "#e5e7eb", width: 1 }} />
+        {!isNarrow && <div style={{ background: "#e5e7eb", width: 1 }} />}
 
         {/* Right: Answers card */}
-        <div style={{ paddingLeft: 16 }}>
+        <div style={{ paddingLeft: isNarrow ? 0 : 16 }}>
           {reviewOnly && (
             <div
               style={{
@@ -986,7 +1002,16 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
             </div>
           )}
           {q && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: isNarrow ? "column" : "row",
+                alignItems: isNarrow ? "flex-start" : "center",
+                justifyContent: "space-between",
+                gap: isNarrow ? 8 : 0,
+                marginBottom: 10,
+              }}
+            >
               <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <div style={{ fontWeight: 700, border: "1px solid #d1d5db", borderRadius: 8, padding: "4px 8px" }}>
                   {page}
@@ -1172,7 +1197,9 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         canBack={page !== 1}
         canNext={page < qCount}
         isLast={page >= qCount}
-      />      {showPalette && (
+        compact={isNarrow}
+      />
+      {showPalette && (
         <PaletteOverlay
           totalQuestions={qCount}
           currentIndex={page}
