@@ -134,21 +134,49 @@ const splitIntoModules = (items, moduleCount = DEFAULT_RW_MODULES, perModule = D
   return modules;
 };
 
+const missingSourceWarnings = new Set();
+const shouldWarnMissing = (key) => {
+  if (missingSourceWarnings.has(key)) return false;
+  missingSourceWarnings.add(key);
+  return true;
+};
+const isMissingTableError = (error) => {
+  if (!error) return false;
+  const code = String(error.code || "").toUpperCase();
+  const message = String(error.message || "");
+  if (code === "PGRST205" || code === "42501") return true;
+  return /does not exist/i.test(message) || /schema cache/i.test(message) || /not found/i.test(message);
+};
+
 async function loadRWFromSupabase() {
   const table = import.meta.env.VITE_SAT_RW_TABLE || "cg_sat_questions";
   const limit = Number(import.meta.env.VITE_SAT_RW_LIMIT || 500);
   const targetCount = Number(import.meta.env.VITE_SAT_RW_TARGET || DEFAULT_RW_TOTAL);
-  const { data, error } = await supabase.from(table).select("*").limit(limit);
-  if (error) throw error;
-  if (!data || !data.length) return null;
-  const mapped = data
-    .map((row, idx) => mapEnglishRow(row, idx, "rw_supabase"))
-    .filter(Boolean);
-  if (!mapped.length) return null;
-  const randomized = shuffle(mapped);
-  const selected = randomized.slice(0, Math.min(randomized.length, targetCount));
-  const modules = splitIntoModules(selected, DEFAULT_RW_MODULES, DEFAULT_RW_PER_MODULE);
-  return modules;
+  try {
+    const { data, error } = await supabase.from(table).select("*").limit(limit);
+    if (error) {
+      if (isMissingTableError(error) && shouldWarnMissing(table)) {
+        console.warn(`SAT questions: "${table}" not available`, error.message || error);
+        return null;
+      }
+      throw error;
+    }
+    if (!data || !data.length) return null;
+    const mapped = data
+      .map((row, idx) => mapEnglishRow(row, idx, "rw_supabase"))
+      .filter(Boolean);
+    if (!mapped.length) return null;
+    const randomized = shuffle(mapped);
+    const selected = randomized.slice(0, Math.min(randomized.length, targetCount));
+    const modules = splitIntoModules(selected, DEFAULT_RW_MODULES, DEFAULT_RW_PER_MODULE);
+    return modules;
+  } catch (err) {
+    if (isMissingTableError(err) && shouldWarnMissing(table)) {
+      console.warn(`SAT questions: "${table}" not available`, err.message || err);
+      return null;
+    }
+    throw err;
+  }
 }
 
 async function loadRWFromCSV() {

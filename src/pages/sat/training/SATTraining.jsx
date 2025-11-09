@@ -109,6 +109,20 @@ const needsLegacyConflictFallback = (error) => {
   return /no unique|matching.*on conflict/i.test(message);
 };
 
+const missingDataWarnings = new Set();
+const isMissingResourceError = (error) => {
+  if (!error) return false;
+  const code = String(error.code || "").toUpperCase();
+  const message = String(error.message || "");
+  if (code === "PGRST205" || code === "PGRST202") return true;
+  return /does not exist/i.test(message) || /schema cache/i.test(message) || /not found/i.test(message);
+};
+const warnMissingSource = (key, error) => {
+  if (missingDataWarnings.has(key)) return;
+  missingDataWarnings.add(key);
+  console.warn(`SAT Training: "${key}" data unavailable`, error?.message || error);
+};
+
 export default function SATTraining({ onNavigate }) {
   SATTraining.propTypes = { onNavigate: PropTypes.func.isRequired };
   const [checking, setChecking] = useState(true);
@@ -225,6 +239,27 @@ export default function SATTraining({ onNavigate }) {
 
   const openClassLog = (row) => setViewClassLog(row);
   const closeClassLog = () => setViewClassLog(null);
+  const handleDeleteClassLog = useCallback(
+    async (logId) => {
+      if (!isAdmin || !logId) return;
+      const ok = window.confirm("Delete this submission record?");
+      if (!ok) return;
+      try {
+        const table = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+        const { error } = await supabase.from(table).delete().eq("id", logId);
+        if (error) throw error;
+        setClassLogs((logs) => logs.filter((log) => log.id !== logId));
+        if (viewClassLog?.id === logId) {
+          setViewClassLog(null);
+        }
+        alert("Submission deleted.");
+      } catch (err) {
+        console.error(err);
+        alert(err?.message || "Failed to delete submission.");
+      }
+    },
+    [isAdmin, viewClassLog?.id],
+  );
 
   const DEFAULT_META = {
     classwork: { durationSec: 20 * 60, allowRetake: true, resumeMode: "restart", attemptLimit: null },
@@ -340,49 +375,86 @@ export default function SATTraining({ onNavigate }) {
     setLoadingEmails(true);
     try {
       const emails = new Set();
-      try {
+      const addEmail = (value) => {
+        if (value) emails.add(value);
+      };
+
+      const safeCollect = async (label, executor) => {
+        try {
+          await executor();
+        } catch (err) {
+          if (isMissingResourceError(err)) {
+            warnMissingSource(label, err);
+          } else {
+            console.warn(`load known emails (${label})`, err);
+          }
+        }
+      };
+
+      await safeCollect("list_user_emails RPC", async () => {
         const rpc = await supabase.rpc("list_user_emails");
-        if (!rpc.error && rpc.data) {
-          rpc.data.forEach((entry) => {
-            if (entry?.email) emails.add(entry.email);
-          });
+        if (rpc.error) {
+          if (isMissingResourceError(rpc.error)) {
+            warnMissingSource("list_user_emails RPC", rpc.error);
+            return;
+          }
+          console.warn("list_user_emails RPC", rpc.error);
+          return;
         }
-      } catch {}
-      try {
+        (rpc.data || []).forEach((entry) => addEmail(entry?.email));
+      });
+
+      await safeCollect("profiles", async () => {
         const pr = await supabase.from("profiles").select("email").limit(5000);
-        if (!pr.error && pr.data) {
-          pr.data.forEach((entry) => {
-            if (entry?.email) emails.add(entry.email);
-          });
+        if (pr.error) {
+          console.warn("profiles email fetch", pr.error);
+          return;
         }
-      } catch {}
-      try {
+        (pr.data || []).forEach((entry) => addEmail(entry?.email));
+      });
+
+      await safeCollect("class assignments", async () => {
         const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
         const ar = await supabase.from(table).select("student_email").limit(5000);
-        if (!ar.error && ar.data) {
-          ar.data.forEach((entry) => {
-            if (entry?.student_email) emails.add(entry.student_email);
-          });
+        if (ar.error) {
+          if (isMissingResourceError(ar.error)) {
+            warnMissingSource(table, ar.error);
+            return;
+          }
+          console.warn("assignments email fetch", ar.error);
+          return;
         }
-      } catch {}
-      try {
+        (ar.data || []).forEach((entry) => addEmail(entry?.student_email));
+      });
+
+      await safeCollect("cg_sat_training", async () => {
         const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
         const tr = await supabase.from(tTable).select("user_email").limit(5000);
-        if (!tr.error && tr.data) {
-          tr.data.forEach((entry) => {
-            if (entry?.user_email) emails.add(entry.user_email);
-          });
+        if (tr.error) {
+          if (isMissingResourceError(tr.error)) {
+            warnMissingSource(tTable, tr.error);
+            return;
+          }
+          console.warn("training email fetch", tr.error);
+          return;
         }
-      } catch {}
-      try {
+        (tr.data || []).forEach((entry) => addEmail(entry?.user_email));
+      });
+
+      await safeCollect("cg_submissions", async () => {
         const sTable = import.meta.env.VITE_SUBMISSIONS_TABLE || "cg_submissions";
         const sr = await supabase.from(sTable).select("user_email").limit(5000);
-        if (!sr.error && sr.data) {
-          sr.data.forEach((entry) => {
-            if (entry?.user_email) emails.add(entry.user_email);
-          });
+        if (sr.error) {
+          if (isMissingResourceError(sr.error)) {
+            warnMissingSource(sTable, sr.error);
+            return;
+          }
+          console.warn("submissions email fetch", sr.error);
+          return;
         }
-      } catch {}
+        (sr.data || []).forEach((entry) => addEmail(entry?.user_email));
+      });
+
       setKnownEmails(Array.from(emails).filter(Boolean).sort((a, b) => a.localeCompare(b)));
     } catch (e) {
       console.warn("load known emails", e);
@@ -1107,6 +1179,82 @@ export default function SATTraining({ onNavigate }) {
   const catalogLoaded = Boolean(bankCatalogRef.current[activeBank.id]);
   const usedQuestionCount = usedQuestionIds.size;
   const selectedClassLabel = selectedClass || "this class";
+  const classInsights = useMemo(() => {
+    if (!Array.isArray(classLogs) || !classLogs.length) return [];
+    const buckets = new Map();
+    const recentWindow = 5;
+
+    classLogs.forEach((log, idx) => {
+      const ts = log.ts ? new Date(log.ts).getTime() : Date.now() - idx;
+      const answersMeta = (log.answers && log.answers.meta) || {};
+      const baseUnit = log.unit || answersMeta.unit || "";
+      const baseLesson = log.lesson || answersMeta.lesson || "";
+
+      const pushEntry = (subjectKey, correct, total, unit = "", lesson = "") => {
+        if (!total || total <= 0) return;
+        const meta = { subject: subjectKey || "", unit: unit || "", lesson: lesson || "" };
+        const bucketKey = buildStatKey(meta);
+        let bucket = buckets.get(bucketKey);
+        if (!bucket) {
+          bucket = {
+            key: bucketKey,
+            meta,
+            correct: 0,
+            total: 0,
+            count: 0,
+            attempts: [],
+            lastTs: ts,
+          };
+          buckets.set(bucketKey, bucket);
+        }
+        bucket.correct += correct;
+        bucket.total += total;
+        bucket.count += 1;
+        bucket.attempts.push({ accuracy: total > 0 ? correct / total : 0, ts });
+        bucket.lastTs = Math.max(bucket.lastTs, ts);
+      };
+
+      const summary = log.summary || {};
+      if (summary.math) {
+        const { correct = 0, total = 0 } = summary.math;
+        pushEntry("math", correct, total, baseUnit, baseLesson);
+      }
+      if (summary.rw) {
+        const { correct = 0, total = 0 } = summary.rw;
+        pushEntry("rw", correct, total, "", "");
+      }
+    });
+
+    const insights = Array.from(buckets.values())
+      .filter((bucket) => bucket.total >= 8)
+      .map((bucket) => {
+        const sortedAttempts = bucket.attempts.sort((a, b) => b.ts - a.ts);
+        const recent = sortedAttempts.slice(0, recentWindow);
+        const earlier = sortedAttempts.slice(recentWindow, recentWindow * 2);
+        const average = (list) => {
+          if (!list.length) return null;
+          const sum = list.reduce((acc, item) => acc + (item.accuracy || 0), 0);
+          return sum / list.length;
+        };
+        const recentAvg = average(recent);
+        const priorAvg = average(earlier);
+        const trend = priorAvg != null && recentAvg != null ? recentAvg - priorAvg : null;
+        return {
+          key: bucket.key,
+          subject: bucket.meta.subject,
+          unit: bucket.meta.unit,
+          lesson: bucket.meta.lesson,
+          accuracy: bucket.total > 0 ? bucket.correct / bucket.total : 0,
+          totalQuestions: bucket.total,
+          attemptCount: bucket.count,
+          recentAccuracies: recent.map((item) => item.accuracy),
+          trend,
+        };
+      })
+      .sort((a, b) => a.accuracy - b.accuracy);
+
+    return insights;
+  }, [classLogs]);
   useEffect(() => {
     if (!isAdmin || !selectedClass) return;
     (async () => {
@@ -1254,6 +1402,8 @@ export default function SATTraining({ onNavigate }) {
     logsLoading,
     fmtDate,
     openClassLog,
+    adaptiveInsights: classInsights,
+    onDeleteLog: handleDeleteClassLog,
   };
 
 

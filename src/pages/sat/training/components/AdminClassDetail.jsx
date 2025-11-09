@@ -1,6 +1,7 @@
 import PropTypes from "prop-types";
 import { Card } from "../../../../components/Layout.jsx";
 import Btn from "../../../../components/Btn.jsx";
+import AdaptiveInsightsCard from "./AdaptiveInsightsCard.jsx";
 import {
   BANKS,
   SUBJECT_OPTIONS,
@@ -89,6 +90,8 @@ export default function AdminClassDetail({
   logsLoading,
   fmtDate,
   openClassLog,
+  adaptiveInsights,
+  onDeleteLog,
 }) {
   return (
     <>
@@ -441,7 +444,14 @@ export default function AdminClassDetail({
         )}
 
         {classTab === "analytics" && (
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+          <>
+            <AdaptiveInsightsCard
+              insights={adaptiveInsights}
+              findSubjectLabel={findSubjectLabel}
+              formatUnitLabel={formatUnitLabel}
+              formatLessonLabel={formatLessonLabel}
+            />
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <div style={{ fontWeight: 700 }}>Recent Training Results</div>
               <div style={{ color: "#6b7280", fontSize: 12 }}>
@@ -479,13 +489,20 @@ export default function AdminClassDetail({
                           <td style={{ padding: 10 }}>{log.section || "-"}</td>
                           <td style={{ padding: 10 }}>{log.unit || log.lesson || "-"}</td>
                           <td style={{ padding: 10 }}>{score}</td>
-                          <td style={{ padding: 10 }}>
+                          <td style={{ padding: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
                             <button
                               type="button"
                               onClick={() => openClassLog(log)}
                               style={{ border: "1px solid #d1d5db", background: "#ffffff", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}
                             >
                               View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onDeleteLog(log.id)}
+                              style={{ border: "1px solid #dc2626", background: "#fff5f5", color: "#b91c1c", borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}
+                            >
+                              Delete
                             </button>
                           </td>
                         </tr>
@@ -496,6 +513,7 @@ export default function AdminClassDetail({
               </div>
             )}
           </div>
+          </>
         )}
       </Card>
     </>
@@ -541,6 +559,8 @@ AdminClassDetail.propTypes = {
   logsLoading: PropTypes.bool.isRequired,
   fmtDate: PropTypes.func.isRequired,
   openClassLog: PropTypes.func.isRequired,
+  adaptiveInsights: PropTypes.array.isRequired,
+  onDeleteLog: PropTypes.func.isRequired,
 };
 
 AdminClassDetail.defaultProps = {
