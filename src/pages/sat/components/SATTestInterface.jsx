@@ -821,6 +821,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   const actionButtonsStyle = isNarrow
     ? { display: "flex", flexWrap: "wrap", gap: 8 }
     : { display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" };
+  const questionPadding = isNarrow ? 12 : 16;
 
   if (!sectionActive) {
     return (
@@ -967,7 +968,14 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       {/* Bluebook-like split layout with center divider */}
       <div style={questionLayoutStyle}>
         {/* Left: Passage + Stem */}
-        <div style={{ paddingRight: isNarrow ? 0 : 16, paddingBottom: isNarrow ? 16 : 0, borderBottom: isNarrow ? "1px solid #e5e7eb" : "none" }}>
+        <div
+          style={{
+            paddingRight: questionPadding,
+            paddingLeft: isNarrow ? questionPadding : 0,
+            paddingBottom: isNarrow ? 16 : 0,
+            borderBottom: isNarrow ? "1px solid #e5e7eb" : "none",
+          }}
+        >
           <div style={{ marginBottom: 8, color: "#6b7280", fontSize: 13 }}>Question {page} of {qCount}</div>
           {q?.passage && showPassage && (
             <div style={{ marginBottom: 12, padding: 14, background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 8, color: "#374151" }}>
@@ -985,7 +993,12 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         {!isNarrow && <div style={{ background: "#e5e7eb", width: 1 }} />}
 
         {/* Right: Answers card */}
-        <div style={{ paddingLeft: isNarrow ? 0 : 16 }}>
+        <div
+          style={{
+            paddingLeft: questionPadding,
+            paddingRight: isNarrow ? questionPadding : 0,
+          }}
+        >
           {reviewOnly && (
             <div
               style={{
