@@ -1655,14 +1655,16 @@ export default function SATTraining({ onNavigate }) {
                   <tbody>
                     {(() => {
                       const answers = viewClassLog.answers || {};
+                      const metrics = viewClassLog.metrics || {};
                       const choices =
+                        metrics.choices ||
                         answers.choices ||
                         answers.custom ||
                         (viewClassLog.unit ? answers[viewClassLog.unit] : null) ||
-                        answers[Object.keys(answers)[0] || ''] ||
+                        answers[Object.keys(answers)[0] || ""] ||
                         {};
-                      const times = answers.times || {};
-                      const correct = answers.correct || {};
+                      const times = metrics.times || answers.times || {};
+                      const correct = metrics.correct || answers.correct || {};
                       const keys = Object.keys(choices || {});
                       keys.sort((a, b) => {
                         const na = parseInt(String(a).replace(/\D+/g, ''), 10);

@@ -7,7 +7,6 @@ import ResultsMatches from "./results/ResultsMatches.jsx";
 import RiasecHeroSection from "./results/components/RiasecHeroSection.jsx";
 import PillarSummaryCards from "./results/components/PillarSummaryCards.jsx";
 import CandidateDetailsCard from "./results/components/CandidateDetailsCard.jsx";
-import resultsPrintStyles from "./results/printStyles.js";
 import { Q_UNIFIED as Q, RIASEC_SCALE_MAX } from "../questionBank.js";
 import { supabase } from "../lib/supabase.js";
 import { loadOccupations, pickByPrimaryLetter } from "../lib/occupations.js";
@@ -384,7 +383,34 @@ export default function Results({
 
   return (
     <PageWrap>
-      <style>{resultsPrintStyles}</style>
+      <style>{`
+        .card {
+          border: 1px solid #d1d5db;
+          border-radius: 16px;
+          background: #ffffff;
+          margin-bottom: 18px;
+        }
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .candidate-first-page {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: calc(297mm - 40mm);
+            page-break-after: always;
+            padding-bottom: 24px;
+          }
+          .candidate-first-page .candidate-card {
+            margin-top: auto;
+          }
+        }
+      `}</style>
 
       {shouldShowParticipantCard ? (
         <div className="candidate-first-page">
@@ -413,10 +439,7 @@ export default function Results({
           style={{
             padding: 16,
             marginTop: groupIdx === 0 ? 0 : 16,
-            pageBreakBefore: groupIdx === 0 ? "auto" : "always",
             pageBreakAfter: groupIdx < interestChunks.length - 1 ? "always" : "auto",
-            pageBreakInside: "avoid",
-            breakInside: "avoid",
           }}
         >
           <h3 style={{ margin: 0, color: "#111827" }}>
@@ -427,13 +450,11 @@ export default function Results({
           </p>
           <div
             style={{
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: 8,
-            marginTop: 8,
-            pageBreakInside: "avoid",
-            breakInside: "avoid",
-          }}
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 16,
+              marginTop: 8,
+            }}
           >
             {group.map((code) => {
               const themeScore = radarByCode[code] ?? 0;
@@ -445,100 +466,107 @@ export default function Results({
                 <div
                   key={code}
                   className="card avoid-break"
-                  style={{ padding: 16, background: "#ffffff", pageBreakInside: "avoid", breakInside: "avoid" }}
+                style={{ padding: 16, background: "#ffffff" }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "stretch",
+                    flexWrap: "nowrap",
+                  }}
                 >
-                  <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "nowrap" }}>
+                  <div
+                    style={{
+                      flex: "2 1 340px",
+                      minWidth: 280,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
+                  >
                     <div
                       style={{
-                        flex: "2 1 340px",
-                        minWidth: 280,
                         display: "flex",
-                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
                         gap: 12,
                       }}
+                      className="avoid-break"
                     >
-                      <div
-                        className="avoid-break"
+                      <h4 style={{ margin: 0, color: "#111827" }}>
+                        {THEME_NAME[code]}{" "}
+                        <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
+                          Level: {level}
+                        </span>
+                      </h4>
+                      <span
+                        aria-hidden
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "baseline",
-                          gap: 12,
+                          width: 14,
+                          height: 14,
+                          borderRadius: 3,
+                          background: color,
+                          display: "inline-block",
                         }}
-                      >
-                        <h4 style={{ margin: 0, color: "#111827" }}>
-                          {THEME_NAME[code]}{" "}
-                          <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
-                            Level: {level}
-                          </span>
-                        </h4>
-                        <span
-                          aria-hidden
-                          style={{
-                            width: 14,
-                            height: 14,
-                            borderRadius: 3,
-                            background: color,
-                            display: "inline-block",
-                          }}
-                        />
-                      </div>
-                      <div>
-                        {areas.length ? (
-                          areas.map((a) => (
-                            <BarRow
-                              key={`${code}-${a.area}`}
-                              label={a.area}
-                              percent={a.percent}
-                              color={color}
-                            />
-                          ))
-                        ) : (
-                          <div style={{ color: "#6b7280", fontSize: 13 }}>
-                            No answers recorded for this theme.
-                          </div>
-                        )}
-                      </div>
+                      />
                     </div>
-                    <aside
-                      style={{
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 10,
-                        padding: 12,
-                        background: "#f8fafc",
-                        color: "#475569",
-                        fontSize: 13,
-                        flex: "1 1 220px",
-                        minWidth: 220,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                      }}
-                    >
-                      <div style={{ fontWeight: 600, color: "#111827" }}>
-                        {insight.title || `${THEME_NAME[code] || code} Insights`}
-                      </div>
-                      <p style={{ margin: 0, lineHeight: 1.4 }}>
-                        {insight.summary || "Lean into this area with weekly practice to confirm the fit."}
-                      </p>
-                      {insight.uni && (
-                        <p style={{ margin: 0, lineHeight: 1.4 }}>
-                          <strong>University focus:</strong> {insight.uni}
-                        </p>
+
+                    <div>
+                      {areas.length ? (
+                        areas.map((a) => (
+                          <BarRow
+                            key={`${code}-${a.area}`}
+                            label={a.area}
+                            percent={a.percent}
+                            color={color}
+                          />
+                        ))
+                      ) : (
+                        <div style={{ color: "#6b7280", fontSize: 13 }}>
+                          No answers recorded for this theme.
+                        </div>
                       )}
-                      {insight.real && (
-                        <p style={{ margin: 0, lineHeight: 1.4 }}>
-                          <strong>Real-life focus:</strong> {insight.real}
-                        </p>
-                      )}
-                    </aside>
+                    </div>
                   </div>
+
+                  <aside
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      padding: 12,
+                      background: "#f8fafc",
+                      color: "#475569",
+                      fontSize: 13,
+                      flex: "1 1 220px",
+                      minWidth: 220,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, color: "#111827" }}>
+                      {insight.title || `${THEME_NAME[code] || code} Insights`}
+                    </div>
+                    <p style={{ margin: 0, lineHeight: 1.4 }}>{insight.summary || "Lean into this area with weekly practice to confirm the fit."}</p>
+                    {insight.uni && (
+                      <p style={{ margin: 0, lineHeight: 1.4 }}>
+                        <strong>University focus:</strong> {insight.uni}
+                      </p>
+                    )}
+                    {insight.real && (
+                      <p style={{ margin: 0, lineHeight: 1.4 }}>
+                        <strong>Real-life focus:</strong> {insight.real}
+                      </p>
+                    )}
+                  </aside>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       ))}
+
       {/* GROUP 4: Occupational Scales (kept together) */}
       <div className="section avoid-break">
         <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
@@ -596,6 +624,7 @@ export default function Results({
     </PageWrap>
   );
 }
+
 
 
 
