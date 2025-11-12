@@ -1654,8 +1654,19 @@ export default function SATTraining({ onNavigate }) {
                   </thead>
                   <tbody>
                     {(() => {
-                      const answers = viewClassLog.answers || {};
-                      const metrics = viewClassLog.metrics || {};
+                      const parseMaybeJSON = (input) => {
+                        if (!input) return {};
+                        if (typeof input === "string") {
+                          try {
+                            return JSON.parse(input);
+                          } catch {
+                            return {};
+                          }
+                        }
+                        return input;
+                      };
+                      const answers = parseMaybeJSON(viewClassLog.answers) || {};
+                      const metrics = parseMaybeJSON(viewClassLog.metrics) || {};
                       const choices =
                         metrics.choices ||
                         answers.choices ||
