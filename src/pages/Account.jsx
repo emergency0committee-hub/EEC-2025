@@ -39,30 +39,38 @@ export default function Account({ onNavigate }) {
   const [saving, setSaving] = useState(false);
   const isAdmin = (() => { try { return localStorage.getItem("cg_admin_ok_v1") === "1"; } catch { return false; } })();
 
-  // Access code generator (changes every 30 minutes)
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
-  const windowMs = 30 * 60 * 1000;
-  const windowIdx = Math.floor(now / windowMs);
-  const msLeft = windowMs - (now % windowMs);
-  const mm = Math.floor(msLeft / 60000).toString().padStart(2, "0");
-  const ss = Math.floor((msLeft % 60000) / 1000).toString().padStart(2, "0");
-  const seed = (import.meta.env.VITE_ACCESS_CODE_SEED || "EEC-SEED").trim();
-  function genCode(label) {
-    const s = `${seed}|${label}|${windowIdx}`;
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24); }
-    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 1/0/I/O
-    const chars = [];
-    let v = Math.abs(h);
-    for (let i = 0; i < 12; i++) {
-      chars.push(alphabet[v % alphabet.length]);
-      v = Math.floor(v / alphabet.length) ^ (v << 1);
+  // Access code generator (manual refresh)
+  const [refreshingCodes, setRefreshingCodes] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const CODE_LENGTH = 12;
+  const makeCode = () => {
+    let raw = "";
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      const buf = new Uint32Array(CODE_LENGTH);
+      crypto.getRandomValues(buf);
+      raw = Array.from(buf, (val) => CODE_ALPHABET[val % CODE_ALPHABET.length]).join("");
+    } else {
+      raw = Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join("");
     }
-    return `${chars.slice(0, 4).join("")}-${chars.slice(4, 8).join("")}-${chars.slice(8, 12).join("")}`;
-  }
-  const satCode = genCode("SAT");
-  const cgCode = genCode("CG");
+    return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+  };
+  const [codes, setCodes] = useState(() => ({
+    sat: makeCode(),
+    cg: makeCode(),
+  }));
+  const handleRefreshCodes = () => {
+    setCodeError("");
+    setRefreshingCodes(true);
+    try {
+      setCodes({ sat: makeCode(), cg: makeCode() });
+    } catch (err) {
+      setCodeError("Unable to refresh codes. Please try again.");
+      console.error("refresh codes", err);
+    } finally {
+      setTimeout(() => setRefreshingCodes(false), 300);
+    }
+  };
 
   // Helpers for flag + dialing code display
   function FlagSVG({ r }) {
@@ -106,7 +114,7 @@ export default function Account({ onNavigate }) {
           name: prof?.name || user.user_metadata?.name || "",
           username: prof?.username || user.user_metadata?.username || (user.email ? user.email.split("@")[0] : ""),
           email: user.email || "",
-          phone: user.user_metadata?.phone || "",
+          phone: prof?.phone || user.user_metadata?.phone || "",
         }));
       } finally {
         setLoading(false);
@@ -191,7 +199,7 @@ export default function Account({ onNavigate }) {
       }
 
       // Update profile (RLS allows own row)
-      const { error: updErr } = await supabase.from("profiles").update({ name, username, email }).eq("id", user.id);
+      const { error: updErr } = await supabase.from("profiles").update({ name, username, email, phone }).eq("id", user.id);
       if (updErr) {
         // Unique constraint violation fallback message
         const msg = updErr.message || "";
@@ -202,10 +210,10 @@ export default function Account({ onNavigate }) {
         }
         throw updErr;
       }
-      setProfile((prev) => (prev ? { ...prev, name, username, email } : prev));
+      setProfile((prev) => ({ ...(prev || {}), name, username, email, phone }));
       // Update local session copy for UI
       const role = profile?.role || (localStorage.getItem("cg_admin_ok_v1") === "1" ? "admin" : "user");
-      saveCurrent({ id: user.id, email, name, username, role });
+      saveCurrent({ id: user.id, email, name, username, phone, role });
       onNavigate("home");
     } catch (e) {
       console.error(e);
@@ -229,24 +237,34 @@ export default function Account({ onNavigate }) {
       <HeaderBar title="Account" right={null} />
       {isAdmin && (
         <Card>
-          <h3 style={{ marginTop: 0 }}>Access Codes (auto-rotate every 30 min)</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(160px, 1fr))", gap: 12, alignItems: "center" }}>
-            <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <h3 style={{ margin: 0 }}>Access Codes</h3>
+            <Btn variant="secondary" onClick={handleRefreshCodes} disabled={refreshingCodes}>
+              {refreshingCodes ? "Refreshing..." : "Refresh"}
+            </Btn>
+          </div>
+          {codeError && (
+            <p style={{ color: "#dc2626", fontSize: 13, marginTop: 8 }}>{codeError}</p>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 }}>
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 12, color: "#6b7280" }}>SAT Diagnostic</div>
-              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{satCode}</div>
-              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(satCode); }}>Copy</Btn>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codes.sat}</div>
+              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(codes.sat); }} style={{ marginTop: 8 }}>
+                Copy
+              </Btn>
             </div>
-            <div>
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Career Guidance</div>
-              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{cgCode}</div>
-              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(cgCode); }}>Copy</Btn>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Next refresh in</div>
-              <div style={{ fontWeight: 700 }}>{mm}:{ss}</div>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codes.cg}</div>
+              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(codes.cg); }} style={{ marginTop: 8 }}>
+                Copy
+              </Btn>
             </div>
           </div>
-          <p style={{ color: "#6b7280", marginTop: 8, fontSize: 12 }}>Configure seed with VITE_ACCESS_CODE_SEED. Codes are valid within the current 30‑min window.</p>
+          <p style={{ color: "#6b7280", marginTop: 8, fontSize: 12 }}>
+            Click refresh whenever you need a new set of codes to share.
+          </p>
         </Card>
       )}
       <Card>

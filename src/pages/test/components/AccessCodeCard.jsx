@@ -1,6 +1,7 @@
 import PropTypes from "prop-types";
 import { useState } from "react";
 import Btn from "../../../components/Btn.jsx";
+import { formatAccessCodeInput } from "../utils/accessCodes.js";
 
 export default function AccessCodeCard({
   code,
@@ -38,7 +39,7 @@ export default function AccessCodeCard({
         <input
           type="text"
           value={code}
-          onChange={(e) => onCodeChange?.(e.target.value)}
+          onChange={(e) => onCodeChange?.(formatAccessCodeInput(e.target.value))}
           placeholder={ui?.placeholderCode || "Enter access code"}
           style={{
             flex: 1,

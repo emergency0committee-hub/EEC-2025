@@ -22,6 +22,20 @@ import { validateAll } from "../lib/validate.js";
 import { saveTestSubmission } from "../lib/supabaseStorage.js";
 import { supabase } from "../lib/supabase.js";
 
+const toPlainString = (value) => {
+  if (value == null) return "";
+  return typeof value === "string" ? value : String(value);
+};
+const pickFirstFilled = (...values) => {
+  for (const value of values) {
+    const str = toPlainString(value).trim();
+    if (str) return str;
+  }
+  return "";
+};
+const phoneDigitsLength = (value) => toPlainString(value).replace(/[^\d]/g, "").length;
+const isPhoneValid = (value) => phoneDigitsLength(value) >= 6;
+
 import {
   RIASEC_SCALE_MAX,
   Q_UNIFIED_CLEAN as RAW_RIASEC,
@@ -169,6 +183,13 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     className: "",
     phone: "",
   }));
+  const [accountProfile, setAccountProfile] = useState(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [accountForm, setAccountForm] = useState({ name: "", school: "", className: "", phone: "" });
+  const [accountFormErrors, setAccountFormErrors] = useState({});
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [profileReloadKey, setProfileReloadKey] = useState(0);
   const [showProfileError, setShowProfileError] = useState(false);
   const [ansTF, setAnsTF] = useState({});
   const [showPalette, setShowPalette] = useState(false);
@@ -176,11 +197,64 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const [attemptId, setAttemptId] = useState(null);
   const [hoverVal, setHoverVal] = useState(null);
 
+  const storedGateUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }, []);
+
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 30);
     return Number.isFinite(saved) && saved > 0 ? saved : 30;
   });
   useEffect(() => { localStorage.setItem("cg_timer_min", String(timerMin)); }, [timerMin]);
+  useEffect(() => {
+    if (!authUser) {
+      setAccountProfile(null);
+      setAccountForm({ name: "", school: "", className: "", phone: "" });
+      setAccountError("");
+      setAccountLoading(false);
+      return;
+    }
+    let active = true;
+    setAccountLoading(true);
+    setAccountError("");
+    (async () => {
+      try {
+        const { data, error } = await supabase.from("profiles").select("*").eq("id", authUser.id).limit(1);
+        if (!active) return;
+        if (error) {
+          console.error("test profile fetch", error);
+          setAccountError(error.message || "Unable to load your account details.");
+          setAccountProfile(null);
+        } else {
+          const row = Array.isArray(data) ? data[0] : null;
+          setAccountProfile(row || null);
+          const meta = authUser.user_metadata || {};
+          const fallbackName = authUser.email ? authUser.email.split("@")[0] : "";
+          setAccountForm({
+            name: pickFirstFilled(row?.name, meta?.name, meta?.username, fallbackName),
+            school: pickFirstFilled(row?.school, meta?.school, meta?.organization),
+            className: pickFirstFilled(row?.class_name, meta?.className, meta?.class, meta?.grade),
+            phone: pickFirstFilled(row?.phone, meta?.phone, meta?.phoneNumber, meta?.tel),
+          });
+        }
+      } catch (err) {
+        if (!active) return;
+        console.error("test profile fetch", err);
+        setAccountError(err.message || "Unable to load your account details.");
+        setAccountProfile(null);
+      } finally {
+        if (active) setAccountLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [authUser, profileReloadKey]);
   useEffect(() => {
     const handleStorage = (event) => {
       if (event.key === "cg_timer_min") {
@@ -340,16 +414,130 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const isValidName = (s) => String(s || "").trim().length > 1;
   const isValidSchool = (s) => String(s || "").trim().length > 1;
   const isValidClass = (s) => String(s || "").trim().length > 0;
-  const isValidPhone = (s) => {
-    const digits = String(s || "").replace(/[^\d]/g, "");
-    return digits.length >= 6;
-  };
+  const isValidPhone = (s) => isPhoneValid(s);
   const isValidProfile = () =>
     isValidName(profile.name) &&
     isValidSchool(profile.school) &&
     isValidClass(profile.className) &&
     isValidPhone(profile.phone) &&
     isEmail(profile.email);
+  const resolvedRole =
+    String(accountProfile?.role || authUser?.user_metadata?.role || authUser?.user_metadata?.accountType || storedGateUser.role || "")
+      .toLowerCase();
+  const isStudentAccount = !resolvedRole || resolvedRole === "student" || resolvedRole === "user";
+  const hasStoredSchool = Boolean(toPlainString(accountProfile?.school || "").trim());
+  const hasStoredClass = Boolean(toPlainString(accountProfile?.class_name || "").trim());
+  const hasStoredPhone = isValidPhone(accountProfile?.phone || "");
+  const needsProfileUpdate =
+    Boolean(authUser) &&
+    !accountLoading &&
+    (!hasStoredSchool || !hasStoredPhone || (isStudentAccount && !hasStoredClass));
+  const handleAccountFieldChange = (field, value) => {
+    setAccountForm((prev) => ({ ...prev, [field]: value }));
+    setAccountFormErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+  const handleReloadProfile = () => setProfileReloadKey((n) => n + 1);
+  const handleMissingInfoSubmit = async () => {
+    if (!authUser) return;
+    const trimmedName = toPlainString(accountForm.name).trim();
+    const trimmedSchool = toPlainString(accountForm.school).trim();
+    const trimmedClass = toPlainString(accountForm.className).trim();
+    const trimmedPhone = toPlainString(accountForm.phone).trim();
+    const nextErrors = {};
+    if (!trimmedName) nextErrors.name = strings.nameRequired || "Name is required";
+    if (!trimmedSchool) nextErrors.school = strings.schoolRequired || "School is required";
+    if (isStudentAccount && !trimmedClass) nextErrors.className = strings.classRequired || "Class is required";
+    if (!isValidPhone(trimmedPhone)) nextErrors.phone = strings.phoneInvalid || "Please enter a valid phone number";
+    setAccountFormErrors(nextErrors);
+    if (Object.keys(nextErrors).length) return;
+    setSavingAccount(true);
+    const nextClassName = isStudentAccount
+      ? trimmedClass
+      : toPlainString(accountProfile?.class_name || accountForm.className).trim();
+    const upsertRow = {
+      id: authUser.id,
+      name: trimmedName,
+      school: trimmedSchool,
+      class_name: nextClassName || null,
+      phone: trimmedPhone,
+    };
+    const identityEmail = accountProfile?.email || authUser.email || null;
+    if (identityEmail) upsertRow.email = identityEmail;
+    const derivedUsername =
+      accountProfile?.username ||
+      authUser?.user_metadata?.username ||
+      (authUser?.email ? authUser.email.split("@")[0] : null);
+    if (derivedUsername) upsertRow.username = derivedUsername;
+    const roleValue =
+      accountProfile?.role ||
+      authUser?.user_metadata?.role ||
+      authUser?.user_metadata?.accountType ||
+      (isStudentAccount ? "student" : "educator");
+    if (roleValue) upsertRow.role = roleValue;
+    try {
+      const { error } = await supabase.from("profiles").upsert(upsertRow);
+      if (error) throw error;
+      const { error: metaErr } = await supabase.auth.updateUser({
+        data: {
+          ...(authUser.user_metadata || {}),
+          name: trimmedName,
+          school: trimmedSchool,
+          class: isStudentAccount ? trimmedClass : "",
+          className: isStudentAccount ? trimmedClass : "",
+          phone: trimmedPhone,
+        },
+      });
+      if (metaErr) throw metaErr;
+      setAccountProfile((prev) => ({ ...(prev || {}), ...upsertRow }));
+      setAccountForm({ name: trimmedName, school: trimmedSchool, className: trimmedClass, phone: trimmedPhone });
+      setAccountFormErrors({});
+      setAccountError("");
+      setProfile((prev) => ({
+        ...prev,
+        name: trimmedName,
+        email: authUser.email || prev.email,
+        school: trimmedSchool,
+        className: isStudentAccount ? trimmedClass : prev.className,
+        phone: trimmedPhone,
+      }));
+      try {
+        const raw = localStorage.getItem("cg_current_user_v1");
+        const existing = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(
+          "cg_current_user_v1",
+          JSON.stringify({
+            ...existing,
+            id: authUser.id,
+            email: authUser.email || existing.email,
+            name: trimmedName,
+            role: roleValue || existing.role,
+            school: trimmedSchool,
+            class_name: isStudentAccount ? trimmedClass : existing.class_name,
+            phone: trimmedPhone,
+          }),
+        );
+      } catch {}
+      try {
+        const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
+        localStorage.setItem(
+          PROFILE_KEY,
+          JSON.stringify({
+            ...saved,
+            name: trimmedName,
+            email: authUser.email || saved.email,
+            school: trimmedSchool,
+            className: isStudentAccount ? trimmedClass : saved.className,
+            phone: trimmedPhone,
+          }),
+        );
+      } catch {}
+    } catch (err) {
+      console.error("test profile update", err);
+      setAccountError(err?.message || "Unable to save your information. Please try again.");
+    } finally {
+      setSavingAccount(false);
+    }
+  };
 
   // Derived results
   const riasecSums = useMemo(() => riasecFromAnswers(Q_RIASEC || [], ansTF), [ansTF]);
@@ -486,6 +674,125 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
           <div style={{ display: "flex", gap: 8 }}>
             <Btn variant="primary" onClick={() => onNavigate("login")}>{loginLabel}</Btn>
             <Btn variant="back" onClick={() => onNavigate("home")}>{backHomeLabel}</Btn>
+          </div>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  if (accountLoading) {
+    return (
+      <PageWrap>
+        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={lang} />
+        <Card>
+          <p style={{ color: "#6b7280" }}>
+            {ui.checkingSession || "Please wait while we verify your account details."}
+          </p>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  if (needsProfileUpdate) {
+    const gateTitle = ui.participantTitle || "Participant Information";
+    const gateDesc = ui.participantDesc || "Please complete the following before beginning.";
+    const continueLabel = strings.agreeBegin || strings.takeTest || "Continue";
+    const helperText = isStudentAccount
+      ? "We need your school, class, and phone number on file before you can start the assessment."
+      : "We need your school and phone number on file before you can start the assessment.";
+    const errorStyle = { color: "#dc2626", fontSize: 13, margin: "4px 0 0" };
+    const inputStyle = {
+      padding: "11px 12px",
+      borderRadius: 10,
+      border: "1px solid #d1d5db",
+      fontSize: 15,
+      width: "100%",
+    };
+
+    return (
+      <PageWrap>
+        <HeaderBar title={gateTitle} right={null} lang={lang} />
+        <Card>
+          <h2 style={{ marginTop: 0 }}>{gateTitle}</h2>
+          <p style={{ color: "#475569", marginBottom: 8 }}>{gateDesc}</p>
+          <p style={{ color: "#b45309", fontSize: 14, marginTop: 0 }}>{helperText}</p>
+          {accountError && (
+            <p style={{ color: "#dc2626", fontSize: 14, marginTop: 0 }}>{accountError}</p>
+          )}
+
+          <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>{ui.participantName || "Full Name"}</span>
+              <input
+                type="text"
+                value={accountForm.name}
+                onChange={(e) => handleAccountFieldChange("name", e.target.value)}
+                autoComplete="name"
+                style={inputStyle}
+              />
+              {accountFormErrors.name && <span style={errorStyle}>{accountFormErrors.name}</span>}
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>{ui.participantSchool || "School / Organization"}</span>
+              <input
+                type="text"
+                value={accountForm.school}
+                onChange={(e) => handleAccountFieldChange("school", e.target.value)}
+                autoComplete="organization"
+                style={inputStyle}
+              />
+              {accountFormErrors.school && <span style={errorStyle}>{accountFormErrors.school}</span>}
+            </label>
+
+            {isStudentAccount && (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>{ui.participantClass || "Class / Grade"}</span>
+                <input
+                  type="text"
+                  value={accountForm.className}
+                  onChange={(e) => handleAccountFieldChange("className", e.target.value)}
+                  autoComplete="organization-title"
+                  style={inputStyle}
+                />
+                {accountFormErrors.className && <span style={errorStyle}>{accountFormErrors.className}</span>}
+              </label>
+            )}
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>{ui.participantPhone || "Phone"}</span>
+              <input
+                type="tel"
+                value={accountForm.phone}
+                onChange={(e) => handleAccountFieldChange("phone", e.target.value)}
+                autoComplete="tel"
+                style={inputStyle}
+              />
+              {accountFormErrors.phone && <span style={errorStyle}>{accountFormErrors.phone}</span>}
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              marginTop: 20,
+            }}
+          >
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn variant="secondary" onClick={handleReloadProfile}>
+                Reload Info
+              </Btn>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn variant="back" onClick={() => onNavigate("home")}>{backHomeLabel}</Btn>
+              <Btn variant="primary" onClick={handleMissingInfoSubmit} disabled={savingAccount}>
+                {savingAccount ? "Saving..." : continueLabel}
+              </Btn>
+            </div>
           </div>
         </Card>
       </PageWrap>
