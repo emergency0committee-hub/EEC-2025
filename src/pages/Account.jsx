@@ -44,6 +44,7 @@ export default function Account({ onNavigate }) {
   const [codeError, setCodeError] = useState("");
   const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const CODE_LENGTH = 12;
+  const CODES_STORAGE_KEY = "cg_latest_codes";
   const makeCode = () => {
     let raw = "";
     if (typeof crypto !== "undefined" && crypto.getRandomValues) {
@@ -55,10 +56,23 @@ export default function Account({ onNavigate }) {
     }
     return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
   };
-  const [codes, setCodes] = useState(() => ({
-    sat: makeCode(),
-    cg: makeCode(),
-  }));
+  const loadStoredCodes = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(CODES_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed?.sat && parsed?.cg) return parsed;
+    } catch {}
+    return null;
+  };
+  const [codes, setCodes] = useState(() => loadStoredCodes() || { sat: makeCode(), cg: makeCode() });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(CODES_STORAGE_KEY, JSON.stringify(codes));
+    } catch {}
+  }, [codes]);
   const handleRefreshCodes = () => {
     setCodeError("");
     setRefreshingCodes(true);

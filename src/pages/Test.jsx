@@ -41,6 +41,31 @@ import {
   Q_UNIFIED_CLEAN as RAW_RIASEC,
 } from "../questionBank.js";
 
+const SCHOOL_OPTIONS = [
+  { value: "EEC", label: "EEC" },
+  { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
+];
+
+const GRADE_OPTIONS = [
+  { value: "Grade 10", label: "Grade 10" },
+  { value: "Grade 11", label: "Grade 11" },
+  { value: "Grade 12", label: "Grade 12" },
+];
+const CODE_STORAGE_KEY = "cg_latest_codes";
+
+const getStoredAccessCode = () => {
+  const fallback = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(CODE_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return (parsed?.cg || "").trim() || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 /* ====================== Validation / Questions ====================== */
 const RAW_APT = [];
 const RAW_WORK = [];
@@ -735,26 +760,36 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 600 }}>{ui.participantSchool || "School / Organization"}</span>
-              <input
-                type="text"
+              <select
                 value={accountForm.school}
                 onChange={(e) => handleAccountFieldChange("school", e.target.value)}
-                autoComplete="organization"
-                style={inputStyle}
-              />
+                style={{ ...inputStyle, paddingRight: 30 }}
+              >
+                <option value="">Select school</option>
+                {SCHOOL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
               {accountFormErrors.school && <span style={errorStyle}>{accountFormErrors.school}</span>}
             </label>
 
             {isStudentAccount && (
               <label style={{ display: "grid", gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>{ui.participantClass || "Class / Grade"}</span>
-                <input
-                  type="text"
+                <select
                   value={accountForm.className}
                   onChange={(e) => handleAccountFieldChange("className", e.target.value)}
-                  autoComplete="organization-title"
-                  style={inputStyle}
-                />
+                  style={{ ...inputStyle, paddingRight: 30 }}
+                >
+                  <option value="">Select grade</option>
+                  {GRADE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
                 {accountFormErrors.className && <span style={errorStyle}>{accountFormErrors.className}</span>}
               </label>
             )}
@@ -845,7 +880,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                   style={{ flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
                 />
                 <Btn variant="primary" onClick={() => {
-                  const expected = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
+                  const expected = getStoredAccessCode();
                   if (expected && cgCode.trim() !== expected) { setCgErr(ui.invalidCode); return; }
                   setCgUnlocked(true);
                 }}>Unlock</Btn>
@@ -890,93 +925,27 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                 </p>
                 <div style={{ display: "grid", gap: 12 }}>
                   {[
-                    {
-                      key: "name",
-                      label: ui.participantName,
-                      placeholder: ui.participantNamePlaceholder,
-                    },
-                    {
-                      key: "school",
-                      label: ui.participantSchool,
-                      placeholder: ui.participantSchoolPlaceholder,
-                    },
-                    {
-                      key: "className",
-                      label: ui.participantClass,
-                      placeholder: ui.participantClassPlaceholder,
-                    },
-                    {
-                      key: "phone",
-                      type: "tel",
-                      label: ui.participantPhone,
-                      placeholder: ui.participantPhonePlaceholder,
-                    },
-                    {
-                      key: "email",
-                      type: "email",
-                      label: ui.participantEmail,
-                      placeholder: ui.participantEmailPlaceholder,
-                    },
-                  ].map(({ key, label, placeholder, type = "text" }) => {
-                    const fieldValue = profile[key] || "";
-                    let isFieldValid = true;
-                    switch (key) {
-                      case "email":
-                        isFieldValid = isEmail(fieldValue);
-                        break;
-                      case "school":
-                        isFieldValid = isValidSchool(fieldValue);
-                        break;
-                      case "className":
-                        isFieldValid = isValidClass(fieldValue);
-                        break;
-                      case "phone":
-                        isFieldValid = isValidPhone(fieldValue);
-                        break;
-                      default:
-                        isFieldValid = isValidName(fieldValue);
-                    }
-                    const autoCompleteAttr =
-                      key === "email"
-                        ? "email"
-                        : key === "name"
-                          ? "name"
-                          : key === "school"
-                            ? "organization"
-                            : key === "className"
-                              ? "section"
-                              : key === "phone"
-                                ? "tel"
-                                : "off";
-                    return (
-                      <label key={key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <span style={{ fontWeight: 600, color: "#1e293b" }}>{label}</span>
-                        <input
-                          type={type}
-                          value={fieldValue}
-                          onChange={(e) => {
-                            const nextValue = e.target.value;
-                            setProfile((prev) => ({ ...prev, [key]: nextValue }));
-                            if (showProfileError) setShowProfileError(false);
-                          }}
-                          placeholder={placeholder}
-                          autoComplete={autoCompleteAttr}
-                          style={{
-                            padding: "10px 12px",
-                            borderRadius: 8,
-                            border: showProfileError && !isFieldValid ? "1px solid #dc2626" : "1px solid #d1d5db",
-                            fontSize: 14,
-                            background: "#ffffff",
-                          }}
-                        />
-                      </label>
-                    );
-                  })}
-                  {showProfileError && (
-                    <p style={{ color: "#dc2626", fontSize: 13, margin: 0 }}>
-                      {ui.participantError}
-                    </p>
-                  )}
+                    { key: "name", label: ui.participantName },
+                    { key: "school", label: ui.participantSchool },
+                    { key: "className", label: ui.participantClass },
+                    { key: "phone", label: ui.participantPhone },
+                    { key: "email", label: ui.participantEmail },
+                  ].map(({ key, label }) => (
+                    <div
+                      key={key}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        padding: "10px 12px",
+                        background: "#fff",
+                      }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b", textTransform: "uppercase" }}>{label}</span>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>{profile[key] || "—"}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
