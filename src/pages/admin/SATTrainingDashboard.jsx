@@ -11,22 +11,10 @@ export default function SATTrainingDashboard({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [deletingRowId, setDeletingRowId] = useState(null);
   const [viewRow, setViewRow] = useState(null);
-
-  const liveHomework = useMemo(() => {
-    const activeStatuses = new Set(['active', 'in_progress']);
-    const list = rows.filter((row) => {
-      const kind = String(row?.kind || '').toLowerCase();
-      if (kind !== 'homework') return false;
-      const status = String(row?.status || '').toLowerCase();
-      return activeStatuses.has(status);
-    });
-    list.sort((a, b) => {
-      const hbA = new Date((a?.meta?.session?.lastHeartbeat) || a?.ts || 0).getTime();
-      const hbB = new Date((b?.meta?.session?.lastHeartbeat) || b?.ts || 0).getTime();
-      return hbB - hbA;
-    });
-    return list;
-  }, [rows]);
+  const [page, setPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState({ key: "ts", direction: "desc" });
+  const [filterKind, setFilterKind] = useState("all");
+  const rowsPerPage = 5;
 
   useEffect(() => {
     (async () => {
@@ -88,6 +76,76 @@ export default function SATTrainingDashboard({ onNavigate }) {
 
   const openView = (row) => setViewRow(row || null);
   const closeView = () => setViewRow(null);
+  const changeSort = (key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+    setPage(1);
+  };
+
+  const kindOptions = useMemo(() => {
+    const set = new Set();
+    rows.forEach((row) => {
+      if (!row?.kind) return;
+      set.add(String(row.kind).toLowerCase());
+    });
+    return Array.from(set).sort();
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    if (filterKind === "all") return rows;
+    const value = String(filterKind).toLowerCase();
+    return rows.filter((row) => String(row.kind || "").toLowerCase() === value);
+  }, [rows, filterKind]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
+    setPage((prev) => Math.min(prev, totalPages));
+  }, [filteredRows, rowsPerPage]);
+
+  const sortedRows = useMemo(() => {
+    const data = [...filteredRows];
+    const { key, direction } = sortConfig;
+    const dir = direction === "asc" ? 1 : -1;
+    const getValue = (row) => {
+      switch (key) {
+        case "ts":
+          return new Date(row.ts || row.created_at || 0).getTime();
+        case "user":
+          return (row.user_email || "").toLowerCase();
+        case "kind":
+          return (row.kind || "").toLowerCase();
+        case "section":
+          return (row.section || "").toLowerCase();
+        case "unit":
+          return ((row.unit || "") + (row.lesson || "")).toLowerCase();
+        case "score":
+          return getScoreInfo(row).ratio ?? -1;
+        case "duration":
+          return Number(row.elapsed_sec || 0);
+        default:
+          return 0;
+      }
+    };
+    data.sort((a, b) => {
+      const aVal = getValue(a);
+      const bVal = getValue(b);
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return -dir;
+      if (bVal == null) return dir;
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return aVal === bVal ? 0 : (aVal > bVal ? dir : -dir);
+      }
+      const aStr = String(aVal);
+      const bStr = String(bVal);
+      if (aStr === bStr) return 0;
+      return aStr > bStr ? dir : -dir;
+    });
+    return data;
+  }, [filteredRows, sortConfig]);
 
 
   const fmt = (iso, time = false) => {
@@ -98,19 +156,6 @@ export default function SATTrainingDashboard({ onNavigate }) {
       ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       : date.toLocaleDateString();
   };
-  const fmtRelative = (iso) => {
-    if (!iso) return "--";
-    const value = new Date(iso);
-    if (Number.isNaN(value.getTime())) return "--";
-    const diffSec = Math.max(0, (Date.now() - value.getTime()) / 1000);
-    if (diffSec < 45) return "Just now";
-    if (diffSec < 90) return "1 min ago";
-    if (diffSec < 3600) return `${Math.round(diffSec / 60)} min ago`;
-    if (diffSec < 7200) return "1 hr ago";
-    if (diffSec < 86400) return `${Math.round(diffSec / 3600)} hr ago`;
-    const days = Math.round(diffSec / 86400);
-    return `${days} day${days === 1 ? "" : "s"} ago`;
-  };
   const fmtDur = (sec) => {
     const value = Number(sec);
     if (!Number.isFinite(value) || value < 0) return "--";
@@ -118,113 +163,149 @@ export default function SATTrainingDashboard({ onNavigate }) {
     const ss = Math.floor(value % 60).toString().padStart(2, "0");
     return `${mm}:${ss}`;
   };
+  const renderSortButton = (label, key) => {
+    const active = sortConfig.key === key;
+    const arrow = active ? (sortConfig.direction === "asc" ? "▲" : "▼") : "↕";
+    return (
+      <button
+        type="button"
+        onClick={() => changeSort(key)}
+        style={{
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          fontWeight: 600,
+          color: "#111827",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        {label}
+        <span style={{ fontSize: 10, color: active ? "#2563eb" : "#9ca3af" }}>{arrow}</span>
+      </button>
+    );
+  };
+  const getScoreInfo = (row) => {
+    const rw = row.summary?.rw;
+    const math = row.summary?.math;
+    let label = "--";
+    let ratio = null;
+    if (rw?.total || rw?.correct) {
+      label = `${rw.correct || 0}/${rw.total || 0}`;
+      ratio = rw.total ? (rw.correct || 0) / (rw.total || 1) : null;
+    }
+    if (math?.total || math?.correct) {
+      label = `${math.correct || 0}/${math.total || 0}`;
+      ratio = math.total ? (math.correct || 0) / (math.total || 1) : null;
+    }
+    return { label, ratio };
+  };
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / rowsPerPage));
+  const pagedRows = sortedRows.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+  const startIndex = sortedRows.length === 0 ? 0 : (page - 1) * rowsPerPage + 1;
+  const endIndex = Math.min(page * rowsPerPage, sortedRows.length);
 
   return (
     <PageWrap>
       <HeaderBar title="SAT Training Analytics" />
 
-      {/* Class assignment tool */}
       <Card>
-        <div
-          style={{
-            marginBottom: 16,
-            padding: '12px 16px',
-            borderRadius: 12,
-            border: '1px solid #c7d2fe',
-            background: '#eef2ff'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0, fontSize: 16, color: '#4338ca' }}>Live Homework Monitor</h3>
-            <span style={{ fontWeight: 600, color: '#4338ca' }}>{liveHomework.length ? `${liveHomework.length} active` : 'No active sessions'}</span>
-          </div>
-          {liveHomework.length === 0 ? (
-            <p style={{ margin: 0, color: '#6b7280', fontSize: 13 }}>No students are working on homework right now.</p>
-          ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
-              {liveHomework.map((row) => {
-                const session = row?.meta && typeof row.meta === 'object' && row.meta.session && typeof row.meta.session === 'object' ? row.meta.session : {};
-                const lastHeartbeat = session.lastHeartbeat || row.ts;
-                const elapsedSec = Number.isFinite(Number(session.lastElapsed)) ? Number(session.lastElapsed) : Number(row?.elapsed_sec || 0);
-                const remainingSec = Number.isFinite(Number(session.estimatedRemaining)) ? Math.max(0, Math.round(Number(session.estimatedRemaining))) : null;
-                return (
-                  <div
-                    key={row.id || `${row.user_email || 'anon'}_${row.ts || Math.random()}`}
-                    style={{
-                      background: '#fff',
-                      border: '1px solid #dbeafe',
-                      borderRadius: 10,
-                      padding: '10px 12px',
-                      display: 'grid',
-                      gap: 6
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                      <span style={{ fontWeight: 600, color: '#1d4ed8' }}>{row.user_email || 'Unknown student'}</span>
-                      <span style={{ color: '#4338ca', fontSize: 12 }}>{fmtRelative(lastHeartbeat)} - {fmt(lastHeartbeat, true)}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, color: '#4f46e5', fontSize: 13 }}>
-                      {row.class_name ? <span>Class: <strong>{row.class_name}</strong></span> : null}
-                      {row.unit ? <span>Unit: <strong>{row.unit}</strong></span> : null}
-                      {row.lesson ? <span>Lesson: <strong>{row.lesson}</strong></span> : null}
-                      <span>Elapsed: <strong>{fmtDur(elapsedSec)}</strong></span>
-                      {Number.isFinite(remainingSec) && remainingSec != null ? (<span>Remaining: <strong>{fmtDur(remainingSec)}</strong></span>) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
         {loading ? (
           <p style={{ color: "#6b7280" }}>Loading...</p>
         ) : rows.length === 0 ? (
           <p style={{ color: "#6b7280" }}>No training activity found.</p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-              <thead>
-                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Date</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Time</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>User</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Kind</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Section</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Unit/Lesson</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Duration</th>
-                  <th style={{ padding: 10, textAlign: 'left' }}>Manage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => {
-                  const rw = r.summary?.rw; const m = r.summary?.math; let score = '--';
-                  if (rw?.total || rw?.correct) score = `${rw.correct||0}/${rw.total||0}`;
-                  if (m?.total || m?.correct) score = `${m.correct||0}/${m.total||0}`;
-                  return (
-                    <tr key={`${r.id || ''}_${r.ts}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                      <td style={{ padding: 10 }}>{fmt(r.ts)}</td>
-                      <td style={{ padding: 10 }}>{fmt(r.ts, true)}</td>
-                      <td style={{ padding: 10 }}>{r.user_email || '--'}</td>
-                      <td style={{ padding: 10 }}>{r.kind || '--'}</td>
-                      <td style={{ padding: 10 }}>{r.section || '--'}</td>
-                      <td style={{ padding: 10 }}>{r.unit || r.lesson || '--'}</td>
-                      <td style={{ padding: 10 }}>{score}</td>
-                      <td style={{ padding: 10 }}>{fmtDur(Number(r.elapsed_sec || 0))}</td>
-                      <td style={{ padding: 10 }}>
-                        <button type="button" onClick={() => openView(r)} title="View answers" style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer', marginRight:6 }}>View</button>
-                        <button type="button" onClick={() => deleteTrainingRow(r)} title="Delete submission" style={{ border:'none', background:'transparent', cursor:'pointer', padding:6, borderRadius:6 }} onMouseEnter={(e)=> e.currentTarget.style.background = '#f3f4f6'} onMouseLeave={(e)=> e.currentTarget.style.background = 'transparent'} disabled={deletingRowId === r.id}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                            <path d="M6 7h12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
-                            <path d="M10 11v6M14 11v6" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 13, color: '#4b5563', fontWeight: 600 }}>
+                Filter by kind:
+                <select
+                  value={filterKind}
+                  onChange={(e) => {
+                    setFilterKind(e.target.value);
+                    setPage(1);
+                  }}
+                  style={{ marginLeft: 6, border: '1px solid #d1d5db', borderRadius: 6, padding: '6px 8px' }}
+                >
+                  <option value="all">All</option>
+                  {kindOptions.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {kind.charAt(0).toUpperCase() + kind.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("Date", "ts")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>Time</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("User", "user")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("Kind", "kind")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("Section", "section")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("Unit/Lesson", "unit")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("Score", "score")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>{renderSortButton("Duration", "duration")}</th>
+                    <th style={{ padding: 10, textAlign: 'left' }}>Manage</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedRows.map(r => {
+                    const scoreInfo = getScoreInfo(r);
+                    return (
+                      <tr key={`${r.id || ''}_${r.ts}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                        <td style={{ padding: 10 }}>{fmt(r.ts)}</td>
+                        <td style={{ padding: 10 }}>{fmt(r.ts, true)}</td>
+                        <td style={{ padding: 10 }}>{r.user_email || '--'}</td>
+                        <td style={{ padding: 10 }}>{r.kind || '--'}</td>
+                        <td style={{ padding: 10 }}>{r.section || '--'}</td>
+                        <td style={{ padding: 10 }}>{r.unit || r.lesson || '--'}</td>
+                        <td style={{ padding: 10 }}>{scoreInfo.label}</td>
+                        <td style={{ padding: 10 }}>{fmtDur(Number(r.elapsed_sec || 0))}</td>
+                        <td style={{ padding: 10 }}>
+                          <button type="button" onClick={() => openView(r)} title="View answers" style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer', marginRight:6 }}>View</button>
+                          <button type="button" onClick={() => deleteTrainingRow(r)} title="Delete submission" style={{ border:'none', background:'transparent', cursor:'pointer', padding:6, borderRadius:6 }} onMouseEnter={(e)=> e.currentTarget.style.background = '#f3f4f6'} onMouseLeave={(e)=> e.currentTarget.style.background = 'transparent'} disabled={deletingRowId === r.id}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                              <path d="M6 7h12M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
+                              <path d="M10 11v6M14 11v6" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ color: '#6b7280', fontSize: 13 }}>
+                Showing {rows.length === 0 ? 0 : startIndex}-
+                {endIndex} of {rows.length}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: page <= 1 ? 'not-allowed' : 'pointer' }}
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: page >= totalPages ? 'not-allowed' : 'pointer' }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
         )}
         <div style={{ marginTop: 12 }}>
           <Btn variant="back" onClick={() => onNavigate('home')}>Back Home</Btn>

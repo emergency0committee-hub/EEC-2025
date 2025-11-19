@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
 import { supabase } from "../../../lib/supabase.js";
-import { fetchQuestionBankSample } from "../../../lib/assignmentQuestions.js";
+import { fetchQuestionBankSample, fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
 import {
   BANKS,
   mapBankQuestionToResource,
@@ -121,6 +121,18 @@ const warnMissingSource = (key, error) => {
   if (missingDataWarnings.has(key)) return;
   missingDataWarnings.add(key);
   console.warn(`SAT Training: "${key}" data unavailable`, error?.message || error);
+};
+
+const parseMaybeJSON = (value) => {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  return value;
 };
 
 export default function SATTraining({ onNavigate }) {
@@ -682,6 +694,168 @@ export default function SATTraining({ onNavigate }) {
     });
     return ids;
   }, [resources]);
+  const [questionTextCache, setQuestionTextCache] = useState({});
+  const resourceQuestionDataMap = useMemo(() => {
+    const map = new Map();
+    (resources || []).forEach((resource) => {
+      const resourceId = resource?.id;
+      if (resourceId == null) return;
+      const questions = getResourceQuestions(resource) || [];
+      if (!questions.length) return;
+      const questionMetaSource =
+        (resource?.payload &&
+          typeof resource.payload === "object" &&
+          ((resource.payload.meta && typeof resource.payload.meta === "object" && resource.payload.meta) ||
+            (resource.payload.settings && typeof resource.payload.settings === "object" && resource.payload.settings))) ||
+        (resource?.meta && typeof resource.meta === "object" && resource.meta) ||
+        (resource?.settings && typeof resource.settings === "object" && resource.settings) ||
+        null;
+      const refsLikely = questions.every((item) => item && item.questionId);
+      const referenceBank = questions.find((item) => item && item.bank)?.bank || null;
+      const derivedBank =
+        (questionMetaSource && (questionMetaSource.questionBank || questionMetaSource.bank)) || referenceBank || null;
+      const entry = {
+        texts: {},
+        bankByQuestion: {},
+        unresolved: new Set(),
+        defaultBank: derivedBank,
+      };
+      questions.forEach((question, idx) => {
+        if (!question) return;
+        const qid =
+          question.id ??
+          question.questionId ??
+          question.question_id ??
+          `q_${idx + 1}`;
+        if (qid == null) return;
+        const rawText = question.text ?? question.question ?? question.prompt ?? question.title ?? "";
+        const trimmed = typeof rawText === "string" ? rawText.trim() : "";
+        if (trimmed) {
+          entry.texts[qid] = trimmed;
+        } else if (question.questionId || refsLikely) {
+          entry.unresolved.add(String(qid));
+        }
+        const qBank = question.bank || question.questionBank || derivedBank;
+        if (qBank) entry.bankByQuestion[qid] = qBank;
+      });
+      map.set(String(resourceId), entry);
+    });
+    return map;
+  }, [resources]);
+  useEffect(() => {
+    const pending = new Map();
+    const addPending = (bankId, qid) => {
+      if (!bankId) return;
+      const key = String(qid || "");
+      if (!key || questionTextCache[key]) return;
+      if (!pending.has(bankId)) pending.set(bankId, new Set());
+      pending.get(bankId).add(key);
+    };
+    resourceQuestionDataMap.forEach((entry) => {
+      if (!entry) return;
+      entry.unresolved.forEach((qid) => {
+        const bank = entry.bankByQuestion[qid] || entry.defaultBank;
+        addPending(bank, qid);
+      });
+    });
+    const gatherFromLog = (log) => {
+      if (!log) return;
+      const answers = parseMaybeJSON(log.answers);
+      const metrics = parseMaybeJSON(log.metrics);
+      const meta = {
+        ...(log.meta || {}),
+        ...(answers?.meta || {}),
+      };
+      const questionRefs =
+        meta.questionRefs ??
+        meta.question_refs ??
+        false;
+      const baseBank =
+        meta.questionBank ||
+        meta.question_bank ||
+        null;
+      const perQuestionBank =
+        meta.questionBanks ||
+        meta.questionBankMap ||
+        null;
+      if (!questionRefs && !perQuestionBank) return;
+      const keys = new Set([
+        ...Object.keys(answers?.choices || {}),
+        ...Object.keys(metrics?.choices || {}),
+        ...Object.keys(answers?.correct || {}),
+        ...Object.keys(metrics?.correct || {}),
+      ]);
+      const lookupEntry =
+        log.resource_id != null ? resourceQuestionDataMap.get(String(log.resource_id)) : null;
+      keys.forEach((qid) => {
+        if (!qid) return;
+        const bank =
+          (perQuestionBank && perQuestionBank[qid]) ||
+          baseBank ||
+          lookupEntry?.bankByQuestion?.[qid] ||
+          lookupEntry?.defaultBank ||
+          null;
+        const refsEnabled =
+          questionRefs ||
+          Boolean(perQuestionBank && perQuestionBank[qid]) ||
+          Boolean(lookupEntry?.bankByQuestion?.[qid]);
+        if (!refsEnabled) return;
+        addPending(bank, qid);
+      });
+    };
+    classLogs.forEach(gatherFromLog);
+    if (viewClassLog) gatherFromLog(viewClassLog);
+    if (!pending.size) return;
+    let cancelled = false;
+    (async () => {
+      const newTexts = {};
+      for (const [bankId, idSet] of pending.entries()) {
+        const config = resolveBankConfig(bankId);
+        if (!config?.table) continue;
+        try {
+          const rows = await fetchQuestionBankByIds({ table: config.table, ids: Array.from(idSet) });
+          const mapped = rows.map(mapBankQuestionToResource).filter(Boolean);
+          mapped.forEach((item) => {
+            const idKey = item?.id != null ? String(item.id) : null;
+            if (!idKey) return;
+            const text = (item.text || "").trim();
+            if (text) newTexts[idKey] = text;
+          });
+        } catch (err) {
+          if (!cancelled) console.warn("question text load", bankId, err);
+        }
+      }
+      if (!cancelled && Object.keys(newTexts).length > 0) {
+        setQuestionTextCache((prev) => ({ ...prev, ...newTexts }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resourceQuestionDataMap, classLogs, viewClassLog, questionTextCache]);
+  const resolveQuestionText = useCallback(
+    (logRow, questionKey) => {
+      if (!logRow || questionKey == null) return null;
+      const key = String(questionKey);
+      const answersSource = logRow.answers || {};
+      const directMap = answersSource.questionTexts || answersSource.question_texts;
+      if (directMap && directMap[key]) return directMap[key];
+      const metricsSource = logRow.metrics || {};
+      const metricMap = metricsSource.questionTexts || metricsSource.question_texts;
+      if (metricMap && metricMap[key]) return metricMap[key];
+      const resourceId = logRow.resource_id || answersSource.resourceId;
+      if (resourceId != null) {
+        const entry = resourceQuestionDataMap.get(String(resourceId));
+        if (entry) {
+          if (entry.texts[key]) return entry.texts[key];
+          if (questionTextCache[key]) return questionTextCache[key];
+        }
+      }
+      if (questionTextCache[key]) return questionTextCache[key];
+      return null;
+    },
+    [resourceQuestionDataMap, questionTextCache],
+  );
   const handleAutoAssignChange = (field, rawValue) => {
     setAutoAssign((prev) => {
       let next = { ...prev };
@@ -1541,6 +1715,7 @@ export default function SATTraining({ onNavigate }) {
             onClose={closeClassLog}
             fmtDate={fmtDate}
             fmtDuration={fmtDuration}
+            resolveQuestionText={resolveQuestionText}
           />
         )}
       </PageWrap>
@@ -1567,159 +1742,18 @@ export default function SATTraining({ onNavigate }) {
       />
 
       {viewClassLog && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={closeClassLog}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 12, width: 'min(820px, 94vw)', maxHeight: '85vh', overflowY: 'auto', padding: 20 }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-              <h3 style={{ margin: 0 }}>Submission Details</h3>
-              <button
-                type="button"
-                onClick={closeClassLog}
-                style={{ border: '1px solid #d1d5db', background: '#ffffff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div style={{ marginTop: 10, color: '#6b7280', display: 'grid', gap: 4 }}>
-              <div><strong>Student:</strong> {viewClassLog.user_email || 'G'}</div>
-              <div>
-                <strong>Section:</strong> {viewClassLog.section || 'G'} &nbsp;-+&nbsp;
-                <strong>Unit:</strong> {viewClassLog.unit || 'G'} &nbsp;-+&nbsp;
-                <strong>Lesson:</strong> {viewClassLog.lesson || 'G'}
-              </div>
-              <div>
-                <strong>Date:</strong> {fmtDate(viewClassLog.ts)} &nbsp;-+&nbsp;
-                <strong>Time:</strong> {fmtDate(viewClassLog.ts, true)}
-              </div>
-              <div><strong>Duration:</strong> {fmtDuration(Number(viewClassLog.elapsed_sec || 0))}</div>
-            </div>
-
-            {(() => {
-              const cards = [];
-              const addCard = (label, data) => {
-                if (!data) return;
-                const total = data.total || 0;
-                const correct = data.correct || 0;
-                const percent = total ? Math.round((correct / total) * 100) : null;
-                cards.push(
-                  <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#f9fafb' }}>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{correct}/{total}</div>
-                    <div style={{ color: '#6b7280', marginTop: 2 }}>{percent != null ? `${percent}% correct` : 'No data'}</div>
-                  </div>
-                );
-              };
-              addCard('Reading & Writing', viewClassLog.summary?.rw);
-              addCard('Math', viewClassLog.summary?.math);
-              if (!cards.length) return null;
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 16 }}>
-                  {cards}
-                </div>
-              );
-            })()}
-
-            {viewClassLog.metrics && Object.keys(viewClassLog.metrics).length > 0 && (
-              <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
-                <h4 style={{ marginTop: 0 }}>Metrics</h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, color: '#6b7280' }}>
-                  {Object.entries(viewClassLog.metrics).map(([key, val]) => (
-                    <div key={key} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: '8px 12px', background: '#f9fafb' }}>
-                      <strong style={{ textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</strong>: {typeof val === 'number' ? Math.round(val * 100) / 100 : String(val)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ marginTop: 18 }}>
-              <h4 style={{ margin: '0 0 8px 0' }}>Question Breakdown</h4>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                  <thead>
-                    <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <th style={{ padding: 8, textAlign: 'left' }}>Question</th>
-                      <th style={{ padding: 8, textAlign: 'left' }}>Selected</th>
-                      <th style={{ padding: 8, textAlign: 'left' }}>Correct</th>
-                      <th style={{ padding: 8, textAlign: 'left' }}>Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const parseMaybeJSON = (input) => {
-                        if (!input) return {};
-                        if (typeof input === "string") {
-                          try {
-                            return JSON.parse(input);
-                          } catch {
-                            return {};
-                          }
-                        }
-                        return input;
-                      };
-                      const answers = parseMaybeJSON(viewClassLog.answers) || {};
-                      const metrics = parseMaybeJSON(viewClassLog.metrics) || {};
-                      const choices =
-                        metrics.choices ||
-                        answers.choices ||
-                        answers.custom ||
-                        (viewClassLog.unit ? answers[viewClassLog.unit] : null) ||
-                        answers[Object.keys(answers)[0] || ""] ||
-                        {};
-                      const times = metrics.times || answers.times || {};
-                      const correct = metrics.correct || answers.correct || {};
-                      const keys = Object.keys(choices || {});
-                      keys.sort((a, b) => {
-                        const na = parseInt(String(a).replace(/\D+/g, ''), 10);
-                        const nb = parseInt(String(b).replace(/\D+/g, ''), 10);
-                        if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
-                        return String(a).localeCompare(String(b));
-                      });
-                      if (!keys.length) {
-                        return (
-                          <tr>
-                            <td style={{ padding: 8, color: '#6b7280' }} colSpan={4}>No per-question data available.</td>
-                          </tr>
-                        );
-                      }
-                      return keys.map((key) => {
-                        const chosen = choices[key];
-                        const answer = correct[key];
-                        const isCorrect =
-                          chosen != null &&
-                          answer != null &&
-                          String(chosen).trim().toLowerCase() === String(answer).trim().toLowerCase();
-                        return (
-                          <tr key={key} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                            <td style={{ padding: 8 }}>{key}</td>
-                            <td style={{ padding: 8 }}>{chosen ?? 'G'}</td>
-                            <td style={{ padding: 8, color: chosen == null || answer == null ? '#6b7280' : isCorrect ? '#16a34a' : '#ef4444' }}>
-                              {chosen == null || answer == null ? 'G' : isCorrect ? 'Correct' : `Wrong (Ans: ${answer})`}
-                            </td>
-                            <td style={{ padding: 8 }}>{fmtDuration(Number(times[key] || 0))}</td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ClassSubmissionModal
+          log={viewClassLog}
+          onClose={closeClassLog}
+          fmtDate={fmtDate}
+          fmtDuration={fmtDuration}
+          resolveQuestionText={resolveQuestionText}
+        />
       )}
-
-  </PageWrap>
-);
+    </PageWrap>
+  );
 }
+
 
 
 

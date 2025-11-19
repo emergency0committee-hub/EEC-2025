@@ -9,7 +9,7 @@ import useCountdown from "../../../hooks/useCountdown.js";
 import "katex/dist/katex.min.css";
 
 import { supabase } from "../../../lib/supabase.js";
-import { saveSatResult } from "../../../lib/supabaseStorage.js";
+import { saveSatResult, saveSatTraining } from "../../../lib/supabaseStorage.js";
 import { loadRWModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../../sat/questions.js";
 import { renderMathText } from "../../../lib/mathText.jsx";
 import { fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
@@ -672,7 +672,6 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     setIsSubmitting(true);
     try {
       if (practice) {
-        const { saveSatTraining } = await import("../../../lib/supabaseStorage.js");
         const ansMap = answers[mod.key] || {};
         const correctMap = {};
         try {
@@ -680,6 +679,20 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
             if (q && q.id && q.correct != null) {
               correctMap[q.id] = String(q.correct);
             }
+          });
+        } catch {}
+        const questionTexts = {};
+        try {
+          const limit = 400;
+          (mod.questions || []).forEach((q, idx) => {
+            if (!q) return;
+            const idKey = q.id || q.questionId || `q_${idx + 1}`;
+            if (!idKey) return;
+            const rawText = q.text || q.question || q.prompt || q.title || null;
+            if (!rawText) return;
+            const compact = String(rawText).replace(/\s+/g, " ").trim();
+            if (!compact) return;
+            questionTexts[idKey] = compact.length > limit ? `${compact.slice(0, limit)}...` : compact;
           });
         } catch {}
         const practiceKind = normalizeTrainingKind(practice.kind || mod?.kind || 'classwork');
@@ -694,6 +707,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
             choices: ansMap,
             times: timesRef.current || {},
             correct: correctMap,
+            questionTexts,
             resourceId: practice.resourceId || null,
             className: practice.className || null,
             meta: practiceMeta,

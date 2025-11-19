@@ -1,6 +1,6 @@
 import PropTypes from "prop-types";
 
-export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuration }) {
+export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuration, resolveQuestionText }) {
   if (!log) return null;
 
   const metrics = log.metrics || {};
@@ -8,6 +8,19 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
   const correct = metrics.correct || {};
   const times = metrics.times || {};
   const questionKeys = Object.keys(choices || {});
+  const storedQuestionTexts =
+    (log.answers && (log.answers.questionTexts || log.answers.question_texts)) ||
+    (log.metrics && (log.metrics.questionTexts || log.metrics.question_texts)) ||
+    {};
+  const getQuestionText = (key) => {
+    if (!key) return "";
+    const direct = storedQuestionTexts[key];
+    if (direct) return direct;
+    if (typeof resolveQuestionText === "function") {
+      return resolveQuestionText(log, key) || "";
+    }
+    return "";
+  };
 
   const summaryCards = [];
   const addSummaryCard = (label, data) => {
@@ -60,14 +73,14 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
         </div>
 
         <div style={{ marginTop: 10, color: "#6b7280", display: "grid", gap: 4 }}>
-          <div><strong>Student:</strong> {log.user_email || "—"}</div>
+          <div><strong>Student:</strong> {log.user_email || "ï¿½"}</div>
           <div>
-            <strong>Section:</strong> {log.section || "—"} &nbsp;·&nbsp;
-            <strong>Unit:</strong> {log.unit || "—"} &nbsp;·&nbsp;
-            <strong>Lesson:</strong> {log.lesson || "—"}
+            <strong>Section:</strong> {log.section || "ï¿½"} &nbsp;ï¿½&nbsp;
+            <strong>Unit:</strong> {log.unit || "ï¿½"} &nbsp;ï¿½&nbsp;
+            <strong>Lesson:</strong> {log.lesson || "ï¿½"}
           </div>
           <div>
-            <strong>Date:</strong> {fmtDate(log.ts)} &nbsp;·&nbsp;
+            <strong>Date:</strong> {fmtDate(log.ts)} &nbsp;ï¿½&nbsp;
             <strong>Time:</strong> {fmtDate(log.ts, true)}
           </div>
           <div><strong>Duration:</strong> {fmtDuration(Number(log.elapsed_sec || 0))}</div>
@@ -133,8 +146,19 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
                       String(chosen).trim().toLowerCase() === String(answer).trim().toLowerCase();
                     return (
                       <tr key={key} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                        <td style={{ padding: 8 }}>{key}</td>
-                        <td style={{ padding: 8 }}>{chosen ?? "—"}</td>
+                        <td style={{ padding: 8 }}>
+                          {(() => {
+                            const text = getQuestionText(String(key));
+                            if (!text) return key;
+                            return (
+                              <>
+                                <div style={{ fontWeight: 600, color: "#111827" }}>{text}</div>
+                                <div style={{ fontSize: 12, color: "#6b7280" }}>ID: {key}</div>
+                              </>
+                            );
+                          })()}
+                        </td>
+                        <td style={{ padding: 8 }}>{chosen ?? "ï¿½"}</td>
                         <td
                           style={{
                             padding: 8,
@@ -142,7 +166,7 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
                           }}
                         >
                           {chosen == null || answer == null
-                            ? "—"
+                            ? "ï¿½"
                             : isCorrect
                             ? "Correct"
                             : `Wrong (Ans: ${answer})`}
@@ -166,4 +190,10 @@ ClassSubmissionModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   fmtDate: PropTypes.func.isRequired,
   fmtDuration: PropTypes.func.isRequired,
+  resolveQuestionText: PropTypes.func,
+};
+
+ClassSubmissionModal.defaultProps = {
+  log: null,
+  resolveQuestionText: null,
 };

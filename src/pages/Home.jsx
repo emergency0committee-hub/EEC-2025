@@ -137,7 +137,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto" }} />
             <span style={{ fontWeight: 600, fontSize: 18 }}>
-              {lang === "AR" ? "\u0627\u0644\u0644\u062c\u0646\u0629 \u0627\u0644\u0627\u0642\u062a\u0635\u0627\u062f\u064a\u0629 \u0644\u0644\u0637\u0627\u0642\u0629" : "EEC"}
+              {lang === "AR" ? "\u0644\u062c\u0646\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0649\u0621 \u0627\u0644\u0627\u0642\u062a\u0635\u0627\u062f\u064a\u0629" : "EEC"}
             </span>
           </div>
         }
