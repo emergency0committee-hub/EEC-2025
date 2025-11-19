@@ -1,10 +1,9 @@
 // src/App.jsx
 import React, { useState, useMemo, useEffect } from "react";
 import PropTypes from "prop-types";
-import Home from "./pages/Home.jsx";
 import Blogs from "./pages/Blogs.jsx";
 import About from "./pages/About.jsx";
-import Career from "./pages/Career.jsx";
+import Home from "./pages/Home.jsx";
 import Test from "./pages/Test.jsx";
 import Results from "./pages/Results.jsx";
 import SelectResults from "./pages/SelectResults.jsx";
@@ -90,10 +89,12 @@ export default function App() {
   // Global language state with localStorage persistence
   const [lang, setLang] = useState(() => {
     try {
-      return localStorage.getItem("cg_lang") || "EN";
-    } catch {
-      return "EN";
-    }
+      const stored = localStorage.getItem("cg_lang");
+      if (stored && ["EN", "FR"].includes(stored)) {
+        return stored;
+      }
+    } catch {}
+    return "EN";
   });
 
   // Persist language preference and set document direction
@@ -333,7 +334,7 @@ export default function App() {
   }, [currentRole, currentAiAccess]);
 
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />;
-  if (route === "career") return <Career onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
   if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;

@@ -165,7 +165,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           <img src="/EEC_Logo.png" alt="Logo" style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain" }} />
           <div>
             <h2 style={{ margin: 0, color: "#111827" }}>{t.homeWelcome}</h2>
-            <p style={{ margin: "6px 0 0", color: "#6b7280" }}>{t.homeSubtitle}</p>
           </div>
         </div>
       </Card>
@@ -180,7 +179,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.career.title}</h3>
-            <p style={{ color: "#6b7280" }}>{home.career.desc}</p>
             <div style={{ marginTop: "auto" }}>
               <Btn variant="primary" to="career" onClick={navTo("career")}>
                 {home.career.cta}
@@ -192,7 +190,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.satDiagnostic.title}</h3>
-            <p style={{ color: "#6b7280" }}>{home.satDiagnostic.desc}</p>
             <div style={{ marginTop: "auto" }}>
               <Btn variant="primary" to="sat" onClick={navTo("sat")}>
                 {home.satDiagnostic.cta}
@@ -204,7 +201,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.satTraining.title}</h3>
-            <p style={{ color: "#6b7280" }}>{home.satTraining.desc}</p>
             <div style={{ marginTop: "auto" }}>
               <Btn variant="secondary" to="sat-training" onClick={navTo("sat-training")}>
                 {home.satTraining.cta}
@@ -216,7 +212,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.aiEducator.title}</h3>
-            <p style={{ color: "#6b7280" }}>{home.aiEducator.desc}</p>
             <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
               <Btn
                 variant="secondary"
@@ -236,7 +231,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         <Card>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.certificate.title}</h3>
-            <p style={{ color: "#6b7280" }}>{home.certificate.desc}</p>
             <div style={{ marginTop: "auto" }}>
               <Btn variant="primary" to="verify-certificate" onClick={navTo("verify-certificate")}>
                 {home.certificate.cta}

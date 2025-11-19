@@ -8,18 +8,26 @@ export default function LanguageButton({ lang, setLang, langs, context = "header
     langs: PropTypes.array.isRequired,
     context: PropTypes.oneOf(["header", "drawer"]),
   };
-LanguageButton.displayName = "LanguageButton";
+  LanguageButton.displayName = "LanguageButton";
 
+  const allowed = new Set(["EN", "FR"]);
+  const options = (langs || []).filter((entry) => allowed.has(entry.code));
+  const currentLang = allowed.has(lang) ? lang : "EN";
   const [isOpen, setIsOpen] = useState(false);
 
-  const toggleDropdown = () => setIsOpen(!isOpen);
+  if (options.length <= 1) return null;
 
+  const toggleDropdown = () => setIsOpen((prev) => !prev);
   const selectLang = (code) => {
+    if (!allowed.has(code)) return;
     setLang(code);
     setIsOpen(false);
   };
 
   const isDrawer = context === "drawer";
+
+  const currentLabel =
+    options.find((entry) => entry.code === currentLang)?.label || currentLang.toUpperCase();
 
   return (
     <div
@@ -48,10 +56,15 @@ LanguageButton.displayName = "LanguageButton";
         }}
       >
         <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9Z" stroke="#374151" strokeWidth="1.6"/>
-          <path d="M3 12h18M12 3c-2.5 2.7-3.75 5.4-3.75 9S9.5 17.3 12 21M12 3c2.5 2.7 3.75 5.4 3.75 9S14.5 17.3 12 21" stroke="#374151" strokeWidth="1.6" strokeLinecap="round"/>
+          <path d="M12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9Z" stroke="#374151" strokeWidth="1.6" />
+          <path
+            d="M3 12h18M12 3c-2.5 2.7-3.75 5.4-3.75 9S9.5 17.3 12 21M12 3c2.5 2.7 3.75 5.4 3.75 9S14.5 17.3 12 21"
+            stroke="#374151"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
         </svg>
-        {lang.toUpperCase() === "AR" ? "عر" : lang}
+        {currentLabel}
       </button>
       {isOpen && (
         <div
@@ -69,7 +82,7 @@ LanguageButton.displayName = "LanguageButton";
             overflow: "hidden",
           }}
         >
-          {langs.map((langObj) => (
+          {options.map((langObj) => (
             <button
               key={langObj.code}
               onClick={() => selectLang(langObj.code)}
