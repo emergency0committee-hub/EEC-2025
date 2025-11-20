@@ -1,5 +1,5 @@
 // src/pages/Account.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
@@ -42,9 +42,9 @@ export default function Account({ onNavigate }) {
   // Access code generator (manual refresh)
   const [refreshingCodes, setRefreshingCodes] = useState(false);
   const [codeError, setCodeError] = useState("");
+  const [codesLoading, setCodesLoading] = useState(true);
   const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const CODE_LENGTH = 12;
-  const CODES_STORAGE_KEY = "cg_latest_codes";
   const makeCode = () => {
     let raw = "";
     if (typeof crypto !== "undefined" && crypto.getRandomValues) {
@@ -56,33 +56,49 @@ export default function Account({ onNavigate }) {
     }
     return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
   };
-  const loadStoredCodes = () => {
-    if (typeof window === "undefined") return null;
+  const [codes, setCodes] = useState({ sat: "—", cg: "—" });
+  const fetchCodes = useCallback(async () => {
+    setCodesLoading(true);
     try {
-      const raw = localStorage.getItem(CODES_STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (parsed?.sat && parsed?.cg) return parsed;
-    } catch {}
-    return null;
-  };
-  const [codes, setCodes] = useState(() => loadStoredCodes() || { sat: makeCode(), cg: makeCode() });
+      const { data, error } = await supabase
+        .from("access_codes")
+        .select("purpose, code")
+        .in("purpose", ["sat", "career"]);
+      if (error) throw error;
+      const next = { sat: "—", cg: "—" };
+      (data || []).forEach((row) => {
+        const value = (row.code || "").trim();
+        if (row.purpose === "sat") next.sat = value || "—";
+        if (row.purpose === "career") next.cg = value || "—";
+      });
+      setCodes(next);
+      setCodeError("");
+    } catch (err) {
+      console.error("load access codes", err);
+      setCodeError((prev) => prev || "Unable to load current codes. Please try again.");
+    } finally {
+      setCodesLoading(false);
+    }
+  }, []);
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(CODES_STORAGE_KEY, JSON.stringify(codes));
-    } catch {}
-  }, [codes]);
-  const handleRefreshCodes = () => {
+    fetchCodes();
+  }, [fetchCodes]);
+  const handleRefreshCodes = async () => {
     setCodeError("");
     setRefreshingCodes(true);
+    const rows = [
+      { purpose: "sat", code: makeCode(), updated_by: user?.id || null },
+      { purpose: "career", code: makeCode(), updated_by: user?.id || null },
+    ];
     try {
-      setCodes({ sat: makeCode(), cg: makeCode() });
+      const { error } = await supabase.from("access_codes").upsert(rows);
+      if (error) throw error;
+      await fetchCodes();
     } catch (err) {
-      setCodeError("Unable to refresh codes. Please try again.");
-      console.error("refresh codes", err);
+      console.error("refresh access codes", err);
+      setCodeError(err?.message || "Unable to refresh codes. Please try again.");
     } finally {
-      setTimeout(() => setRefreshingCodes(false), 300);
+      setRefreshingCodes(false);
     }
   };
 
@@ -253,7 +269,7 @@ export default function Account({ onNavigate }) {
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <h3 style={{ margin: 0 }}>Access Codes</h3>
-            <Btn variant="secondary" onClick={handleRefreshCodes} disabled={refreshingCodes}>
+            <Btn variant="secondary" onClick={handleRefreshCodes} disabled={refreshingCodes || codesLoading}>
               {refreshingCodes ? "Refreshing..." : "Refresh"}
             </Btn>
           </div>
@@ -263,15 +279,25 @@ export default function Account({ onNavigate }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 12 }}>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 12, color: "#6b7280" }}>SAT Diagnostic</div>
-              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codes.sat}</div>
-              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(codes.sat); }} style={{ marginTop: 8 }}>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codesLoading ? "…" : codes.sat}</div>
+              <Btn
+                variant="secondary"
+                onClick={() => { if (!codesLoading) navigator.clipboard?.writeText(codes.sat); }}
+                disabled={codesLoading}
+                style={{ marginTop: 8 }}
+              >
                 Copy
               </Btn>
             </div>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Career Guidance</div>
-              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codes.cg}</div>
-              <Btn variant="secondary" onClick={() => { navigator.clipboard?.writeText(codes.cg); }} style={{ marginTop: 8 }}>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codesLoading ? "…" : codes.cg}</div>
+              <Btn
+                variant="secondary"
+                onClick={() => { if (!codesLoading) navigator.clipboard?.writeText(codes.cg); }}
+                disabled={codesLoading}
+                style={{ marginTop: 8 }}
+              >
                 Copy
               </Btn>
             </div>

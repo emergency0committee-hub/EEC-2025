@@ -51,20 +51,8 @@ const GRADE_OPTIONS = [
   { value: "Grade 11", label: "Grade 11" },
   { value: "Grade 12", label: "Grade 12" },
 ];
-const CODE_STORAGE_KEY = "cg_latest_codes";
 
-const getStoredAccessCode = () => {
-  const fallback = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(CODE_STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return (parsed?.cg || "").trim() || fallback;
-  } catch {
-    return fallback;
-  }
-};
+const ENV_CG_ACCESS_CODE = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
 
 /* ====================== Validation / Questions ====================== */
 const RAW_APT = [];
@@ -196,6 +184,8 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const [cgUnlocked, setCgUnlocked] = useState(isAdmin);
   const [cgCode, setCgCode] = useState("");
   const [cgErr, setCgErr] = useState("");
+  const [serverCode, setServerCode] = useState(ENV_CG_ACCESS_CODE);
+  const [codeLoading, setCodeLoading] = useState(false);
   // Exam language selection (locked once test starts)
   const [examLang, setExamLang] = useState(() => {
     try { return localStorage.getItem("cg_exam_lang") || ""; } catch { return ""; }
@@ -230,6 +220,38 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       return {};
     }
   }, []);
+
+  const fetchCareerCode = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("access_codes")
+        .select("code")
+        .eq("purpose", "career")
+        .maybeSingle();
+      if (error && error.code !== "PGRST116") throw error;
+      const value = (data?.code || "").trim();
+      return value || ENV_CG_ACCESS_CODE;
+    } catch (err) {
+      console.error("career code fetch", err);
+      return ENV_CG_ACCESS_CODE;
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setCodeLoading(true);
+    fetchCareerCode()
+      .then((value) => {
+        if (!active) return;
+        setServerCode(value);
+      })
+      .finally(() => {
+        if (active) setCodeLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fetchCareerCode]);
 
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 30);
@@ -395,6 +417,19 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const signInTitle = strings.signInTitle || loginLabel;
   const signInPrompt = strings.signInSubtitle || ui.accessDesc || "Please sign in to continue.";
   const backHomeLabel = ui.backHome || strings.backToHome || "Back Home";
+  const handleUnlock = useCallback(async () => {
+    if (codeLoading) return;
+    setCgErr("");
+    setCodeLoading(true);
+    const expected = await fetchCareerCode();
+    setServerCode(expected);
+    setCodeLoading(false);
+    if (expected && cgCode.trim() !== expected) {
+      setCgErr(ui.invalidCode);
+      return;
+    }
+    setCgUnlocked(true);
+  }, [codeLoading, cgCode, fetchCareerCode, ui.invalidCode]);
 
   useEffect(() => {
     try {
@@ -879,11 +914,14 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
                   placeholder={ui.placeholderCode}
                   style={{ flex: 1, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
                 />
-                <Btn variant="primary" onClick={() => {
-                  const expected = getStoredAccessCode();
-                  if (expected && cgCode.trim() !== expected) { setCgErr(ui.invalidCode); return; }
-                  setCgUnlocked(true);
-                }}>Unlock</Btn>
+                <Btn
+                  variant="primary"
+                  onClick={handleUnlock}
+                  disabled={codeLoading}
+                  style={codeLoading ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+                >
+                  {codeLoading ? (ui.checkingCode || "Checking…") : "Unlock"}
+                </Btn>
               </div>
               {cgErr && <p style={{ color: "#dc2626", fontSize: 13, marginTop: 6 }}>{cgErr}</p>}
               <div style={{ marginTop: 12 }}>
