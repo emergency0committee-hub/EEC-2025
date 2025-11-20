@@ -295,109 +295,109 @@ const COPY = {
   },
   FR: {
     title: "Banque de questions",
-    subtitle: "Ajoutez et g�rez des questions pour les quiz, devoirs et travaux en classe.",
+    subtitle: "Ajoutez et gérez des questions pour les quiz, devoirs et travaux en classe.",
     questionType: "Type de question",
     mcqLabel: "Choix multiples (A/B/C/D)",
-    fillLabel: "R�ponse libre",
-    subject: "Mati�re",
-    unit: "Unit�",
-    lesson: "Le�on",
-    hardness: "Difficult�",
-    skill: "Comp�tence",
+    fillLabel: "Réponse libre",
+    subject: "Matière",
+    unit: "Unité",
+    lesson: "Leçon",
+    hardness: "Difficulté",
+    skill: "Compétence",
     question: "Question",
-    answers: "R�ponses",
-    answer: (label) => `R�ponse ${label}`,
-    fillAnswerLabel: "Bonne r�ponse",
+    answers: "Réponses",
+    answer: (label) => `Réponse ${label}`,
+    fillAnswerLabel: "Bonne réponse",
     correctAnswer: "Choix correct",
     imageLabel: "URL de l'image",
-    imageUpload: "T�l�verser une image",
-    imageUploading: "T�l�versement...",
+    imageUpload: "Téléverser une image",
+    imageUploading: "Téléversement...",
     imageAlt: "Image de la question (optionnel)",
     removeImage: "Supprimer l'image",
     optional: "optionnel",
     create: "Enregistrer",
-    reset: "R�initialiser",
+    reset: "Réinitialiser",
     filters: "Filtres",
     filterQuestionType: "Type de question",
     filterAll: "Tous",
     tableQuestion: "Question",
-    tableSubject: "Mati�re",
-    tableUnit: "Unit�",
-    tableLesson: "Le�on",
+    tableSubject: "Matière",
+    tableUnit: "Unité",
+    tableLesson: "Leçon",
     tableType: "Type",
-    tableHardness: "Difficult�",
-    tableSkill: "Comp�tence",
+    tableHardness: "Difficulté",
+    tableSkill: "Compétence",
     tableImage: "Image",
-    tableCreated: "Cr�� le",
+    tableCreated: "Créé le",
     tableActions: "Actions",
     delete: "Supprimer",
     deleteConfirm: "Supprimer cette question ?",
     noResults: "Aucune question pour le moment. Ajoutez-en une ci-dessus.",
     loadError: "Impossible de charger les questions.",
-    createSuccess: "Question enregistr�e.",
-    updateSuccess: "Question mise � jour.",
-    uploadTip: "Glissez-d�posez une image ou cliquez pour la t�l�verser. Vous pouvez aussi coller une URL publique.",
+    createSuccess: "Question enregistrée.",
+    updateSuccess: "Question mise à jour.",
+    uploadTip: "Glissez-déposez une image ou cliquez pour la téléverser. Vous pouvez aussi coller une URL publique.",
     refresh: "Actualiser",
-    update: "Mettre � jour la question",
+    update: "Mettre à jour la question",
     cancelEdit: "Annuler la modification",
     editingNotice: "Modification d'une question existante",
     edit: "Modifier",
-    preview: "Aper�u",
+    preview: "Aperçu",
     close: "Fermer",
-    previewTitle: "Aper�u de la question",
+    previewTitle: "Aperçu de la question",
     importLabel: "Importer un CSV",
-    importHint: "T�l�versez un fichier CSV pour ajouter plusieurs questions.",
+    importHint: "Téléversez un fichier CSV pour ajouter plusieurs questions.",
     importingStatus: "Import de la question {current} sur {total}",
     importSubmit: "Enregistrer et continuer",
     skip: "Ignorer",
     cancelImport: "Annuler l'import",
     importError: "Impossible de traiter le fichier CSV.",
-    importEmpty: "Aucune ligne trouv�e dans le CSV.",
-    importFinished: "Import termin�.",
-    importPreviewTitle: "Aper�u de la question import�e",
-    importSkipped: "Question ignor�e.",
+    importEmpty: "Aucune ligne trouvée dans le CSV.",
+    importFinished: "Import terminé.",
+    importPreviewTitle: "Aperçu de la question importée",
+    importSkipped: "Question ignorée.",
     tabMath: "Banque Maths",
     tabEnglish: "Banque Anglais",
     tabTests: "Banque Tests",
     tabDiagnostic: "Banque Diagnostic",
     tabCareer: "Banque Orientation",
-    tableBuilderTitle: "Cr�ateur de tableau",
-    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis ins�rez le tableau dans la question ou la r�ponse.",
+    tableBuilderTitle: "Créateur de tableau",
+    tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis insérez le tableau dans la question ou la réponse.",
     tableBuilderRows: "Lignes",
     tableBuilderCols: "Colonnes",
-    tableBuilderIncludeHeader: "Utiliser la premi�re ligne comme en-t�te",
-    tableBuilderTarget: "Ins�rer dans",
+    tableBuilderIncludeHeader: "Utiliser la première ligne comme en-tête",
+    tableBuilderTarget: "Insérer dans",
     tableBuilderCellsLabel: "Cellules",
     tableBuilderCellPlaceholder: "Cellule",
-    tableBuilderPreview: "Aper�u",
-    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aper�u du tableau.",
-    tableBuilderInsert: "Ins�rer le tableau",
+    tableBuilderPreview: "Aperçu",
+    tableBuilderPreviewEmpty: "Ajoutez du contenu pour afficher l'aperçu du tableau.",
+    tableBuilderInsert: "Insérer le tableau",
     tableBuilderClear: "Effacer les cellules",
-    tableBuilderInsertSuccess: "Tableau ins�r�.",
-    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'ins�rer le tableau.",
-    tableBuilderHide: "Masquer le cr�ateur de tableau",
+    tableBuilderInsertSuccess: "Tableau inséré.",
+    tableBuilderEmptyError: "Veuillez remplir au moins une cellule avant d'insérer le tableau.",
+    tableBuilderHide: "Masquer le créateur de tableau",
     addTable: "Ajouter un tableau",
     addImage: "Ajouter une image",
     hideImage: "Masquer les options d'image",
-    tableBuilderMergedCell: "Fusionn�",
-    tableBuilderSelectedCell: (row, col) => `Cellule s�lectionn�e : ligne ${row + 1}, colonne ${col + 1}`,
+    tableBuilderMergedCell: "Fusionné",
+    tableBuilderSelectedCell: (row, col) => `Cellule sélectionnée : ligne ${row + 1}, colonne ${col + 1}`,
     tableBuilderMergeRight: "Fusionner vers la droite",
     tableBuilderMergeDown: "Fusionner vers le bas",
-    tableBuilderSplitCell: "S�parer la cellule",
+    tableBuilderSplitCell: "Séparer la cellule",
     sectionSetup: "Configuration",
-    sectionSetupDesc: "Choisissez le type de question, la mati�re et les m�tadonn�es.",
-    sectionPrompt: "�nonc� et m�dias",
-    sectionPromptDesc: "R�digez l'�nonc� et ajoutez des notes facultatives.",
-    sectionAnswers: "Choix de r�ponses",
-    sectionAnswersDesc: "Saisissez les options et indiquez la bonne r�ponse.",
-    sectionAssets: "Outils et pi�ces jointes",
-    sectionAssetsDesc: "Utilisez le g�n�rateur de tableaux ou l'import d'images.",
-    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions r�centes.",
-    questionTypeRequired: "Veuillez s�lectionner un type de question.",
-    subjectRequired: "Veuillez choisir la mati�re.",
-    correctAnswerRequired: "Veuillez indiquer la r�ponse correcte.",
-    unitRequired: "Veuillez choisir l'unit�.",
-    lessonRequired: "Veuillez choisir la le�on.",
+    sectionSetupDesc: "Choisissez le type de question, la matière et les métadonnées.",
+    sectionPrompt: "Énoncé et médias",
+    sectionPromptDesc: "Rédigez l'énoncé et ajoutez des notes facultatives.",
+    sectionAnswers: "Choix de réponses",
+    sectionAnswersDesc: "Saisissez les options et indiquez la bonne réponse.",
+    sectionAssets: "Outils et pièces jointes",
+    sectionAssetsDesc: "Utilisez le générateur de tableaux ou l'import d'images.",
+    sectionFiltersDesc: "Filtrez la liste ou rechargez les questions récentes.",
+    questionTypeRequired: "Veuillez sélectionner un type de question.",
+    subjectRequired: "Veuillez choisir la matière.",
+    correctAnswerRequired: "Veuillez indiquer la réponse correcte.",
+    unitRequired: "Veuillez choisir l'unité.",
+    lessonRequired: "Veuillez choisir la leçon.",
   },
 };
 
@@ -1378,7 +1378,7 @@ const validate = () => {
               </ol>
             ) : (
               <div style={{ background: "#e0f2fe", borderRadius: 6, padding: "6px 10px", color: "#0c4a6e" }}>
-                {currentImportRow.correct_answer || "�"}
+                {currentImportRow.correct_answer || "—"}
               </div>
             )}
             {currentImportRow.image_url && (
@@ -1462,17 +1462,17 @@ const validate = () => {
                     <td style={tdStyle}>{subjectLabel(row.subject, lang)}</td>
                     {bank.supportsUnitLesson && (
                       <>
-                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "�"}</td>
-                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "�"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "—"}</td>
+                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "—"}</td>
                       </>
                     )}
                     <td style={tdStyle}>{row.question_type === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
                     <td style={tdStyle}>{hardnessLabel(row.hardness, lang)}</td>
-                    <td style={tdStyle}>{row.skill || "�"}</td>
+                    <td style={tdStyle}>{row.skill || "—"}</td>
                     <td style={tdStyle}>
                       {row.image_url ? (() => {
                         const href = resolveImageUrl(row.image_url);
-                        if (!href) return "�";
+                        if (!href) return "—";
                         const isLocal = row.image_url.startsWith(LOCAL_IMAGE_PREFIX);
                         if (isLocal) {
                           return (
@@ -1491,7 +1491,7 @@ const validate = () => {
                           </a>
                         );
                       })() : (
-                        "�"
+                        "—"
                       )}
                     </td>
                     <td style={tdStyle}>{new Date(row.created_at).toLocaleString()}</td>
@@ -1850,8 +1850,8 @@ function TableBuilderSection({
                       />
                       {(cell.rowspan > 1 || cell.colspan > 1) && (
                         <div style={tableBuilderSpanBadgeStyle}>
-                          {cell.rowspan > 1 && <span>{`rowspan �${cell.rowspan}`}</span>}
-                          {cell.colspan > 1 && <span>{`colspan �${cell.colspan}`}</span>}
+                          {cell.rowspan > 1 && <span>{`rowspan —${cell.rowspan}`}</span>}
+                          {cell.colspan > 1 && <span>{`colspan —${cell.colspan}`}</span>}
                         </div>
                       )}
                     </>
@@ -2773,7 +2773,7 @@ const renderMathSegments = (text, block) => {
 
 function MathText({ value, block = false }) {
   const raw = value == null ? "" : String(value).trim();
-  if (!raw) return <span>�</span>;
+  if (!raw) return <span>—</span>;
 
   const decoded = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   const normalized = decoded.replace(/\\\\/g, "\\").replace(/\r\n/g, "\n");
@@ -2825,7 +2825,7 @@ function firstWords(text, count = 3) {
 
 function subjectLabel(value, lang) {
   const option = SUBJECT_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "�";
+  if (!option) return value || "—";
   return option.label[lang] || option.label.EN;
 }
 
@@ -2834,7 +2834,7 @@ function unitLabel(subject, value, lang) {
     const option = MATH_UNIT_OPTIONS.find((opt) => opt.value === value);
     if (option) return option.label[lang] || option.label.EN;
   }
-  return value || "�";
+  return value || "—";
 }
 
 function lessonLabel(subject, unit, value, lang) {
@@ -2843,12 +2843,12 @@ function lessonLabel(subject, unit, value, lang) {
     const option = lessons.find((opt) => opt.value === value);
     if (option) return option.label[lang] || option.label.EN;
   }
-  return value || "�";
+  return value || "—";
 }
 
 function hardnessLabel(value, lang) {
   const option = HARDNESS_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "�";
+  if (!option) return value || "—";
   return option.label[lang] || option.label.EN;
 }
 

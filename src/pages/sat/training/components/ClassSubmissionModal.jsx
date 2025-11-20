@@ -73,14 +73,14 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
         </div>
 
         <div style={{ marginTop: 10, color: "#6b7280", display: "grid", gap: 4 }}>
-          <div><strong>Student:</strong> {log.user_email || "�"}</div>
+          <div><strong>Student:</strong> {log.user_email || "—"}</div>
           <div>
-            <strong>Section:</strong> {log.section || "�"} &nbsp;�&nbsp;
-            <strong>Unit:</strong> {log.unit || "�"} &nbsp;�&nbsp;
-            <strong>Lesson:</strong> {log.lesson || "�"}
+            <strong>Section:</strong> {log.section || "—"} &nbsp;—&nbsp;
+            <strong>Unit:</strong> {log.unit || "—"} &nbsp;—&nbsp;
+            <strong>Lesson:</strong> {log.lesson || "—"}
           </div>
           <div>
-            <strong>Date:</strong> {fmtDate(log.ts)} &nbsp;�&nbsp;
+            <strong>Date:</strong> {fmtDate(log.ts)} &nbsp;—&nbsp;
             <strong>Time:</strong> {fmtDate(log.ts, true)}
           </div>
           <div><strong>Duration:</strong> {fmtDuration(Number(log.elapsed_sec || 0))}</div>
@@ -158,7 +158,7 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
                             );
                           })()}
                         </td>
-                        <td style={{ padding: 8 }}>{chosen ?? "�"}</td>
+                        <td style={{ padding: 8 }}>{chosen ?? "—"}</td>
                         <td
                           style={{
                             padding: 8,
@@ -166,7 +166,7 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
                           }}
                         >
                           {chosen == null || answer == null
-                            ? "�"
+                            ? "—"
                             : isCorrect
                             ? "Correct"
                             : `Wrong (Ans: ${answer})`}

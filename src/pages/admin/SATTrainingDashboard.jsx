@@ -319,7 +319,7 @@ export default function SATTrainingDashboard({ onNavigate }) {
               <h3 style={{ marginTop:0 }}>Submission Details</h3>
               <button onClick={closeView} style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer' }}>Close</button>
             </div>
-            <div style={{ color:'#6b7280', marginBottom:8 }}>User: {viewRow.user_email || '--'} �- Date: {fmt(viewRow.ts)} {fmt(viewRow.ts,true)}</div>
+            <div style={{ color:'#6b7280', marginBottom:8 }}>User: {viewRow.user_email || '--'} — Date: {fmt(viewRow.ts)} {fmt(viewRow.ts,true)}</div>
             <div style={{ color:'#6b7280', marginBottom:8 }}>Duration: {fmtDur(Number(viewRow.elapsed_sec || 0))}</div>
             <div style={{ borderTop:'1px solid #e5e7eb', paddingTop:10 }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
