@@ -177,9 +177,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         }}
       >
         <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.career.title}</h3>
-            <div style={{ marginTop: "auto" }}>
+            <div>
               <Btn variant="primary" to="career" onClick={navTo("career")}>
                 {home.career.cta}
               </Btn>
@@ -188,9 +188,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         </Card>
 
         <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.satDiagnostic.title}</h3>
-            <div style={{ marginTop: "auto" }}>
+            <div>
               <Btn variant="primary" to="sat" onClick={navTo("sat")}>
                 {home.satDiagnostic.cta}
               </Btn>
@@ -199,9 +199,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         </Card>
 
         <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.satTraining.title}</h3>
-            <div style={{ marginTop: "auto" }}>
+            <div>
               <Btn variant="secondary" to="sat-training" onClick={navTo("sat-training")}>
                 {home.satTraining.cta}
               </Btn>
@@ -210,9 +210,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         </Card>
 
         <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.aiEducator.title}</h3>
-            <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <Btn
                 variant="secondary"
                 onClick={handleAiEducatorClick}
@@ -229,9 +229,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         </Card>
 
         <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 180 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h3 style={{ marginTop: 0, color: "#111827" }}>{home.certificate.title}</h3>
-            <div style={{ marginTop: "auto" }}>
+            <div>
               <Btn variant="primary" to="verify-certificate" onClick={navTo("verify-certificate")}>
                 {home.certificate.cta}
               </Btn>
