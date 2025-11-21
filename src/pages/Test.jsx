@@ -315,6 +315,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
   const cd = useCountdown(timerMin * 60);
+  const hasEndedRef = useRef(false);
   const [startTs, setStartTs] = useState(null);
 
   const [shuffledRIASEC, setShuffledRIASEC] = useState([]);
