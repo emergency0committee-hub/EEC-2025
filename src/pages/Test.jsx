@@ -254,8 +254,8 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   }, [fetchCareerCode]);
 
   const [timerMin, setTimerMin] = useState(() => {
-    const saved = Number(localStorage.getItem("cg_timer_min") || 30);
-    return Number.isFinite(saved) && saved > 0 ? saved : 30;
+    const saved = Number(localStorage.getItem("cg_timer_min") || 60);
+    return Number.isFinite(saved) && saved > 0 ? saved : 60;
   });
   useEffect(() => { localStorage.setItem("cg_timer_min", String(timerMin)); }, [timerMin]);
   useEffect(() => {
@@ -640,6 +640,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
     if (typeof setLang === "function") setLang(chosen);
     setExamLocked(true);
     // Shuffle questions each time the test starts
+    hasEndedRef.current = false;
     setShuffledRIASEC(shuffleArray(Q_RIASEC));
     cd.reset(); cd.start();
     setStartTs(Date.now());
@@ -647,6 +648,8 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   };
 
   const endTest = async () => {
+    if (hasEndedRef.current) return;
+    hasEndedRef.current = true;
     try {
       const topCodes = Array.isArray(top3) ? top3.map(t => t.code || t) : [];
       const finishedAt = Date.now();
@@ -677,8 +680,17 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       console.error("Save failed:", e);
       const msg = e?.message || String(e);
       alert(`Could not save your results. ${msg}`);
+      hasEndedRef.current = false; // allow retry if save failed
     }
   };
+
+  // Auto-submit when timer hits zero
+  useEffect(() => {
+    if (!examLocked || !startTs) return;
+    if (cd.remaining <= 0) {
+      endTest();
+    }
+  }, [cd.remaining, examLocked, startTs, endTest]);
 
   /* ---------- Keyboard Shortcuts ---------- */
   useEffect(() => {

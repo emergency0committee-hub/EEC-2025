@@ -18,8 +18,8 @@ export default function AdminDashboard({ onNavigate }) {
   const [selectedSchool, setSelectedSchool] = useState("");
   const [bulkSet, setBulkSet] = useState(null);
   const [timerMin, setTimerMin] = useState(() => {
-    const saved = Number(localStorage.getItem("cg_timer_min") || 30);
-    return Number.isFinite(saved) && saved > 0 ? saved : 30;
+    const saved = Number(localStorage.getItem("cg_timer_min") || 60);
+    return Number.isFinite(saved) && saved > 0 ? saved : 60;
   });
 
   useEffect(() => {
