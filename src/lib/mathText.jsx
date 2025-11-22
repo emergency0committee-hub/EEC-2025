@@ -244,7 +244,11 @@ export const renderMathText = (value) => {
   const trimmed = decoded.trim();
   if (!trimmed) return null;
 
-  if (HTML_CONTENT_REGEX.test(trimmed)) {
+  INLINE_REGEX.lastIndex = 0;
+  const hasMath = INLINE_REGEX.test(trimmed);
+  INLINE_REGEX.lastIndex = 0;
+
+  if (HTML_CONTENT_REGEX.test(trimmed) && !hasMath) {
     const sanitized = sanitizeRichTextHtml(trimmed);
     const overflow = sanitized.includes("<table") ? "auto" : "visible";
     return [

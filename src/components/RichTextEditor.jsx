@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import { InlineMath, BlockMath } from "react-katex";
 import {
   HIGHLIGHT_COLOR,
   hasVisualContent,
@@ -47,6 +48,7 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
   const fileInputRef = useRef(null);
   const toolbarWrapperRef = useRef(null);
   const [toolbarVisible, setToolbarVisible] = useState(() => hasVisualContent(value || ""));
+  const [equationModal, setEquationModal] = useState({ open: false, text: "", display: false });
 
   const updateToolbarState = () => {
     if (!editorRef.current || typeof document.queryCommandState !== "function") return;
@@ -155,14 +157,24 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
 
   const handleAttachmentToggle = () => setMenuOpen((prev) => !prev);
 
+  const openEquationModal = () => {
+    setEquationModal((prev) => ({ ...prev, open: true }));
+    setMenuOpen(false);
+  };
+
+  const closeEquationModal = () => {
+    setEquationModal({ open: false, text: "", display: false });
+  };
+
   const handleInsertEquation = () => {
-    const latex = window.prompt("Enter LaTeX (without surrounding $):");
-    if (!latex) return;
-    const trimmed = latex.trim();
-    if (!trimmed) return;
-    const isBlock = window.confirm("Insert as display equation? OK = block, Cancel = inline.");
-    const snippet = isBlock ? `\n$$${trimmed}$$\n` : `\\(${trimmed}\\)`;
+    const trimmed = (equationModal.text || "").trim();
+    if (!trimmed) {
+      alert("Enter an equation first.");
+      return;
+    }
+    const snippet = equationModal.display ? `\n$$${trimmed}$$\n` : `\\(${trimmed}\\)`;
     insertText(snippet);
+    closeEquationModal();
   };
 
   const handleQuickInsertTable = () => {
@@ -388,7 +400,7 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
     {
       id: "equation",
       title: "Insert equation",
-      action: handleInsertEquation,
+      action: openEquationModal,
       icon: <img src={EQUATION_ICON_SRC} alt="Equation" style={{ width: 16, height: 16 }} />,
     },
   ];
@@ -439,6 +451,29 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
   });
 
   const placeholderVisible = !hasVisualContent(value || "");
+
+  const equationSymbols = [
+    { label: "Fraction", insert: "\\frac{a}{b}" },
+    { label: "Square root", insert: "\\sqrt{x}" },
+    { label: "Exponent", insert: "x^{2}" },
+    { label: "Subscript", insert: "a_{i}" },
+    { label: "Pi", insert: "\\pi" },
+    { label: "Theta", insert: "\\theta" },
+    { label: "Alpha", insert: "\\alpha" },
+    { label: "Beta", insert: "\\beta" },
+    { label: "Delta", insert: "\\Delta" },
+    { label: "Integral", insert: "\\int" },
+    { label: "Summation", insert: "\\sum" },
+    { label: "Infinity", insert: "\\infty" },
+    { label: "Plus/Minus", insert: "\\pm" },
+    { label: "Times", insert: "\\times" },
+    { label: "Divide", insert: "\\div" },
+    { label: "Less/Equal", insert: "\\le" },
+    { label: "Greater/Equal", insert: "\\ge" },
+    { label: "Not Equal", insert: "\\neq" },
+    { label: "Angle", insert: "\\angle" },
+    { label: "Degree", insert: "^{\\circ}" },
+  ];
 
   return (
     <div style={{ display: "grid", gap: 8 }}>
@@ -543,6 +578,130 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
         />
       </div>
       {variant !== "compact" && <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>Toolbar applies formatting directly; HTML is stored automatically.</p>}
+
+      {equationModal.open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 12,
+          }}
+          onClick={closeEquationModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: 16,
+              width: "min(760px, 96vw)",
+              boxShadow: "0 15px 40px rgba(0,0,0,0.14)",
+              display: "grid",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <h3 style={{ margin: 0 }}>Insert equation</h3>
+              <button type="button" onClick={closeEquationModal} style={{ border: "none", background: "transparent", cursor: "pointer", fontWeight: 700 }}>
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              <label style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>
+                LaTeX
+                <textarea
+                  value={equationModal.text}
+                  onChange={(e) => setEquationModal((prev) => ({ ...prev, text: e.target.value }))}
+                  placeholder="e.g. \\frac{a}{b} + \\sqrt{x}"
+                  rows={3}
+                  style={{ width: "100%", border: "1px solid #d1d5db", borderRadius: 8, padding: 10, fontFamily: "monospace", fontSize: 13, marginTop: 6 }}
+                />
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {equationSymbols.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => setEquationModal((prev) => ({ ...prev, text: `${(prev.text || "").trim()} ${item.insert}`.trim() }))}
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      background: "#f9fafb",
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <input
+                  type="radio"
+                  name="eq-mode"
+                  checked={!equationModal.display}
+                  onChange={() => setEquationModal((prev) => ({ ...prev, display: false }))}
+                />
+                Inline
+              </label>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                <input
+                  type="radio"
+                  name="eq-mode"
+                  checked={equationModal.display}
+                  onChange={() => setEquationModal((prev) => ({ ...prev, display: true }))}
+                />
+                Display (block)
+              </label>
+            </div>
+
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, background: "#f9fafb", minHeight: 60 }}>
+              <div style={{ fontWeight: 600, fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Preview</div>
+              <div style={{ color: "#111827" }}>
+                {(() => {
+                  const trimmed = (equationModal.text || "").trim();
+                  if (!trimmed) return <span style={{ color: "#9ca3af" }}>Start typing to preview</span>;
+                  const MathComponent = equationModal.display ? BlockMath : InlineMath;
+                  try {
+                    return <MathComponent>{trimmed}</MathComponent>;
+                  } catch {
+                    return <span style={{ color: "#b91c1c" }}>Invalid LaTeX</span>;
+                  }
+                })()}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button
+                type="button"
+                onClick={closeEquationModal}
+                style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertEquation}
+                style={{ border: "none", background: "#2563eb", color: "#fff", borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontWeight: 700 }}
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

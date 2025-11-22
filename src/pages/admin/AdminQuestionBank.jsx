@@ -8,6 +8,7 @@ import UserMenu from "../../components/UserMenu.jsx";
 import { LANGS } from "../../i18n/strings.js";
 import Btn from "../../components/Btn.jsx";
 import { BlockMath, InlineMath } from "react-katex";
+import { renderMathText } from "../../lib/mathText.jsx";
 import {
   createAssignmentQuestion,
   deleteAssignmentQuestion,
@@ -23,7 +24,7 @@ import {
   createDefaultForm,
   normalizeSubjectValue,
 } from "../../lib/questionBanks.js";
-import { toEditorHtml } from "../../lib/richText.js";
+import { toEditorHtml, sanitizeRichTextHtml } from "../../lib/richText.js";
 
 const LOCAL_IMAGE_STORE_KEY = "cg_question_images_v1";
 const LOCAL_IMAGE_PREFIX = "local-image://";
@@ -1585,39 +1586,95 @@ const validate = () => {
             </div>
 
             <div style={{ display: "grid", gap: 16 }}>
-              <div style={{ color: "#374151" }}>
-                <MathText value={previewRow.question} block />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                  gap: 12,
+                  alignItems: "flex-start",
+                }}
+              >
+                {(() => {
+                  const questionHasImg = /<img[^>]+src=/i.test(previewRow.question || "");
+                  const questionHtml = questionHasImg ? sanitizeRichTextHtml(previewRow.question || "") : null;
+                  return (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <div style={{ marginBottom: 4, color: "#6b7280", fontSize: 13 }}>
+                        Question preview (matches test view)
+                      </div>
+                      <div style={{ color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
+                        {questionHasImg ? (
+                          <div
+                            style={{ overflowX: "auto" }}
+                            dangerouslySetInnerHTML={{ __html: questionHtml }}
+                          />
+                        ) : (
+                          renderMathText(previewRow.question)
+                        )}
+                      </div>
+                      {previewRow.image_url && (
+                        <div style={{ marginTop: 4 }}>
+                          <img
+                            src={resolveImageUrl(previewRow.image_url)}
+                            alt=""
+                            style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid #e5e7eb" }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  {previewRow.question_type === "mcq" ? (
+                    [previewRow.answer_a, previewRow.answer_b, previewRow.answer_c, previewRow.answer_d].map((answer, index) => {
+                      const letter = String.fromCharCode(65 + index);
+                      return (
+                        <div
+                          key={letter}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            padding: "12px 14px",
+                            borderRadius: 10,
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 999,
+                              border: "1px solid #d1d5db",
+                              color: "#111827",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              background: "#f9fafb",
+                            }}
+                          >
+                            {letter}
+                          </span>
+                          <span style={{ color: "#111827" }}>{renderMathText(answer)}</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder={copy.fillLabel}
+                        readOnly
+                        style={{ ...inputStyle, cursor: "not-allowed", background: "#f3f4f6" }}
+                        value=""
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-
-              {previewRow.image_url && (
-                <div>
-                  <img
-                    src={resolveImageUrl(previewRow.image_url)}
-                    alt=""
-                    style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid #e5e7eb" }}
-                  />
-                </div>
-              )}
-
-              {previewRow.question_type === "mcq" ? (
-                <ol style={{ listStyle: "upper-alpha", paddingLeft: 20, margin: 0, display: "grid", gap: 8 }}>
-                  {[previewRow.answer_a, previewRow.answer_b, previewRow.answer_c, previewRow.answer_d].map((answer, index) => (
-                    <li key={index} style={{ background: "#f9fafb", borderRadius: 8, padding: "8px 12px" }}>
-                      <MathText value={answer} />
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <div>
-                  <input
-                    type="text"
-                    placeholder={copy.fillLabel}
-                    readOnly
-                    style={{ ...inputStyle, cursor: "not-allowed", background: "#f3f4f6" }}
-                    value=""
-                  />
-                </div>
-              )}
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "#6b7280", fontSize: 14 }}>
                 <span>
@@ -2675,7 +2732,7 @@ function tableTargetLabel(copy, value) {
 const ALLOWED_TABLE_TAGS = new Set(["TABLE", "TBODY", "THEAD", "TFOOT", "TR", "TD", "TH", "COLGROUP", "COL", "SPAN", "P", "BR", "B", "STRONG", "I", "EM", "U", "SMALL"]);
 const ALLOWED_TABLE_ATTRS = new Set(["rowspan", "colspan", "align", "style"]);
 
-const sanitizeRichTextHtml = (html) => {
+const sanitizeTableHtml = (html) => {
   if (typeof window === "undefined" || typeof DOMParser === "undefined") return html;
   try {
     const parser = new DOMParser();
@@ -2718,7 +2775,7 @@ const sanitizeRichTextHtml = (html) => {
 };
 
 const renderMathSegments = (text, block) => {
-  const inlineRegex = /\\\[(.+?)\\\]|\\\((.+?)\\\)|\$\$(.+?)\$\$/gs;
+  const inlineRegex = /\\\[(.+?)\\\]|\\\((.+?)\\\)|\$\$(.+?)\$\$|\$([^$]+?)\$/gs;
   const segments = [];
   let match;
   let lastIndex = 0;
@@ -2793,11 +2850,19 @@ function MathText({ value, block = false }) {
   }
 
   const htmlRegex = /<\s*(table|img|div|p|span|br|figure|figcaption|ul|ol|li|mark|strong|em|u|small|blockquote|hr|a)\b/i;
-  if (htmlRegex.test(normalized)) {
-    const sanitized = sanitizeRichTextHtml(normalized);
+  const hasMathMarkers = /\\\[|\\\(|\$\$|\$[^$]+\$/.test(normalized);
+  if (htmlRegex.test(normalized) && !hasMathMarkers) {
+    let sanitized = sanitizeTableHtml(normalized);
+    sanitized = sanitized.replace(/ style="[^"]*"/gi, "").replace(/&nbsp;/gi, " ");
+    sanitized = sanitized
+      .replace(/<\/?(span|font)[^>]*>/gi, "")
+      .trim();
     return (
       <div
-        style={{ overflowX: sanitized.includes("<table") ? "auto" : "visible" }}
+        style={{
+          overflowX: sanitized.includes("<table") ? "auto" : "visible",
+          whiteSpace: "normal",
+        }}
         dangerouslySetInnerHTML={{ __html: sanitized }}
       />
     );
