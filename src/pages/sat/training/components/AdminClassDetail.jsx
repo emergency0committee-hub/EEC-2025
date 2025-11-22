@@ -1,3 +1,4 @@
+import React, { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Card } from "../../../../components/Layout.jsx";
 import Btn from "../../../../components/Btn.jsx";
@@ -85,6 +86,7 @@ export default function AdminClassDetail({
   formatDuration,
   pillStyles,
   deleteResource,
+  addLessonResource,
   onNavigate,
   classLogs,
   logsLoading,
@@ -93,6 +95,34 @@ export default function AdminClassDetail({
   adaptiveInsights,
   onDeleteLog,
 }) {
+  const [lessonForm, setLessonForm] = useState({ title: "", url: "", file: null });
+  const [savingLesson, setSavingLesson] = useState(false);
+  const fileInputRef = useRef(null);
+  const getKind = (res) => String(res?.payload?.kindOverride || res?.kind || "").toLowerCase();
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  const handleAddLesson = async () => {
+    const title = (lessonForm.title || "").trim();
+    const url = (lessonForm.url || "").trim();
+    const file = lessonForm.file || null;
+    if (!title || (!url && !file)) {
+      alert("Enter a title and either upload a PDF or paste a link.");
+      return;
+    }
+    setSavingLesson(true);
+    try {
+      await addLessonResource({ title, url, file });
+      setLessonForm({ title: "", url: "", file: null });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      alert("Resource added.");
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "Failed to add resource.");
+    } finally {
+      setSavingLesson(false);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -108,7 +138,7 @@ export default function AdminClassDetail({
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {["classwork", "analytics"].map((id) => (
+          {["lessons", "classwork", "analytics"].map((id) => (
             <button
               key={id}
               onClick={() => setClassTab(id)}
@@ -122,10 +152,75 @@ export default function AdminClassDetail({
                 fontWeight: 600,
               }}
             >
-              {id === "classwork" ? "Classwork" : "Analysis"}
+              {id === "lessons" ? "Resources" : id === "classwork" ? "Assessments" : "Analysis"}
             </button>
           ))}
         </div>
+
+        {classTab === "lessons" && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources (PDF/Links)</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                <input
+                  type="text"
+                  placeholder="Resource title"
+                  value={lessonForm.title}
+                  onChange={(e) => setLessonForm((prev) => ({ ...prev, title: e.target.value }))}
+                  style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 220 }}
+                />
+                <input
+                  type="url"
+                  placeholder="PDF link (optional if you upload a file)"
+                  value={lessonForm.url}
+                  onChange={(e) => setLessonForm((prev) => ({ ...prev, url: e.target.value }))}
+                  style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 320 }}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => setLessonForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }))}
+                  style={{ padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 200 }}
+                />
+                <Btn variant="primary" onClick={handleAddLesson} disabled={savingLesson}>
+                  {savingLesson ? "Saving..." : "Add Resource"}
+                </Btn>
+              </div>
+              <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 4 }}>
+                Upload a PDF or paste a link. We’ll store and share the public link with students.
+              </div>
+              {resLoading ? (
+                <div style={{ color: "#6b7280" }}>Loading…</div>
+              ) : resources.filter((r) => getKind(r) === "lesson").length === 0 ? (
+                <div style={{ color: "#6b7280" }}>No resources yet.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+                  {resources
+                    .filter((r) => getKind(r) === "lesson")
+                    .map((resource) => (
+                      <div key={resource.id || resource.title} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ fontWeight: 700 }}>{resource.title || "Resource"}</div>
+                          <span style={{ fontSize: 12, color: "#0ea5e9" }}>Resource</span>
+                        </div>
+                        <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                          {resource.url && (
+                            <Btn variant="secondary" onClick={() => setPreviewUrl(resource.url)}>
+                              View PDF
+                            </Btn>
+                          )}
+                          <Btn variant="back" onClick={() => deleteResource(resource)}>
+                            Delete
+                          </Btn>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {classTab === "classwork" && (
           <div style={{ display: "grid", gap: 12 }}>
@@ -341,7 +436,6 @@ export default function AdminClassDetail({
                 </div>
               )}
             </div>
-
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
               <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources</div>
               {resLoading ? (
@@ -350,7 +444,9 @@ export default function AdminClassDetail({
                 <div style={{ color: "#6b7280" }}>No resources yet.</div>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-                  {resources.map((resource) => {
+                  {resources
+                    .filter((r) => getKind(r) !== "lesson")
+                    .map((resource) => {
                     const key = resource.id || `${resource.title}_${resource.url}`;
                     const meta = extractResourceMeta(resource);
                     const questions = decodeResourceQuestions(resource) || [];
@@ -515,7 +611,33 @@ export default function AdminClassDetail({
           </div>
           </>
         )}
-      </Card>
+          </Card>
+        {previewUrl && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              zIndex: 9999,
+            }}
+            onClick={() => setPreviewUrl("")}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: "#ffffff", borderRadius: 12, width: "90%", height: "90%", display: "grid", gridTemplateRows: "auto 1fr" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>
+                <div style={{ fontWeight: 700 }}>Preview</div>
+                <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
+              </div>
+              <iframe title="Lesson PDF" src={previewUrl} style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }} />
+            </div>
+          </div>
+        )}
     </>
   );
 }
@@ -554,6 +676,7 @@ AdminClassDetail.propTypes = {
   formatDuration: PropTypes.func.isRequired,
   pillStyles: PropTypes.object.isRequired,
   deleteResource: PropTypes.func.isRequired,
+  addLessonResource: PropTypes.func.isRequired,
   onNavigate: PropTypes.func.isRequired,
   classLogs: PropTypes.array.isRequired,
   logsLoading: PropTypes.bool.isRequired,

@@ -10,6 +10,7 @@ import PeopleCard from "./PeopleCard.jsx";
 const STUDENT_TABS = [
   { id: "stream", label: "Stream" },
   { id: "classwork", label: "Classwork" },
+  { id: "lessons", label: "Resources" },
   { id: "people", label: "People" },
 ];
 
@@ -29,6 +30,17 @@ export default function StudentTabsPanel({
   renderResourceCard,
   people,
 }) {
+  const renderLessonsTab = () => (
+    <StudentClassworkPanel
+      isLoading={studentResLoading}
+      resourceGroupOrder={[{ key: "lesson", title: "Resources", subtitle: "PDF lessons or readings shared by your teacher." }]}
+      groupedResources={groupedStudentResources}
+      renderResourceCard={(resource) => renderResourceCard(resource)}
+      hasAnyResource={(groupedStudentResources.lesson || []).length > 0}
+      onBackHome={onNavigateHome}
+    />
+  );
+
   const renderStreamTab = () => (
     <div style={{ display: "grid", gap: 12 }}>
       {streamPosts.map((post) => (
@@ -93,6 +105,8 @@ export default function StudentTabsPanel({
           onBackHome={onNavigateHome}
         />
       )}
+
+      {tab === "lessons" && renderLessonsTab()}
 
       {tab === "people" && renderPeopleTab()}
     </div>

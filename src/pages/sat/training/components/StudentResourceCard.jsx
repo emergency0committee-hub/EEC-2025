@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "../../../../components/Btn.jsx";
 
@@ -25,8 +25,21 @@ export default function StudentResourceCard({
   decodeQuestions,
   extractMeta,
 }) {
+  const [previewUrl, setPreviewUrl] = useState("");
   const computed = useMemo(() => {
     if (!resource) return null;
+    const kindLower = String(
+      resource?.payload?.kindOverride ||
+      resource?.kind ||
+      "classwork"
+    ).toLowerCase();
+    if (kindLower === "lesson") {
+      return {
+        kind: kindLower,
+        title: resource.title || "Lesson",
+        url: resource.url || (resource.payload && resource.payload.url) || "",
+      };
+    }
     const items = decodeQuestions(resource) || [];
     const meta = extractMeta(resource);
     const practiceMeta = { ...meta };
@@ -38,7 +51,6 @@ export default function StudentResourceCard({
     const questionRefs = Boolean(questionMetaSource.questionRefs || refsLikely);
     const referenceBank = Array.isArray(items) ? items.find((item) => item?.bank)?.bank : null;
     const questionBank = questionMetaSource.questionBank || questionMetaSource.bank || referenceBank || null;
-    const kindLower = String(resource.kind || "classwork").toLowerCase();
     if (kindLower === "homework") {
       practiceMeta.resumeMode = "restart";
       practiceMeta.durationSec = null;
@@ -57,7 +69,7 @@ export default function StudentResourceCard({
     const allowRetake = practiceMeta?.allowRetake !== false;
     const limitReached = items.length > 0 && completed && ((!allowRetake && attemptLimit == null) || (attemptLimit != null && attemptCount >= attemptLimit));
     const baseCanStart = items.length > 0 && !limitReached;
-    const kindLabel = (resource.kind || "classwork").toLowerCase();
+    const kindLabel = kindLower;
     const prettyKind = kindLabel.charAt(0).toUpperCase() + kindLabel.slice(1);
     const durationLabel = items.length > 0 ? formatDuration(practiceMeta?.durationSec) : null;
     const deadlineIso =
@@ -100,7 +112,7 @@ export default function StudentResourceCard({
       if (questionBank && !metaForPractice.questionBank) metaForPractice.questionBank = questionBank;
       if (deadlineIso && !metaForPractice.deadline) metaForPractice.deadline = deadlineIso;
       const practicePayload = {
-        kind: resource.kind || "classwork",
+        kind: kindLabel || "classwork",
         resourceId: resource.id || null,
         className: studentClass || null,
         subject: normalizedSubject || null,
@@ -139,6 +151,54 @@ export default function StudentResourceCard({
   }, [resource, studentAttempts, studentClass, decodeQuestions, extractMeta, formatDuration, onNavigate]);
 
   if (!resource || !computed) return null;
+
+  if (computed.kind === "lesson") {
+    const key = resource.id || `${computed.title}_${computed.url || "lesson"}`;
+    return (
+      <>
+        <div key={key} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontWeight: 700 }}>{computed.title}</div>
+            <span style={{ fontSize: 12, color: "#0ea5e9" }}>Lesson</span>
+          </div>
+          {!computed.url && <div style={{ color: "#6b7280", fontSize: 12 }}>No file provided.</div>}
+          <div style={{ marginTop: 4, display: "flex", gap: 8 }}>
+            {computed.url && (
+              <Btn variant="secondary" onClick={() => setPreviewUrl(computed.url)}>
+                View PDF
+              </Btn>
+            )}
+          </div>
+        </div>
+        {previewUrl && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              zIndex: 9999,
+            }}
+            onClick={() => setPreviewUrl("")}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: "#ffffff", borderRadius: 12, width: "90%", height: "90%", display: "grid", gridTemplateRows: "auto 1fr" }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>
+                <div style={{ fontWeight: 700 }}>Preview</div>
+                <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
+              </div>
+              <iframe title="Lesson PDF" src={previewUrl} style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }} />
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   const {
     items,

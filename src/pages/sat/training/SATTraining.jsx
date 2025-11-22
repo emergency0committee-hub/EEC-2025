@@ -81,6 +81,11 @@ const formatLessonLabel = (subject, unit, lesson) => {
 const DEFAULT_DIFFICULTY =
   (HARDNESS_OPTIONS.find((opt) => opt.value === "medium") || HARDNESS_OPTIONS[0] || {}).value || "";
 
+const RESOURCE_BUCKET =
+  import.meta.env.VITE_CLASS_RESOURCE_BUCKET ||
+  import.meta.env.VITE_ASSIGNMENT_MEDIA_BUCKET ||
+  "assignment-media";
+
 const createDefaultAutoAssign = (bankId = "math") => {
   const bank = resolveBankConfig(bankId);
   const subject = bank.subjectLocked
@@ -215,22 +220,27 @@ export default function SATTraining({ onNavigate }) {
   const [studentAttempts, setStudentAttempts] = useState({});
   const [studentChatRefresh, setStudentChatRefresh] = useState(0);
   const [adminChatRefresh, setAdminChatRefresh] = useState(0);
+  const resourceKind = (res) => String(res?.payload?.kindOverride || res?.kind || "classwork").toLowerCase();
+
   const groupedStudentResources = useMemo(() => {
     const groups = {
       exam: [],
       quiz: [],
       classwork: [],
       homework: [],
+      lesson: [],
       other: [],
     };
     (studentResources || []).forEach((resource) => {
-      const kind = String(resource?.kind || "classwork").toLowerCase();
+      const kind = resourceKind(resource);
       if (["exam", "sat", "test", "practice"].includes(kind)) {
         groups.exam.push(resource);
       } else if (kind === "quiz") {
         groups.quiz.push(resource);
       } else if (kind === "homework") {
         groups.homework.push(resource);
+      } else if (kind === "lesson") {
+        groups.lesson.push(resource);
       } else if (kind === "classwork") {
         groups.classwork.push(resource);
       } else {
@@ -241,9 +251,7 @@ export default function SATTraining({ onNavigate }) {
   }, [studentResources]);
   const hasAnyStudentResource = useMemo(
     () =>
-      ["exam", "quiz", "classwork", "homework", "other"].some(
-        (key) => (groupedStudentResources[key] || []).length > 0,
-      ),
+      ["exam", "quiz", "classwork", "homework", "lesson", "other"].some((key) => (groupedStudentResources[key] || []).length > 0),
     [groupedStudentResources],
   );
   const [autoAssign, setAutoAssign] = useState(() => createDefaultAutoAssign("math"));
@@ -1497,6 +1505,46 @@ export default function SATTraining({ onNavigate }) {
     }
   };
 
+  const uploadResourceFile = async (file) => {
+    if (!file) throw new Error("No file provided");
+    const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name.replace(/\s+/g, "_")}`;
+    const path = `class-resources/${selectedClass || "general"}/${safeName}`;
+    const { error } = await supabase.storage.from(RESOURCE_BUCKET).upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType: file.type || "application/pdf",
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from(RESOURCE_BUCKET).getPublicUrl(path);
+    return data?.publicUrl || null;
+  };
+
+  const addLessonResource = async ({ title, url, file }) => {
+    if (!selectedClass) throw new Error("Select a class first");
+    const cleanTitle = String(title || "").trim();
+    const cleanUrl = String(url || "").trim();
+    if (!cleanTitle) throw new Error("Title is required");
+    let finalUrl = cleanUrl;
+
+    if (file) {
+      finalUrl = await uploadResourceFile(file);
+    }
+
+    if (!finalUrl) throw new Error("Provide a PDF URL or upload a file");
+    const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
+    const payload = {
+      class_name: selectedClass,
+      title: cleanTitle,
+      url: finalUrl,
+      kind: "classwork",
+      payload: { url: finalUrl, kindOverride: "lesson" },
+    };
+    const { data, error } = await supabase.from(rTable).insert(payload).select().single();
+    if (error) throw error;
+    setResources((list) => [data, ...list]);
+    return data;
+  };
+
   const people = useMemo(() => ([
     { role: "Teacher", name: "Practice Bot" },
     { role: "Student", name: "You" },
@@ -1571,6 +1619,8 @@ export default function SATTraining({ onNavigate }) {
     formatDuration,
     pillStyles,
     deleteResource,
+    addLessonResource,
+    renderResourcesTab: null,
     onNavigate,
     classLogs,
     logsLoading,
@@ -1586,6 +1636,7 @@ export default function SATTraining({ onNavigate }) {
     { key: "quiz", title: "Quizzes", subtitle: "Quick checks assigned by your teacher." },
     { key: "classwork", title: "Classwork", subtitle: "Practice sets to work on during class time." },
     { key: "homework", title: "Homework", subtitle: "Assignments you can resume from home." },
+    { key: "lesson", title: "Resources", subtitle: "PDF lessons or readings shared by your teacher." },
     { key: "other", title: "Additional Resources", subtitle: "Links and materials shared by your teacher." },
   ];
   useEffect(() => {

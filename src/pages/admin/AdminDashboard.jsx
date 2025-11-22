@@ -7,6 +7,10 @@ import AdminTable from "./AdminTable2.jsx";
 import AdminLegend from "./AdminLegend.jsx";
 import { supabase } from "../../lib/supabase.js";
 import Results from "../Results.jsx";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import { createRoot } from "react-dom/client";
+import resultsPrintStyles from "../results/printStyles.js";
 
 export default function AdminDashboard({ onNavigate }) {
   AdminDashboard.propTypes = {
@@ -17,6 +21,8 @@ export default function AdminDashboard({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [selectedSchool, setSelectedSchool] = useState("");
   const [bulkSet, setBulkSet] = useState(null);
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkProgress, setBulkProgress] = useState(0);
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 60);
     return Number.isFinite(saved) && saved > 0 ? saved : 60;
@@ -58,17 +64,255 @@ export default function AdminDashboard({ onNavigate }) {
   const bulkEntries = bulkSet?.entries || [];
   const bulkActive = bulkEntries.length > 0;
 
-  const handleBulkExport = () => {
+  const visibleSubmissions = useMemo(() => {
+    if (!selectedSchool) return submissions;
+    const target = selectedSchool.trim().toLowerCase();
+    return submissions.filter(
+      (sub) => getSchool(sub).trim().toLowerCase() === target
+    );
+  }, [submissions, selectedSchool]);
+
+  // Render full Results layout to canvas, then into PDF
+  // Render full Results layout to PDF (multi-page, matches single export)
+  const renderResultsToPdf = (submission) =>
+    new Promise((resolve, reject) => {
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-20000px";
+      container.style.top = "0";
+      container.style.width = "1000px";
+      container.style.padding = "24px";
+      container.style.background = "#ffffff";
+      container.style.zIndex = "-1";
+      container.style.opacity = "1";
+      document.body.appendChild(container);
+      const style = document.createElement("style");
+      style.textContent = `
+        ${resultsPrintStyles}
+        .no-print { display: none !important; visibility: hidden !important; }
+        .card {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        .section, .avoid-break, .print-stack {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+      `;
+      container.appendChild(style);
+      const root = createRoot(container);
+      root.render(<Results submission={submission} fromAdmin onNavigate={() => {}} />);
+
+      const cleanup = () => {
+        try { root.unmount(); } catch {}
+        try { container.remove(); } catch {}
+      };
+
+      const makePdf = async () => {
+        try {
+          // Allow the DOM to render
+          await new Promise((r) => requestAnimationFrame(r));
+          await new Promise((r) => setTimeout(r, 300));
+          const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+          if (!canvas || !canvas.width || !canvas.height) throw new Error("Canvas render failed");
+
+          const pdf = new jsPDF({ unit: "pt", format: "a4" });
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const margin = 20;
+          const usableWidth = pageWidth - margin * 2;
+          const usableHeight = pageHeight - margin * 2;
+
+          // Compute the height in px that fits one PDF page
+          const ratio = usableWidth / canvas.width;
+          const pageCanvasHeight = Math.floor(usableHeight / ratio);
+
+          let rendered = 0;
+          let pageIndex = 0;
+
+          while (rendered < canvas.height) {
+            const sliceHeight = Math.min(pageCanvasHeight, canvas.height - rendered);
+            const pageCanvas = document.createElement("canvas");
+            pageCanvas.width = canvas.width;
+            pageCanvas.height = sliceHeight;
+            const ctx = pageCanvas.getContext("2d");
+            ctx.drawImage(
+              canvas,
+              0,
+              rendered,
+              canvas.width,
+              sliceHeight,
+              0,
+              0,
+              canvas.width,
+              sliceHeight
+            );
+            const imgData = pageCanvas.toDataURL("image/png");
+            const imgHeightPt = (sliceHeight * usableWidth) / canvas.width;
+            if (pageIndex > 0) pdf.addPage();
+            pdf.addImage(imgData, "PNG", margin, margin, usableWidth, imgHeightPt, undefined, "FAST");
+            rendered += sliceHeight;
+            pageIndex += 1;
+          }
+
+          const buf = pdf.output("arraybuffer");
+          resolve(new Uint8Array(buf));
+        } catch (e) {
+          reject(e);
+        } finally {
+          cleanup();
+        }
+      };
+
+      makePdf();
+      setTimeout(() => {
+        cleanup();
+        reject(new Error("PDF render timeout"));
+      }, 30000);
+    });
+
+  const crcTable = (() => {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[i] = c >>> 0;
+    }
+    return table;
+  })();
+  const crc32 = (buf) => {
+    let crc = 0 ^ -1;
+    for (let i = 0; i < buf.length; i++) {
+      crc = (crc >>> 8) ^ crcTable[(crc ^ buf[i]) & 0xff];
+    }
+    return (crc ^ -1) >>> 0;
+  };
+
+  const buildZip = (files) => {
+    const encoder = new TextEncoder();
+    let offset = 0;
+    const parts = [];
+    const central = [];
+    files.forEach(({ name, data }) => {
+      const nameBuf = encoder.encode(name);
+      const crc = crc32(data);
+      const size = data.length;
+      const localHeader = new Uint8Array(30 + nameBuf.length);
+      const view = new DataView(localHeader.buffer);
+      view.setUint32(0, 0x04034b50, true); // local file header signature
+      view.setUint16(4, 20, true); // version needed
+      view.setUint16(6, 0, true); // flags
+      view.setUint16(8, 0, true); // method store
+      view.setUint16(10, 0, true); // time
+      view.setUint16(12, 0, true); // date
+      view.setUint32(14, crc, true);
+      view.setUint32(18, size, true);
+      view.setUint32(22, size, true);
+      view.setUint16(26, nameBuf.length, true);
+      view.setUint16(28, 0, true); // extra length
+      localHeader.set(nameBuf, 30);
+      const fileRecord = new Uint8Array(localHeader.length + data.length);
+      fileRecord.set(localHeader, 0);
+      fileRecord.set(data, localHeader.length);
+      parts.push(fileRecord);
+
+      const centralHeader = new Uint8Array(46 + nameBuf.length);
+      const cv = new DataView(centralHeader.buffer);
+      cv.setUint32(0, 0x02014b50, true); // central file header signature
+      cv.setUint16(4, 20, true); // version made by
+      cv.setUint16(6, 20, true); // version needed
+      cv.setUint16(8, 0, true); // flags
+      cv.setUint16(10, 0, true); // method
+      cv.setUint16(12, 0, true); // time
+      cv.setUint16(14, 0, true); // date
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, size, true);
+      cv.setUint32(24, size, true);
+      cv.setUint16(28, nameBuf.length, true);
+      cv.setUint16(30, 0, true); // extra
+      cv.setUint16(32, 0, true); // comment
+      cv.setUint16(34, 0, true); // disk number
+      cv.setUint16(36, 0, true); // internal attrs
+      cv.setUint32(38, 0, true); // external attrs
+      cv.setUint32(42, offset, true); // local header offset
+      centralHeader.set(nameBuf, 46);
+      central.push(centralHeader);
+      offset += fileRecord.length;
+    });
+    const centralSize = central.reduce((sum, c) => sum + c.length, 0);
+    const centralOffset = offset;
+    const end = new Uint8Array(22);
+    const ev = new DataView(end.buffer);
+    ev.setUint32(0, 0x06054b50, true); // end of central dir
+    ev.setUint16(4, 0, true); // disk number
+    ev.setUint16(6, 0, true); // central dir start disk
+    ev.setUint16(8, files.length, true); // entries this disk
+    ev.setUint16(10, files.length, true); // total entries
+    ev.setUint32(12, centralSize, true);
+    ev.setUint32(16, centralOffset, true);
+    ev.setUint16(20, 0, true); // comment length
+
+    const totalSize = offset + centralSize + end.length;
+    const zip = new Uint8Array(totalSize);
+    let cursor = 0;
+    parts.forEach((p) => { zip.set(p, cursor); cursor += p.length; });
+    central.forEach((c) => { zip.set(c, cursor); cursor += c.length; });
+    zip.set(end, cursor);
+    return new Blob([zip], { type: "application/zip" });
+  };
+
+  const handleBulkExport = async () => {
     if (!selectedSchool) return;
     const target = selectedSchool.trim().toLowerCase();
     const entries = realSubmissions.filter(
-      (sub) => getSchool(sub).trim().toLowerCase() === target
+      (sub) => !sub?._demo && getSchool(sub).trim().toLowerCase() === target
     );
     if (!entries.length) {
       alert("No submissions found for the selected school yet.");
       return;
     }
-    setBulkSet({ school: selectedSchool, entries });
+    setBulkStatus("Preparing PDFs...");
+    setBulkProgress(0);
+    try {
+      const files = [];
+      for (let i = 0; i < entries.length; i++) {
+        const sub = entries[i];
+        const pdfData = await renderResultsToPdf(sub);
+        const nameSafe =
+          (sub.participant?.name || sub.profile?.name || `student-${i + 1}`)
+            .replace(/[^a-z0-9-_]+/gi, "_")
+            .replace(/^_+|_+$/g, "") || `student-${i + 1}`;
+        const fileName = `${nameSafe || "submission"}-${sub.id || i + 1}.pdf`;
+        files.push({ name: fileName, data: pdfData });
+        setBulkStatus(`Rendering ${i + 1} of ${entries.length}`);
+        setBulkProgress(Math.round(((i + 1) / entries.length) * 85)); // up to 85% during render
+      }
+      setBulkStatus("Zipping files...");
+      setBulkProgress(95);
+      const zipBlob = buildZip(files);
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${selectedSchool.replace(/\s+/g, "_") || "school"}_submissions.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setBulkProgress(100);
+      setTimeout(() => {
+        setBulkStatus("");
+        setBulkProgress(0);
+      }, 1500);
+    } catch (err) {
+      console.error("Bulk export failed", err);
+      alert(err?.message || "Failed to generate bulk export.");
+    } finally {
+      if (bulkProgress === 0) {
+        setBulkStatus("");
+      }
+    }
   };
 
   useEffect(() => {
@@ -259,47 +503,10 @@ export default function AdminDashboard({ onNavigate }) {
         `}
       </style>
 
-      <div className="no-print">
-        <Card>
-          <h3 style={{ marginTop: 0 }}>Career Guidance Timer</h3>
-          <p style={{ color: "#475569", marginBottom: 16 }}>
-            Set the default duration students see when they begin the Career Guidance test. This applies to new test sessions.
-          </p>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <label htmlFor="cg-timer-min" style={{ fontWeight: 600, color: "#1e293b" }}>
-              Timer (minutes)
-            </label>
-            <input
-              id="cg-timer-min"
-              type="number"
-              min={1}
-              max={180}
-              value={timerMin}
-              onChange={(e) => {
-                const next = Number(e.target.value);
-                const clamped = Number.isFinite(next) ? Math.max(1, Math.min(180, Math.round(next))) : timerMin;
-                setTimerMin(clamped);
-              }}
-              style={{
-                width: 100,
-                padding: "8px 10px",
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-                fontWeight: 600,
-              }}
-            />
-            <div style={{ color: "#475569" }}>
-              Current: <b>{timerMin} min</b>
-            </div>
-          </div>
-        </Card>
-      </div>
-
       <div className={`admin-bulk-screen${bulkActive ? " bulk-hide-print" : ""}`}>
         <HeaderBar title="Test Submissions" right={null} />
         <Card>
           <h3 style={{ marginTop: 0 }}>Recent Test Submissions</h3>
-          <AdminLegend />
 
           {schoolOptions.length > 0 && (
             <div
@@ -340,19 +547,62 @@ export default function AdminDashboard({ onNavigate }) {
                     </option>
                   ))}
                 </select>
-              </div>
-              <Btn
-                variant="primary"
-                onClick={handleBulkExport}
-                disabled={!selectedSchool || bulkActive}
-                style={
-                  !selectedSchool || bulkActive
-                    ? { opacity: 0.6, cursor: "not-allowed" }
-                    : undefined
-                }
-              >
-                {bulkActive ? "Preparing..." : "Export PDF"}
-              </Btn>
+            </div>
+              {bulkStatus ? (
+                <div
+                  style={{
+                    minWidth: 140,
+                    maxWidth: 200,
+                    height: 40,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    borderRadius: 12,
+                    background: "#0f172a",
+                    color: "#e2e8f0",
+                    boxShadow: "0 8px 18px rgba(15, 23, 42, 0.22)",
+                  }}
+                >
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 10,
+                      borderRadius: 999,
+                      background: "#1e293b",
+                      overflow: "hidden",
+                      boxShadow: "inset 0 0 0 1px #0b1220",
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, bulkProgress || 5))}%`,
+                        height: "100%",
+                        background: "linear-gradient(90deg, #38bdf8, #6366f1)",
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 12, color: "#cbd5e1", minWidth: 32, textAlign: "right" }}>
+                    {bulkProgress || 5}%
+                  </span>
+                </div>
+              ) : (
+                <Btn
+                  variant="primary"
+                  onClick={handleBulkExport}
+                  disabled={!selectedSchool || bulkActive}
+                  style={
+                    !selectedSchool || bulkActive
+                      ? { opacity: 0.6, cursor: "not-allowed" }
+                      : undefined
+                  }
+                >
+                  Export ZIP
+                </Btn>
+              )}
             </div>
           )}
 
@@ -377,12 +627,18 @@ export default function AdminDashboard({ onNavigate }) {
 
           {loading ? (
             <p style={{ color: "#6b7280" }}>Loading test submissions...</p>
-          ) : (
+          ) : visibleSubmissions.length > 0 ? (
             <AdminTable
-              submissions={submissions}
+              submissions={visibleSubmissions}
               onViewSubmission={handleViewSubmission}
               onDeleteSubmission={handleDeleteSubmission}
             />
+          ) : (
+            <p style={{ color: "#6b7280" }}>
+              {selectedSchool
+                ? `No submissions found for ${selectedSchool} yet.`
+                : "No submissions available."}
+            </p>
           )}
           <div style={{ marginTop: 16 }}>
             <Btn variant="back" onClick={() => onNavigate("home")}>
