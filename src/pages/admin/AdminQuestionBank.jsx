@@ -1,5 +1,5 @@
 ﻿// src/pages/admin/AdminQuestionBank.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import RichTextEditor from "../../components/RichTextEditor.jsx";
@@ -8,6 +8,7 @@ import UserMenu from "../../components/UserMenu.jsx";
 import { LANGS } from "../../i18n/strings.js";
 import Btn from "../../components/Btn.jsx";
 import { BlockMath, InlineMath } from "react-katex";
+import { supabase } from "../../lib/supabase.js";
 import { renderMathText } from "../../lib/mathText.jsx";
 import {
   createAssignmentQuestion,
@@ -33,6 +34,15 @@ const DEFAULT_TABLE_COLS = 2;
 const MAX_TABLE_ROWS = 10;
 const MAX_TABLE_COLS = 6;
 const FILTERS_PAGE_SIZE = 5;
+const RESOURCE_BUCKET = import.meta.env.VITE_CLASS_RESOURCE_BUCKET || "assignment-media";
+const RESOURCE_LIBRARY_TABLE = import.meta.env.VITE_RESOURCE_LIBRARY_TABLE || "cg_resource_library";
+
+const detectLibraryKind = (name = "") => {
+  const lower = name.toLowerCase();
+  if (/\.(pdf)$/.test(lower)) return "pdf";
+  if (/\.(ppt|pptx|pps|ppsx)$/.test(lower)) return "ppt";
+  return "file";
+};
 
 const promptHasContent = (html = "") => {
   if (!html) return false;
@@ -51,6 +61,7 @@ const BANK_TAB_META = {
   tests: { accent: "#16a34a" },
   diagnostic: { accent: "#0ea5e9" },
   career: { accent: "#a855f7" },
+  resources: { accent: "#10b981" },
 };
 
 const BANK_TAB_DESCRIPTIONS = {
@@ -81,10 +92,17 @@ const BANK_TAB_DESCRIPTIONS = {
   },
 };
 
+// Resources tab description (no translation)
+BANK_TAB_DESCRIPTIONS.resources = {
+  EN: "Upload reusable files (PDF/PPT/links) for classes.",
+  AR: "Upload reusable files (PDF/PPT/links) for classes.",
+  FR: "Upload reusable files (PDF/PPT/links) for classes.",
+};
+
 const COPY = {
   EN: {
-    title: "Question Bank",
-    subtitle: "Add and manage questions for quizzes, homework, and classwork.",
+    title: "Bank Manager",
+    subtitle: "Manage questions and upload reusable resources.",
     questionType: "Question Type",
     mcqLabel: "Multiple Choice (A/B/C/D)",
     fillLabel: "Fill in the Blank",
@@ -150,6 +168,7 @@ const COPY = {
     tabTests: "Test Bank",
     tabDiagnostic: "Diagnostic Bank",
     tabCareer: "Career Guidance",
+    tabResources: "Resources Bank",
     tableBuilderTitle: "Table Builder",
     tableBuilderInstructions: "Configure rows and columns, fill the cells, then insert the table into the question or an answer.",
     tableBuilderRows: "Rows",
@@ -434,12 +453,15 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const [activeBank, setActiveBank] = useState("math");
   const visibleBanks = useMemo(
     () =>
-      Object.values(BANKS).filter((cfg) => {
-        if (cfg.id === "diagnostic" || cfg.id === "career") {
-          return isAdmin;
-        }
-        return true;
-      }),
+      [
+        ...Object.values(BANKS).filter((cfg) => {
+          if (cfg.id === "diagnostic" || cfg.id === "career") {
+            return isAdmin;
+          }
+          return true;
+        }),
+        { id: "resources", labelKey: "tabResources" },
+      ],
     [isAdmin]
   );
   const visibleBankIds = useMemo(() => visibleBanks.map((cfg) => cfg.id), [visibleBanks]);
@@ -468,9 +490,14 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const [showTableBuilder, setShowTableBuilder] = useState(false);
   const [tableBuilder, setTableBuilder] = useState(() => createInitialTableBuilder());
   const importInputRef = useRef(null);
+  const libraryFileRef = useRef(null);
   const [importRows, setImportRows] = useState([]);
   const [importIndex, setImportIndex] = useState(0);
   const [importError, setImportError] = useState("");
+  const [libraryItems, setLibraryItems] = useState([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState("");
+  const [libraryForm, setLibraryForm] = useState({ title: "", url: "", file: null, kind: "file" });
   const isEditing = Boolean(editingRow);
   const isImporting = importRows.length > 0;
   const isImportingActive = isImporting && !isEditing;
@@ -861,6 +888,80 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     });
   };
 
+  // Resource library (standalone uploads)
+  const loadLibraryItems = useCallback(async () => {
+    setLibraryLoading(true);
+    setLibraryError("");
+    try {
+      const { data, error } = await supabase
+        .from(RESOURCE_LIBRARY_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      setLibraryItems(data || []);
+    } catch (err) {
+      console.error(err);
+      setLibraryError(err?.message || "Could not load library.");
+      setLibraryItems([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLibraryItems();
+  }, [loadLibraryItems]);
+
+  const uploadLibraryFile = async (file) => {
+    if (!file) throw new Error("No file provided");
+    const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name.replace(/\s+/g, "_")}`;
+    const path = `resource-library/${safeName}`;
+    const { error } = await supabase.storage.from(RESOURCE_BUCKET).upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+      contentType: file.type || "application/octet-stream",
+    });
+    if (error) throw error;
+    const { data } = supabase.storage.from(RESOURCE_BUCKET).getPublicUrl(path);
+    return data?.publicUrl || null;
+  };
+
+  const handleCreateLibraryItem = async () => {
+    const title = (libraryForm.title || "").trim();
+    const url = (libraryForm.url || "").trim();
+    const file = libraryForm.file || null;
+    if (!title) {
+      alert("Enter a title.");
+      return;
+    }
+    if (!url && !file) {
+      alert("Upload a file or paste a link.");
+      return;
+    }
+    try {
+      setLibraryLoading(true);
+      let finalUrl = url;
+      if (file) {
+        finalUrl = await uploadLibraryFile(file);
+      }
+      if (!finalUrl) throw new Error("Missing URL after upload.");
+      const kind = libraryForm.kind || detectLibraryKind(file?.name || url);
+      const payload = { title, url: finalUrl, kind };
+      const { error } = await supabase.from(RESOURCE_LIBRARY_TABLE).insert(payload);
+      if (error) throw error;
+      setLibraryForm({ title: "", url: "", file: null, kind: "file" });
+      if (libraryFileRef.current) libraryFileRef.current.value = "";
+      await loadLibraryItems();
+      alert("Resource saved to library.");
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || "Failed to save resource.");
+    } finally {
+      setLibraryLoading(false);
+    }
+  };
+
   const applyImportRow = (row) => {
     const nextForm = buildFormFromRow(row, bank);
     setForm(nextForm);
@@ -1185,9 +1286,13 @@ const validate = () => {
         }}
       >
         {visibleBanks.map((cfg) => {
-          const active = cfg.id === bank.id;
+          const active = cfg.id === activeBank;
           const meta = BANK_TAB_META[cfg.id] || BANK_TAB_META.math;
-          const desc = bankTabDescription(cfg.id, lang);
+          const label = cfg.id === "resources" ? "Resources Bank" : copy[cfg.labelKey];
+          const desc =
+            cfg.id === "resources"
+              ? "Upload reusable files (PDF/PPT/links) for classes."
+              : bankTabDescription(cfg.id, lang);
           return (
             <button
               key={cfg.id}
@@ -1197,7 +1302,7 @@ const validate = () => {
             >
               <span style={bankTabIconWrapperStyle(active, meta.accent)}>{getBankTabIcon(cfg.id)}</span>
               <span style={{ display: "grid", gap: 4, textAlign: "left" }}>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>{copy[cfg.labelKey]}</span>
+                <span style={{ fontWeight: 700, fontSize: 15 }}>{label}</span>
                 <span style={bankTabDescriptionStyle(active)}>{desc}</span>
               </span>
             </button>
@@ -1205,6 +1310,8 @@ const validate = () => {
         })}
       </div>
 
+      {activeBank !== "resources" && (
+        <>
       <Card>
         <p style={{ marginTop: 0, color: "#6b7280" }}>{copy.subtitle}</p>
         <div style={actionBarStyle}>
@@ -1574,8 +1681,95 @@ const validate = () => {
           </>
         )}
       </Card>
+        </>
+      )}
 
-      {previewRow && (
+      {activeBank === "resources" && (
+        <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Resources Bank</h3>
+            <div style={{ color: "#6b7280", fontSize: 13 }}>Upload standalone files (PDF/PPT/links) to reuse later in lessons.</div>
+          </div>
+          <Btn variant="secondary" onClick={loadLibraryItems} disabled={libraryLoading}>
+            {libraryLoading ? "Loading..." : "Reload"}
+          </Btn>
+        </div>
+
+        <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <input
+              type="text"
+              placeholder="Title"
+              value={libraryForm.title}
+              onChange={(e) => setLibraryForm((prev) => ({ ...prev, title: e.target.value }))}
+              style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 200 }}
+            />
+            <input
+              type="url"
+              placeholder="Link (optional if uploading)"
+              value={libraryForm.url}
+              onChange={(e) => setLibraryForm((prev) => ({ ...prev, url: e.target.value }))}
+              style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 260 }}
+            />
+            <select
+              value={libraryForm.kind}
+              onChange={(e) => setLibraryForm((prev) => ({ ...prev, kind: e.target.value }))}
+              style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+            >
+              <option value="file">File</option>
+              <option value="pdf">PDF</option>
+              <option value="ppt">PPT</option>
+            </select>
+            <input
+              ref={libraryFileRef}
+              type="file"
+              accept=".pdf,.ppt,.pptx,.pps,.ppsx,application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              onChange={(e) => setLibraryForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }))}
+              style={{ padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+            />
+            <Btn variant="primary" onClick={handleCreateLibraryItem} disabled={libraryLoading}>
+              {libraryLoading ? "Saving..." : "Save Resource"}
+            </Btn>
+          </div>
+          <div style={{ color: "#6b7280", fontSize: 12 }}>
+            Uploads go to bucket <code>{RESOURCE_BUCKET}</code>. Saved items appear in the library list below for later reuse.
+          </div>
+        </div>
+
+        {libraryError && <div style={{ color: "#b91c1c", marginBottom: 8 }}>{libraryError}</div>}
+        {libraryLoading && libraryItems.length === 0 ? (
+          <div style={{ color: "#6b7280" }}>Loading library...</div>
+        ) : libraryItems.length === 0 ? (
+          <div style={{ color: "#6b7280" }}>No library resources yet.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+            {libraryItems.map((item) => (
+              <div key={item.id || item.url} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, display: "grid", gap: 6 }}>
+                <div style={{ fontWeight: 700 }}>{item.title || "Resource"}</div>
+                <div style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase" }}>{item.kind || "file"}</div>
+                {item.url && (
+                  <div style={{ wordBreak: "break-word", fontSize: 12 }}>
+                    <a href={item.url} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
+                      {item.url}
+                    </a>
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  {item.url && (
+                    <Btn variant="secondary" onClick={() => navigator.clipboard?.writeText(item.url)}>
+                      Copy link
+                    </Btn>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      )}
+
+      {activeBank !== "resources" && previewRow && (
         <div style={modalOverlayStyle} role="dialog" aria-modal="true" aria-labelledby="question-bank-preview-title" onClick={closePreview}>
           <div style={modalContentStyle} onClick={(event) => event.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
@@ -2471,6 +2665,15 @@ function getBankTabIcon(id) {
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
           <rect x="3" y="4" width="18" height="16" rx="2" />
           <path d="M7 8h10M7 12h10M7 16h6" />
+        </svg>
+      );
+    case "resources":
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          <path d="M4 4h16v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4z" />
+          <path d="M9 2v4M15 2v4" />
+          <path d="M9 12h6" />
+          <path d="M9 16h4" />
         </svg>
       );
     case "math":

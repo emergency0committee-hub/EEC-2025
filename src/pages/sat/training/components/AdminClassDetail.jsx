@@ -81,6 +81,10 @@ export default function AdminClassDetail({
   formatLessonLabel,
   resources,
   resLoading,
+  resourceLibrary,
+  libraryLoading,
+  loadResourceLibrary,
+  addLibraryResourceToClass,
   extractResourceMeta,
   decodeResourceQuestions,
   formatDuration,
@@ -100,6 +104,13 @@ export default function AdminClassDetail({
   const fileInputRef = useRef(null);
   const getKind = (res) => String(res?.payload?.kindOverride || res?.kind || "").toLowerCase();
   const [previewUrl, setPreviewUrl] = useState("");
+  const isPpt = (url) => /\.(pptx?|ppsx?)(\?|$)/i.test(String(url || ""));
+  const buildPreviewUrl = (url) => {
+    if (!url) return "";
+    if (isPpt(url)) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    return url;
+  };
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const handleAddLesson = async () => {
     const title = (lessonForm.title || "").trim();
@@ -171,7 +182,7 @@ export default function AdminClassDetail({
                 />
                 <input
                   type="url"
-                  placeholder="PDF link (optional if you upload a file)"
+                  placeholder="PDF/PPT link (optional if you upload a file)"
                   value={lessonForm.url}
                   onChange={(e) => setLessonForm((prev) => ({ ...prev, url: e.target.value }))}
                   style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 320 }}
@@ -179,16 +190,19 @@ export default function AdminClassDetail({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="application/pdf"
+                  accept=".pdf,application/pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                   onChange={(e) => setLessonForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }))}
-                  style={{ padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 200 }}
+                  style={{ padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 220 }}
                 />
                 <Btn variant="primary" onClick={handleAddLesson} disabled={savingLesson}>
                   {savingLesson ? "Saving..." : "Add Resource"}
                 </Btn>
+                <Btn variant="secondary" onClick={() => { setLibraryOpen(true); loadResourceLibrary(); }}>
+                  Add from Library
+                </Btn>
               </div>
               <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 4 }}>
-                Upload a PDF or paste a link. We’ll store and share the public link with students.
+                Upload a PDF/PPT or paste a link. We’ll store and share the public link with students.
               </div>
               {resLoading ? (
                 <div style={{ color: "#6b7280" }}>Loading…</div>
@@ -206,8 +220,8 @@ export default function AdminClassDetail({
                         </div>
                         <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
                           {resource.url && (
-                            <Btn variant="secondary" onClick={() => setPreviewUrl(resource.url)}>
-                              View PDF
+                            <Btn variant="secondary" onClick={() => setPreviewUrl(buildPreviewUrl(resource.url))}>
+                              View File
                             </Btn>
                           )}
                           <Btn variant="back" onClick={() => deleteResource(resource)}>
@@ -560,16 +574,15 @@ export default function AdminClassDetail({
               <div style={{ overflowX: "auto", marginTop: 6 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                   <thead>
-                    <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                      <th style={{ padding: 10, textAlign: "left" }}>Date</th>
-                      <th style={{ padding: 10, textAlign: "left" }}>Time</th>
-                      <th style={{ padding: 10, textAlign: "left" }}>Student</th>
-                      <th style={{ padding: 10, textAlign: "left" }}>Section</th>
-                      <th style={{ padding: 10, textAlign: "left" }}>Unit/Lesson</th>
-                      <th style={{ padding: 10, textAlign: "left" }}>Score</th>
-                      <th style={{ padding: 10, textAlign: "left" }}>Manage</th>
-                    </tr>
-                  </thead>
+                  <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                    <th style={{ padding: 10, textAlign: "left" }}>Date</th>
+                    <th style={{ padding: 10, textAlign: "left" }}>Time</th>
+                    <th style={{ padding: 10, textAlign: "left" }}>Student</th>
+                    <th style={{ padding: 10, textAlign: "left" }}>Unit/Lesson</th>
+                    <th style={{ padding: 10, textAlign: "left" }}>Score</th>
+                    <th style={{ padding: 10, textAlign: "left" }}>Manage</th>
+                  </tr>
+                </thead>
                   <tbody>
                     {classLogs.map((log) => {
                       const rw = log.summary?.rw;
@@ -582,7 +595,6 @@ export default function AdminClassDetail({
                           <td style={{ padding: 10 }}>{fmtDate(log.ts)}</td>
                           <td style={{ padding: 10 }}>{fmtDate(log.ts, true)}</td>
                           <td style={{ padding: 10 }}>{log.user_email || "-"}</td>
-                          <td style={{ padding: 10 }}>{log.section || "-"}</td>
                           <td style={{ padding: 10 }}>{log.unit || log.lesson || "-"}</td>
                           <td style={{ padding: 10 }}>{score}</td>
                           <td style={{ padding: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -612,6 +624,74 @@ export default function AdminClassDetail({
           </>
         )}
           </Card>
+        {libraryOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 12,
+            }}
+            onClick={() => setLibraryOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 12, padding: 16, width: "min(720px, 95vw)", boxShadow: "0 15px 40px rgba(0,0,0,0.12)", display: "grid", gap: 12 }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h3 style={{ margin: 0 }}>Resource Library</h3>
+                <Btn variant="back" onClick={() => setLibraryOpen(false)}>Close</Btn>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ color: "#6b7280", fontSize: 13 }}>Pick a saved resource to add to this class.</div>
+                <Btn variant="secondary" onClick={loadResourceLibrary} disabled={libraryLoading}>
+                  {libraryLoading ? "Loading..." : "Reload"}
+                </Btn>
+              </div>
+              {libraryLoading && resourceLibrary.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>Loading library...</div>
+              ) : resourceLibrary.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>No library resources yet.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+                  {resourceLibrary.map((item) => (
+                    <div key={item.id || item.url} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, display: "grid", gap: 6 }}>
+                      <div style={{ fontWeight: 700 }}>{item.title || "Resource"}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase" }}>{item.kind || "file"}</div>
+                      {item.url && (
+                        <div style={{ wordBreak: "break-word", fontSize: 12, color: "#2563eb" }}>
+                          {item.url}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Btn
+                          variant="secondary"
+                          onClick={async () => {
+                            try {
+                              await addLibraryResourceToClass(item);
+                              alert("Added to class resources.");
+                              setLibraryOpen(false);
+                            } catch (err) {
+                              alert(err?.message || "Failed to add resource.");
+                            }
+                          }}
+                        >
+                          Add to Class
+                        </Btn>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {previewUrl && (
           <div
             style={{
@@ -634,7 +714,11 @@ export default function AdminClassDetail({
                 <div style={{ fontWeight: 700 }}>Preview</div>
                 <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
               </div>
-              <iframe title="Lesson PDF" src={previewUrl} style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }} />
+              <iframe
+                title="Lesson File"
+                src={previewUrl}
+                style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }}
+              />
             </div>
           </div>
         )}
@@ -671,6 +755,10 @@ AdminClassDetail.propTypes = {
   formatLessonLabel: PropTypes.func.isRequired,
   resources: PropTypes.array.isRequired,
   resLoading: PropTypes.bool.isRequired,
+  resourceLibrary: PropTypes.array.isRequired,
+  libraryLoading: PropTypes.bool.isRequired,
+  loadResourceLibrary: PropTypes.func.isRequired,
+  addLibraryResourceToClass: PropTypes.func.isRequired,
   extractResourceMeta: PropTypes.func.isRequired,
   decodeResourceQuestions: PropTypes.func.isRequired,
   formatDuration: PropTypes.func.isRequired,

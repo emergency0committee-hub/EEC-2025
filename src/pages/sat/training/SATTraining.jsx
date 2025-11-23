@@ -1,4 +1,4 @@
-﻿// src/pages/sat/training/SATTraining.jsx
+// src/pages/sat/training/SATTraining.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
@@ -85,6 +85,7 @@ const RESOURCE_BUCKET =
   import.meta.env.VITE_CLASS_RESOURCE_BUCKET ||
   import.meta.env.VITE_ASSIGNMENT_MEDIA_BUCKET ||
   "assignment-media";
+const RESOURCE_LIBRARY_TABLE = import.meta.env.VITE_RESOURCE_LIBRARY_TABLE || "cg_resource_library";
 
 const createDefaultAutoAssign = (bankId = "math") => {
   const bank = resolveBankConfig(bankId);
@@ -213,6 +214,8 @@ export default function SATTraining({ onNavigate }) {
 
   // Classwork resources
   const [resLoading, setResLoading] = useState(false);
+  const [resourceLibrary, setResourceLibrary] = useState([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
   // Student class & resources
   const [studentClass, setStudentClass] = useState("");
   const [studentResLoading, setStudentResLoading] = useState(false);
@@ -703,6 +706,7 @@ export default function SATTraining({ onNavigate }) {
     return ids;
   }, [resources]);
   const [questionTextCache, setQuestionTextCache] = useState({});
+  const [questionDataCache, setQuestionDataCache] = useState({});
   const resourceQuestionDataMap = useMemo(() => {
     const map = new Map();
     (resources || []).forEach((resource) => {
@@ -724,6 +728,7 @@ export default function SATTraining({ onNavigate }) {
         (questionMetaSource && (questionMetaSource.questionBank || questionMetaSource.bank)) || referenceBank || null;
       const entry = {
         texts: {},
+        data: {},
         bankByQuestion: {},
         unresolved: new Set(),
         defaultBank: derivedBank,
@@ -740,6 +745,15 @@ export default function SATTraining({ onNavigate }) {
         const trimmed = typeof rawText === "string" ? rawText.trim() : "";
         if (trimmed) {
           entry.texts[qid] = trimmed;
+          const choiceEntries = [
+            { value: "A", label: question.answer_a || question.answerA || "" },
+            { value: "B", label: question.answer_b || question.answerB || "" },
+            { value: "C", label: question.answer_c || question.answerC || "" },
+            { value: "D", label: question.answer_d || question.answerD || "" },
+          ].filter((c) => String(c.label || "").trim().length > 0);
+          if (choiceEntries.length) {
+            entry.data[qid] = { text: trimmed, choices: choiceEntries };
+          }
         } else if (question.questionId || refsLikely) {
           entry.unresolved.add(String(qid));
         }
@@ -755,7 +769,7 @@ export default function SATTraining({ onNavigate }) {
     const addPending = (bankId, qid) => {
       if (!bankId) return;
       const key = String(qid || "");
-      if (!key || questionTextCache[key]) return;
+      if (!key || questionTextCache[key] || questionDataCache[key]) return;
       if (!pending.has(bankId)) pending.set(bankId, new Set());
       pending.get(bankId).add(key);
     };
@@ -786,7 +800,6 @@ export default function SATTraining({ onNavigate }) {
         meta.questionBanks ||
         meta.questionBankMap ||
         null;
-      if (!questionRefs && !perQuestionBank) return;
       const keys = new Set([
         ...Object.keys(answers?.choices || {}),
         ...Object.keys(metrics?.choices || {}),
@@ -806,7 +819,8 @@ export default function SATTraining({ onNavigate }) {
         const refsEnabled =
           questionRefs ||
           Boolean(perQuestionBank && perQuestionBank[qid]) ||
-          Boolean(lookupEntry?.bankByQuestion?.[qid]);
+          Boolean(lookupEntry?.bankByQuestion?.[qid]) ||
+          Boolean(lookupEntry?.defaultBank);
         if (!refsEnabled) return;
         addPending(bank, qid);
       });
@@ -817,6 +831,7 @@ export default function SATTraining({ onNavigate }) {
     let cancelled = false;
     (async () => {
       const newTexts = {};
+      const newData = {};
       for (const [bankId, idSet] of pending.entries()) {
         const config = resolveBankConfig(bankId);
         if (!config?.table) continue;
@@ -828,6 +843,7 @@ export default function SATTraining({ onNavigate }) {
             if (!idKey) return;
             const text = (item.text || "").trim();
             if (text) newTexts[idKey] = text;
+            newData[idKey] = { text: item.text || "", choices: item.choices || [] };
           });
         } catch (err) {
           if (!cancelled) console.warn("question text load", bankId, err);
@@ -836,11 +852,14 @@ export default function SATTraining({ onNavigate }) {
       if (!cancelled && Object.keys(newTexts).length > 0) {
         setQuestionTextCache((prev) => ({ ...prev, ...newTexts }));
       }
+      if (!cancelled && Object.keys(newData).length > 0) {
+        setQuestionDataCache((prev) => ({ ...prev, ...newData }));
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [resourceQuestionDataMap, classLogs, viewClassLog, questionTextCache]);
+  }, [resourceQuestionDataMap, classLogs, viewClassLog, questionTextCache, questionDataCache]);
   const resolveQuestionText = useCallback(
     (logRow, questionKey) => {
       if (!logRow || questionKey == null) return null;
@@ -863,6 +882,22 @@ export default function SATTraining({ onNavigate }) {
       return null;
     },
     [resourceQuestionDataMap, questionTextCache],
+  );
+  const resolveQuestionData = useCallback(
+    (logRow, questionKey) => {
+      if (!logRow || questionKey == null) return null;
+      const key = String(questionKey);
+      const resourceId = logRow.resource_id || (logRow.answers || {})?.resourceId;
+      if (resourceId != null) {
+        const entry = resourceQuestionDataMap.get(String(resourceId));
+        if (entry?.data?.[key]) return entry.data[key];
+      }
+      if (questionDataCache[key]) return questionDataCache[key];
+      const text = resolveQuestionText(logRow, questionKey);
+      if (text) return { text, choices: [] };
+      return null;
+    },
+    [resourceQuestionDataMap, questionDataCache, resolveQuestionText],
   );
   const handleAutoAssignChange = (field, rawValue) => {
     setAutoAssign((prev) => {
@@ -1498,12 +1533,47 @@ export default function SATTraining({ onNavigate }) {
       const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
       const { error } = await supabase.from(rTable).delete().eq("id", row.id);
       if (error) throw error;
+      // best-effort delete from storage if we own the object (public URL under our bucket)
+      try {
+        const url = row.url || (row && row.payload && row.payload.url);
+        const bucket = RESOURCE_BUCKET;
+        if (url && bucket) {
+          const { data } = supabase.storage.from(bucket).getPublicUrl("");
+          const base = (data && data.publicUrl) || "";
+          if (base && url.startsWith(base)) {
+            const path = url.replace(base, "").replace(/^\//, "");
+            if (path) {
+              await supabase.storage.from(bucket).remove([path]);
+            }
+          }
+        }
+      } catch (storageErr) {
+        console.warn("storage cleanup failed", storageErr);
+      }
       setResources((list) => list.filter((x) => x.id !== row.id));
     } catch (e) {
       console.error(e);
       alert(e?.message || "Failed to delete resource");
     }
   };
+
+  const loadResourceLibrary = useCallback(async () => {
+    setLibraryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from(RESOURCE_LIBRARY_TABLE)
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      setResourceLibrary(data || []);
+    } catch (e) {
+      console.warn(e);
+      setResourceLibrary([]);
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, []);
 
   const uploadResourceFile = async (file) => {
     if (!file) throw new Error("No file provided");
@@ -1515,8 +1585,8 @@ export default function SATTraining({ onNavigate }) {
       contentType: file.type || "application/pdf",
     });
     if (error) throw error;
-    const { data } = supabase.storage.from(RESOURCE_BUCKET).getPublicUrl(path);
-    return data?.publicUrl || null;
+    const { data: publicData } = supabase.storage.from(RESOURCE_BUCKET).getPublicUrl(path);
+    return (publicData && publicData.publicUrl) || null;
   };
 
   const addLessonResource = async ({ title, url, file }) => {
@@ -1538,6 +1608,23 @@ export default function SATTraining({ onNavigate }) {
       url: finalUrl,
       kind: "classwork",
       payload: { url: finalUrl, kindOverride: "lesson" },
+    };
+    const { data, error } = await supabase.from(rTable).insert(payload).select().single();
+    if (error) throw error;
+    setResources((list) => [data, ...list]);
+    return data;
+  };
+
+  const addLibraryResourceToClass = async (item) => {
+    if (!selectedClass) throw new Error("Select a class first");
+    if (!item || !item.url) throw new Error("Missing resource");
+    const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
+    const payload = {
+      class_name: selectedClass,
+      title: item.title || "Resource",
+      url: item.url,
+      kind: "classwork",
+      payload: { url: item.url, kindOverride: "lesson", libraryId: item.id },
     };
     const { data, error } = await supabase.from(rTable).insert(payload).select().single();
     if (error) throw error;
@@ -1620,6 +1707,10 @@ export default function SATTraining({ onNavigate }) {
     pillStyles,
     deleteResource,
     addLessonResource,
+    resourceLibrary,
+    libraryLoading,
+    loadResourceLibrary,
+    addLibraryResourceToClass,
     renderResourcesTab: null,
     onNavigate,
     classLogs,
@@ -1767,6 +1858,7 @@ export default function SATTraining({ onNavigate }) {
             fmtDate={fmtDate}
             fmtDuration={fmtDuration}
             resolveQuestionText={resolveQuestionText}
+            resolveQuestionData={resolveQuestionData}
           />
         )}
       </PageWrap>
@@ -1799,6 +1891,7 @@ export default function SATTraining({ onNavigate }) {
           fmtDate={fmtDate}
           fmtDuration={fmtDuration}
           resolveQuestionText={resolveQuestionText}
+          resolveQuestionData={resolveQuestionData}
         />
       )}
     </PageWrap>

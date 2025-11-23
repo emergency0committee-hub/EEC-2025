@@ -25,6 +25,12 @@ export default function StudentResourceCard({
   decodeQuestions,
   extractMeta,
 }) {
+  const isPpt = (url) => /\.(pptx?|ppsx?)(\?|$)/i.test(String(url || ""));
+  const buildPreviewUrl = (url) => {
+    if (!url) return "";
+    if (isPpt(url)) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    return url;
+  };
   const [previewUrl, setPreviewUrl] = useState("");
   const computed = useMemo(() => {
     if (!resource) return null;
@@ -164,8 +170,11 @@ export default function StudentResourceCard({
           {!computed.url && <div style={{ color: "#6b7280", fontSize: 12 }}>No file provided.</div>}
           <div style={{ marginTop: 4, display: "flex", gap: 8 }}>
             {computed.url && (
-              <Btn variant="secondary" onClick={() => setPreviewUrl(computed.url)}>
-                View PDF
+              <Btn
+                variant="secondary"
+                onClick={() => setPreviewUrl(buildPreviewUrl(computed.url))}
+              >
+                View File
               </Btn>
             )}
           </div>
@@ -192,7 +201,11 @@ export default function StudentResourceCard({
                 <div style={{ fontWeight: 700 }}>Preview</div>
                 <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
               </div>
-              <iframe title="Lesson PDF" src={previewUrl} style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }} />
+              <iframe
+                title="Lesson File"
+                src={previewUrl}
+                style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }}
+              />
             </div>
           </div>
         )}

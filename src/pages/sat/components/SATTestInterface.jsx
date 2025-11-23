@@ -683,16 +683,13 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         } catch {}
         const questionTexts = {};
         try {
-          const limit = 400;
           (mod.questions || []).forEach((q, idx) => {
             if (!q) return;
             const idKey = q.id || q.questionId || `q_${idx + 1}`;
             if (!idKey) return;
             const rawText = q.text || q.question || q.prompt || q.title || null;
             if (!rawText) return;
-            const compact = String(rawText).replace(/\s+/g, " ").trim();
-            if (!compact) return;
-            questionTexts[idKey] = compact.length > limit ? `${compact.slice(0, limit)}...` : compact;
+            questionTexts[idKey] = String(rawText);
           });
         } catch {}
         const practiceKind = normalizeTrainingKind(practice.kind || mod?.kind || 'classwork');
