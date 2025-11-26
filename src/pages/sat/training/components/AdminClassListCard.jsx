@@ -12,6 +12,7 @@ export default function AdminClassListCard({
   classDeleteBusy,
   onAssignChange,
   onSaveAssignment,
+  onOpenBulkAssign,
   onRefreshClasses,
   onSelectClass,
   onDeleteClass,
@@ -19,87 +20,69 @@ export default function AdminClassListCard({
 }) {
   return (
     <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <h3 style={{ marginTop: 0 }}>Your Classes</h3>
-        <div style={{ color: "#6b7280", fontSize: 12 }}>
-          {classesLoading ? "Loading…" : `${classes.length} class${classes.length === 1 ? "" : "es"}`}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h3 style={{ margin: 0 }}>Your Classes</h3>
+          <span
+            style={{
+              fontSize: 12,
+              color: "#0f172a",
+              background: "#e0f2fe",
+              border: "1px solid #bae6fd",
+              borderRadius: 999,
+              padding: "4px 10px",
+            }}
+          >
+            {classesLoading ? "Loading…" : `${classes.length} class${classes.length === 1 ? "" : "es"}`}
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Btn variant="secondary" onClick={onRefreshClasses} style={{ minWidth: 140 }} disabled={classesLoading}>
+            {classesLoading ? "Refreshing…" : "Refresh"}
+          </Btn>
+          <Btn variant="primary" onClick={onOpenBulkAssign} style={{ minWidth: 160 }}>
+            Bulk add students
+          </Btn>
         </div>
       </div>
       <div
         style={{
           marginTop: 12,
-          border: "1px dashed #dbeafe",
-          borderRadius: 12,
+          border: "1px solid #e2e8f0",
+          borderRadius: 14,
           padding: 16,
           background: "#f8fafc",
           display: "grid",
-          gap: 12,
+          gap: 8,
         }}
       >
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
-          <div>
-            <div style={{ fontWeight: 600 }}>Create or Assign a Class</div>
-            <p style={{ margin: "4px 0 0", color: "#6b7280", fontSize: 13 }}>
-              Add a student email and class name. New names create classes automatically.
-            </p>
-          </div>
-          <Btn variant="secondary" onClick={onRefreshClasses} style={{ minWidth: 150 }} disabled={classesLoading}>
-            {classesLoading ? "Refreshing…" : "Refresh list"}
-          </Btn>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            alignItems: "flex-end",
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontWeight: 600, fontSize: 13 }}>Student Email</label>
-            <input
-              type="email"
-              list="sat-training-email-options"
-              placeholder="student@example.com"
-              value={assignForm.email}
-              onChange={(event) => onAssignChange("email", event.target.value)}
-              style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
-            />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ fontWeight: 600, fontSize: 13 }}>Class Name</label>
-            <input
-              type="text"
-              placeholder="e.g., Cohort A"
-              value={assignForm.className}
-              onChange={(event) => onAssignChange("className", event.target.value)}
-              style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
-            />
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <Btn variant="primary" onClick={onSaveAssignment} disabled={savingAssign} style={{ width: "100%" }}>
-              {savingAssign ? "Saving…" : "Save Assignment"}
-            </Btn>
-          </div>
-        </div>
-        <div style={{ fontSize: 12, color: "#6b7280" }}>
-          {loadingEmails ? "Loading known student emails…" : "Suggestions appear as you type."}
-        </div>
-        <datalist id="sat-training-email-options">
-          {knownEmails.map((email) => (
-            <option key={email} value={email} />
-          ))}
-        </datalist>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Create or Assign a Class</div>
+        <p style={{ margin: 0, color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
+          Use <b>Bulk add students</b> to paste multiple emails and assign them to a class. New class names are created automatically.
+        </p>
       </div>
       {classes.length === 0 ? (
-        <p style={{ color: "#6b7280" }}>No classes found yet. Use the form above to create your first class.</p>
+        <p style={{ color: "#6b7280", marginTop: 12 }}>
+          No classes found yet. Use bulk add to create your first class and roster.
+        </p>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginTop: 12 }}>
           {classes.map((cls) => {
             const canDelete = cls.name && cls.name !== "(Unassigned)";
             const busy = classDeleteBusy === cls.name;
             return (
-              <div key={cls.name} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+              <div
+                key={cls.name}
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 14,
+                  background: "#fff",
+                  boxShadow: "0 2px 6px rgba(15,23,42,0.05)",
+                  display: "grid",
+                  gap: 8,
+                }}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                   <div>
                     <div style={{ fontWeight: 700, color: "#111827" }}>{cls.name}</div>
@@ -169,10 +152,17 @@ AdminClassListCard.propTypes = {
     email: PropTypes.string,
     className: PropTypes.string,
   }).isRequired,
-  knownEmails: PropTypes.arrayOf(PropTypes.string).isRequired,
+  knownEmails: PropTypes.arrayOf(
+    PropTypes.shape({
+      email: PropTypes.string.isRequired,
+      name: PropTypes.string,
+      school: PropTypes.string,
+    })
+  ).isRequired,
   loadingEmails: PropTypes.bool.isRequired,
   savingAssign: PropTypes.bool.isRequired,
   classDeleteBusy: PropTypes.string.isRequired,
+  onOpenBulkAssign: PropTypes.func.isRequired,
   onAssignChange: PropTypes.func.isRequired,
   onSaveAssignment: PropTypes.func.isRequired,
   onRefreshClasses: PropTypes.func.isRequired,

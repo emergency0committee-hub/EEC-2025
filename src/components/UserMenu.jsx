@@ -47,7 +47,6 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
     profile: strings.menuProfile || "Profile",
     careerDashboard: strings.menuCareerDashboard || "Career Dashboard",
     satDashboard: strings.menuSatDashboard || "SAT Dashboard",
-    satTraining: strings.menuSatTraining || "SAT Training",
     manageUsers: strings.menuManageUsers || "Manage Users",
     questions: strings.menuQuestions || "Question Bank",
     certificates: strings.menuCertificates || "Certificates",
@@ -153,15 +152,6 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                 }}
               >
                 {menuLabels.satDashboard}
-              </MenuItem>
-              <MenuItem
-                to="admin-sat-training"
-                onSelect={(event) => {
-                  setOpen(false);
-                  onNavigate("admin-sat-training", null, event);
-                }}
-              >
-                {menuLabels.satTraining}
               </MenuItem>
               <MenuItem
                 to="admin-certificates"

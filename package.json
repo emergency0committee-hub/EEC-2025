@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --port 5173",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "lint:encoding": "bash scripts/check-encoding.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.76.1",

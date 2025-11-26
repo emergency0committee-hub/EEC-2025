@@ -1,6 +1,7 @@
 // src/pages/sat/training/SATTraining.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import Btn from "../../../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
 import { supabase } from "../../../lib/supabase.js";
 import { fetchQuestionBankSample, fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
@@ -189,6 +190,12 @@ export default function SATTraining({ onNavigate }) {
   const [adminViewTab, setAdminViewTab] = useState("classwork"); // stream | classwork | people
   const [assignForm, setAssignForm] = useState({ email: "", className: "" });
   const [savingAssign, setSavingAssign] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkClassName, setBulkClassName] = useState("");
+  const [bulkEmailsText, setBulkEmailsText] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkSelectedEmails, setBulkSelectedEmails] = useState([]);
+  const [bulkSearch, setBulkSearch] = useState("");
   const [knownEmails, setKnownEmails] = useState([]);
   const [loadingEmails, setLoadingEmails] = useState(false);
 
@@ -397,9 +404,17 @@ export default function SATTraining({ onNavigate }) {
     }
     setLoadingEmails(true);
     try {
-      const emails = new Set();
-      const addEmail = (value) => {
-        if (value) emails.add(value);
+      const emailMap = new Map();
+      const addEmail = (value, extra = {}) => {
+        if (!value) return;
+        const email = String(value).trim();
+        if (!email) return;
+        const existing = emailMap.get(email) || {};
+        emailMap.set(email, {
+          email,
+          name: extra.name || existing.name || "",
+          school: extra.school || existing.school || "",
+        });
       };
 
       const safeCollect = async (label, executor) => {
@@ -424,16 +439,39 @@ export default function SATTraining({ onNavigate }) {
           console.warn("list_user_emails RPC", rpc.error);
           return;
         }
-        (rpc.data || []).forEach((entry) => addEmail(entry?.email));
+        (rpc.data || []).forEach((entry) => {
+          if (entry?.role && String(entry.role).toLowerCase().includes("educator")) return;
+          addEmail(entry?.email, { name: entry?.name, school: entry?.school });
+        });
       });
 
       await safeCollect("profiles", async () => {
-        const pr = await supabase.from("profiles").select("email").limit(5000);
+        const pr = await supabase
+          .from("profiles")
+          .select(
+            "email, school, school_name, schoolname, organization, org, company, class_name, name, full_name, username"
+          )
+          .limit(5000);
         if (pr.error) {
           console.warn("profiles email fetch", pr.error);
           return;
         }
-        (pr.data || []).forEach((entry) => addEmail(entry?.email));
+        (pr.data || []).forEach((entry) => {
+          const role = String(entry?.role || entry?.accountType || "").toLowerCase();
+          if (role.includes("educator")) return;
+          addEmail(entry?.email, {
+            school:
+              entry?.school ||
+              entry?.school_name ||
+              entry?.schoolname ||
+              entry?.organization ||
+              entry?.org ||
+              entry?.company ||
+              entry?.class_name ||
+              "",
+            name: entry?.name || entry?.full_name || entry?.username,
+          });
+        });
       });
 
       await safeCollect("class assignments", async () => {
@@ -478,7 +516,9 @@ export default function SATTraining({ onNavigate }) {
         (sr.data || []).forEach((entry) => addEmail(entry?.user_email));
       });
 
-      setKnownEmails(Array.from(emails).filter(Boolean).sort((a, b) => a.localeCompare(b)));
+      const list = Array.from(emailMap.values()).filter((e) => e.email);
+      list.sort((a, b) => a.email.localeCompare(b.email));
+      setKnownEmails(list);
     } catch (e) {
       console.warn("load known emails", e);
       setKnownEmails([]);
@@ -490,6 +530,16 @@ export default function SATTraining({ onNavigate }) {
   const handleAssignInput = (field, value) => {
     setAssignForm((prev) => ({ ...prev, [field]: value }));
   };
+
+  const parseEmails = (text) =>
+    Array.from(
+      new Set(
+        (text || "")
+          .split(/[\n,;\s]+/)
+          .map((e) => e.trim())
+          .filter((e) => e && /\S+@\S+\.\S+/.test(e))
+      )
+    );
 
   const saveAssignment = async () => {
     if (!isAdmin) return;
@@ -527,6 +577,57 @@ export default function SATTraining({ onNavigate }) {
       alert(e?.message || "Failed to save class assignment.");
     } finally {
       setSavingAssign(false);
+    }
+  };
+
+  const saveBulkAssignments = async () => {
+    if (!isAdmin) return;
+    const className = (bulkClassName || "").trim();
+    const emails = bulkSelectedEmails.length
+      ? Array.from(new Set(bulkSelectedEmails.map((e) => e.email)))
+      : parseEmails(bulkEmailsText);
+    if (!className) {
+      alert("Enter a class name.");
+      return;
+    }
+    if (!emails.length) {
+      alert("Add at least one valid student email (one per line or separated by commas).");
+      return;
+    }
+    setBulkSaving(true);
+    try {
+      const { data: me } = await supabase.auth.getUser();
+      const adminEmail = me?.user?.email || null;
+      const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+      const payloads = emails.map((email) => ({
+        student_email: email,
+        class_name: className,
+        assigned_by: adminEmail,
+      }));
+      let { error } = await supabase
+        .from(table)
+        .upsert(payloads, { onConflict: CLASS_ASSIGN_ON_CONFLICT });
+      if (needsLegacyConflictFallback(error)) {
+        // Fallback: delete + insert one by one
+        for (const payload of payloads) {
+          try { await supabase.from(table).delete().eq("student_email", payload.student_email).eq("class_name", payload.class_name); } catch {}
+          const res = await supabase.from(table).insert(payload);
+          if (res.error) throw res.error;
+        }
+        error = null;
+      }
+      if (error) throw error;
+      setBulkEmailsText("");
+      setBulkSelectedEmails([]);
+      setBulkClassName("");
+      setBulkModalOpen(false);
+      await loadClasses();
+      alert(`Added ${emails.length} student${emails.length === 1 ? "" : "s"} to ${className}.`);
+    } catch (e) {
+      console.error(e);
+      alert(e?.message || "Failed to save bulk assignments.");
+    } finally {
+      setBulkSaving(false);
     }
   };
 
@@ -1579,7 +1680,14 @@ export default function SATTraining({ onNavigate }) {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200);
-      if (error) throw error;
+      if (error) {
+        if (isMissingResourceError(error)) {
+          warnMissingSource(RESOURCE_LIBRARY_TABLE, error);
+          setResourceLibrary([]);
+          return;
+        }
+        throw error;
+      }
       setResourceLibrary(data || []);
     } catch (e) {
       console.warn(e);
@@ -1603,32 +1711,6 @@ export default function SATTraining({ onNavigate }) {
     return (publicData && publicData.publicUrl) || null;
   };
 
-  const addLessonResource = async ({ title, url, file }) => {
-    if (!selectedClass) throw new Error("Select a class first");
-    const cleanTitle = String(title || "").trim();
-    const cleanUrl = String(url || "").trim();
-    if (!cleanTitle) throw new Error("Title is required");
-    let finalUrl = cleanUrl;
-
-    if (file) {
-      finalUrl = await uploadResourceFile(file);
-    }
-
-    if (!finalUrl) throw new Error("Provide a PDF URL or upload a file");
-    const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
-    const payload = {
-      class_name: selectedClass,
-      title: cleanTitle,
-      url: finalUrl,
-      kind: "classwork",
-      payload: { url: finalUrl, kindOverride: "lesson" },
-    };
-    const { data, error } = await supabase.from(rTable).insert(payload).select().single();
-    if (error) throw error;
-    setResources((list) => [data, ...list]);
-    return data;
-  };
-
   const addLibraryResourceToClass = async (item) => {
     if (!selectedClass) throw new Error("Select a class first");
     if (!item || !item.url) throw new Error("Missing resource");
@@ -1646,10 +1728,25 @@ export default function SATTraining({ onNavigate }) {
     return data;
   };
 
-  const people = useMemo(() => ([
-    { role: "Teacher", name: "Practice Bot" },
-    { role: "Student", name: "You" },
-  ]), []);
+  const resolveDisplayName = useCallback((email) => {
+    const entry = knownEmails.find((e) => (e.email || e) === email);
+    if (entry && entry.name) return entry.name;
+    if (email && email.includes("@")) return email.split("@")[0];
+    return email || "";
+  }, [knownEmails]);
+
+  const people = useMemo(() => {
+    const teacherName = resolveDisplayName(userEmail) || "Teacher";
+    const students = classEmails.map((email) => ({
+      role: "Student",
+      name: resolveDisplayName(email),
+    }));
+    const list = [{ role: "Teacher", name: teacherName }, ...students];
+    return list.length ? list : [
+      { role: "Teacher", name: "Practice Bot" },
+      { role: "Student", name: "You" },
+    ];
+  }, [classEmails, userEmail, resolveDisplayName]);
 
   function decodeResourceQuestions(r) {
     return getResourceQuestions(r);
@@ -1680,6 +1777,7 @@ export default function SATTraining({ onNavigate }) {
     classDeleteBusy,
     onAssignChange: handleAssignInput,
     onSaveAssignment: saveAssignment,
+    onOpenBulkAssign: () => setBulkModalOpen(true),
     onRefreshClasses: loadClasses,
     onSelectClass: (name) => setSelectedClass(name),
     onDeleteClass: handleDeleteClass,
@@ -1720,7 +1818,6 @@ export default function SATTraining({ onNavigate }) {
     formatDuration,
     pillStyles,
     deleteResource,
-    addLessonResource,
     resourceLibrary,
     libraryLoading,
     loadResourceLibrary,
@@ -1827,6 +1924,16 @@ export default function SATTraining({ onNavigate }) {
     })();
   }, []);
 
+  const filteredKnown = useMemo(() => {
+    const term = String(bulkSearch || "").trim().toLowerCase();
+    if (!term) return knownEmails;
+    return knownEmails.filter((entry) => {
+      const email = String(entry.email || entry || "").toLowerCase();
+      const name = String(entry.name || "").toLowerCase();
+      return email.includes(term) || name.includes(term);
+    });
+  }, [knownEmails, bulkSearch]);
+
   if (checking) {
     return (
       <PageWrap>
@@ -1875,6 +1982,185 @@ export default function SATTraining({ onNavigate }) {
             resolveQuestionText={resolveQuestionText}
             resolveQuestionData={resolveQuestionData}
           />
+        )}
+        {bulkModalOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1400,
+              padding: 12,
+            }}
+            onClick={() => setBulkModalOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                padding: 16,
+                width: "min(640px, 95vw)",
+                boxShadow: "0 15px 40px rgba(0,0,0,0.12)",
+                display: "grid",
+                gap: 12,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Bulk add students</h3>
+                  <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    Paste one email per line (or separated by commas) and choose a class name.
+                  </div>
+                </div>
+                <Btn variant="back" onClick={() => setBulkModalOpen(false)}>Close</Btn>
+              </div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontWeight: 600, fontSize: 13 }}>Class Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Cohort A"
+                    value={bulkClassName}
+                    onChange={(e) => setBulkClassName(e.target.value)}
+                    style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontWeight: 600, fontSize: 13 }}>Student emails</label>
+                  {filteredKnown.length ? (
+                  <div
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      background: "#fff",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 12px",
+                        borderBottom: "1px solid #e5e7eb",
+                        background: "#f9fafb",
+                        gap: 8,
+                        }}
+                    >
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>Student list</div>
+                        <input
+                          type="search"
+                          placeholder="Search name or email"
+                          value={bulkSearch}
+                          onChange={(e) => setBulkSearch(e.target.value)}
+                          style={{
+                            padding: "8px 10px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 8,
+                            fontSize: 13,
+                            minWidth: 200,
+                          }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <Btn
+                          variant="secondary"
+                          onClick={() =>
+                            setBulkSelectedEmails(
+                              filteredKnown.map((e) => ({
+                                email: e.email || e,
+                                school: e.school || "",
+                                name: e.name || "",
+                              }))
+                            )
+                          }
+                          style={{ padding: "6px 10px", minWidth: 80 }}
+                        >
+                          Select all
+                        </Btn>
+                        <Btn
+                          variant="back"
+                          onClick={() => setBulkSelectedEmails([])}
+                          style={{ padding: "6px 10px", minWidth: 80 }}
+                        >
+                          Clear
+                        </Btn>
+                      </div>
+                    </div>
+                    <div style={{ maxHeight: 240, overflowY: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                            <th style={{ width: 40, padding: "8px 10px", textAlign: "left" }} />
+                            <th style={{ padding: "8px 10px", textAlign: "left", color: "#0f172a" }}>Name / Email</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredKnown.map((entry) => {
+                            const email = entry.email || entry;
+                            const name = entry.name || email.split("@")[0];
+                            const checked = bulkSelectedEmails.some((e) => e.email === email);
+                            return (
+                              <tr key={email} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                            <td style={{ padding: "8px 10px" }}>
+                              <input
+                                type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      setBulkSelectedEmails((prev) =>
+                                        prev.some((e) => e.email === email)
+                                          ? prev.filter((e) => e.email !== email)
+                                          : [...prev, { email, name }]
+                                      )
+                                    }
+                                    style={{ width: 16, height: 16, cursor: "pointer" }}
+                                  />
+                            </td>
+                            <td style={{ padding: "8px 10px", wordBreak: "break-all", color: "#111827" }}>
+                              <div style={{ fontWeight: 700 }}>{name}</div>
+                              <div style={{ color: "#6b7280", fontSize: 12 }}>{email}</div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      padding: 12,
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      background: "#f9fafb",
+                      color: "#6b7280",
+                      fontSize: 13,
+                    }}
+                  >
+                    No saved student emails yet. Add students elsewhere to see them here.
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: "#64748b" }}>
+                  Check one or more students to add them to this class.
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <Btn variant="secondary" onClick={() => setBulkModalOpen(false)}>Cancel</Btn>
+                <Btn variant="primary" onClick={saveBulkAssignments} disabled={bulkSaving}>
+                  {bulkSaving ? "Saving…" : "Save all"}
+                  </Btn>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </PageWrap>
     );

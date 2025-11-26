@@ -34,6 +34,7 @@ export default function AdminDashboard({ onNavigate }) {
     return Number.isFinite(saved) && saved > 0 ? saved : 60;
   });
 
+
   useEffect(() => {
     try {
       localStorage.setItem("cg_timer_min", String(timerMin));
@@ -412,8 +413,13 @@ export default function AdminDashboard({ onNavigate }) {
     fetchSubmissions();
   }, []);
 
-  const handleViewSubmission = (submission) => {
-    // Navigate to results with submission data
+  const handleViewSubmission = async (submission, event) => {
+    const isNewTab = event && (event.ctrlKey || event.metaKey || event.button === 1 || event.type === "auxclick");
+    if (isNewTab) {
+      event.preventDefault();
+      await openPreviewPdf(submission);
+      return;
+    }
     onNavigate("results", { submission });
   };
 
@@ -492,7 +498,23 @@ export default function AdminDashboard({ onNavigate }) {
       <div className={`admin-bulk-screen${bulkActive ? " bulk-hide-print" : ""}`}>
         <HeaderBar title="Test Submissions" right={null} />
         <Card>
-          <h3 style={{ marginTop: 0 }}>Recent Test Submissions</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <h3 style={{ marginTop: 0, marginBottom: 0 }}>Recent Test Submissions</h3>
+            <Btn
+              variant="primary"
+              onClick={() =>
+                onNavigate("test", {
+                  preview: true,
+                  previewTitle: "Career Test Preview",
+                })
+              }
+            >
+              Preview Career Test
+            </Btn>
+          </div>
+          <p style={{ color: "#6b7280", marginTop: 8 }}>
+            Open the full Career Guidance test in preview mode to review the experience. No data is saved while in preview.
+          </p>
 
           {bulkSet?.school && bulkEntries.length > 0 && (
             <div
@@ -850,11 +872,11 @@ export default function AdminDashboard({ onNavigate }) {
                   Next
                 </Btn>
                 <Btn
-                  variant="primary"
-                  onClick={() => {
-                    setBulkPreviewOpen(false);
-                    handleBulkExport(bulkPreviewList);
-                  }}
+                variant="primary"
+                onClick={() => {
+                  setBulkPreviewOpen(false);
+                  handleBulkExport(bulkPreviewList);
+                }}
                   disabled={!bulkPreviewList.length || bulkActive}
                 >
                   Start ZIP export

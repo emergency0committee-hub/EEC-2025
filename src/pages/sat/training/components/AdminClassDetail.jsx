@@ -90,7 +90,6 @@ export default function AdminClassDetail({
   formatDuration,
   pillStyles,
   deleteResource,
-  addLessonResource,
   onNavigate,
   classLogs,
   logsLoading,
@@ -98,10 +97,10 @@ export default function AdminClassDetail({
   openClassLog,
   adaptiveInsights,
   onDeleteLog,
+  refreshClassData,
 }) {
-  const [lessonForm, setLessonForm] = useState({ title: "", url: "", file: null });
   const [savingLesson, setSavingLesson] = useState(false);
-  const fileInputRef = useRef(null);
+  const [libraryPage, setLibraryPage] = useState(1);
   const getKind = (res) => String(res?.payload?.kindOverride || res?.kind || "").toLowerCase();
   const [previewUrl, setPreviewUrl] = useState("");
   const isPpt = (url) => /\.(pptx?|ppsx?)(\?|$)/i.test(String(url || ""));
@@ -112,19 +111,11 @@ export default function AdminClassDetail({
   };
   const [libraryOpen, setLibraryOpen] = useState(false);
 
-  const handleAddLesson = async () => {
-    const title = (lessonForm.title || "").trim();
-    const url = (lessonForm.url || "").trim();
-    const file = lessonForm.file || null;
-    if (!title || (!url && !file)) {
-      alert("Enter a title and either upload a PDF or paste a link.");
-      return;
-    }
+  const handleAddLesson = async (item) => {
+    if (!item) return;
     setSavingLesson(true);
     try {
-      await addLessonResource({ title, url, file });
-      setLessonForm({ title: "", url: "", file: null });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      await addLibraryResourceToClass(item);
       alert("Resource added.");
     } catch (e) {
       console.error(e);
@@ -171,38 +162,17 @@ export default function AdminClassDetail({
         {classTab === "lessons" && (
           <div style={{ display: "grid", gap: 12 }}>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources (PDF/Links)</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-                <input
-                  type="text"
-                  placeholder="Resource title"
-                  value={lessonForm.title}
-                  onChange={(e) => setLessonForm((prev) => ({ ...prev, title: e.target.value }))}
-                  style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 220 }}
-                />
-                <input
-                  type="url"
-                  placeholder="PDF/PPT link (optional if you upload a file)"
-                  value={lessonForm.url}
-                  onChange={(e) => setLessonForm((prev) => ({ ...prev, url: e.target.value }))}
-                  style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 320 }}
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf,.ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                  onChange={(e) => setLessonForm((prev) => ({ ...prev, file: e.target.files?.[0] || null }))}
-                  style={{ padding: "9px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 220 }}
-                />
-                <Btn variant="primary" onClick={handleAddLesson} disabled={savingLesson}>
-                  {savingLesson ? "Saving..." : "Add Resource"}
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Resources (Library only)</div>
+              <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0 }}>
+                Uploads and direct links are disabled here. Choose items from the library to add to this class.
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                <Btn variant="primary" onClick={() => { setLibraryOpen(true); loadResourceLibrary(); }}>
+                  Open Library
                 </Btn>
-                <Btn variant="secondary" onClick={() => { setLibraryOpen(true); loadResourceLibrary(); }}>
-                  Add from Library
+                <Btn variant="secondary" onClick={refreshQuestionStats}>
+                  Refresh
                 </Btn>
-              </div>
-              <div style={{ color: "#6b7280", fontSize: 12, marginBottom: 4 }}>
-                Upload a PDF/PPT or paste a link. We’ll store and share the public link with students.
               </div>
               {resLoading ? (
                 <div style={{ color: "#6b7280" }}>Loading…</div>
@@ -583,6 +553,7 @@ export default function AdminClassDetail({
                     <th style={{ padding: 10, textAlign: "left" }}>Time</th>
                     <th style={{ padding: 10, textAlign: "left" }}>Student</th>
                     <th style={{ padding: 10, textAlign: "left" }}>Unit/Lesson</th>
+                    <th style={{ padding: 10, textAlign: "left" }}>Lesson Title</th>
                     <th style={{ padding: 10, textAlign: "left" }}>Score</th>
                     <th style={{ padding: 10, textAlign: "left" }}>Manage</th>
                   </tr>
@@ -600,6 +571,7 @@ export default function AdminClassDetail({
                           <td style={{ padding: 10 }}>{fmtDate(log.ts, true)}</td>
                           <td style={{ padding: 10 }}>{log.user_email || "-"}</td>
                           <td style={{ padding: 10 }}>{log.unit || log.lesson || "-"}</td>
+                          <td style={{ padding: 10 }}>{log.lesson_title || log.title || "-"}</td>
                           <td style={{ padding: 10 }}>{score}</td>
                           <td style={{ padding: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
                             <button
@@ -652,7 +624,7 @@ export default function AdminClassDetail({
                 <h3 style={{ margin: 0 }}>Resource Library</h3>
                 <Btn variant="back" onClick={() => setLibraryOpen(false)}>Close</Btn>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ color: "#6b7280", fontSize: 13 }}>Pick a saved resource to add to this class.</div>
                 <Btn variant="secondary" onClick={loadResourceLibrary} disabled={libraryLoading}>
                   {libraryLoading ? "Loading..." : "Reload"}
@@ -663,35 +635,62 @@ export default function AdminClassDetail({
               ) : resourceLibrary.length === 0 ? (
                 <div style={{ color: "#6b7280" }}>No library resources yet.</div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-                  {resourceLibrary.map((item) => (
-                    <div key={item.id || item.url} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, display: "grid", gap: 6 }}>
-                      <div style={{ fontWeight: 700 }}>{item.title || "Resource"}</div>
-                      <div style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase" }}>{item.kind || "file"}</div>
-                      {item.url && (
-                        <div style={{ wordBreak: "break-word", fontSize: 12, color: "#2563eb" }}>
-                          {item.url}
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
+                    {resourceLibrary
+                      .slice()
+                      .sort((a, b) => (a.title || "").localeCompare(b.title || "", undefined, { sensitivity: "base" }))
+                      .slice((libraryPage - 1) * 4, (libraryPage - 1) * 4 + 4)
+                      .map((item) => (
+                        <div key={item.id || item.url} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, display: "grid", gap: 6 }}>
+                          <div style={{ fontWeight: 700 }}>{item.title || "Resource"}</div>
+                          <div style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase" }}>{item.kind || "file"}</div>
+                          {item.url && (
+                            <div style={{ wordBreak: "break-word", fontSize: 12, color: "#2563eb" }}>
+                              {item.url}
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <Btn
+                              variant="secondary"
+                              onClick={async () => {
+                                try {
+                                  await addLibraryResourceToClass(item);
+                                  alert("Added to class resources.");
+                                  setLibraryOpen(false);
+                                } catch (err) {
+                                  alert(err?.message || "Failed to add resource.");
+                                }
+                              }}
+                            >
+                              Add to Class
+                            </Btn>
+                          </div>
                         </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <Btn
-                          variant="secondary"
-                          onClick={async () => {
-                            try {
-                              await addLibraryResourceToClass(item);
-                              alert("Added to class resources.");
-                              setLibraryOpen(false);
-                            } catch (err) {
-                              alert(err?.message || "Failed to add resource.");
-                            }
-                          }}
-                        >
-                          Add to Class
-                        </Btn>
+                      ))}
+                  </div>
+                  {Math.ceil(resourceLibrary.length / 4) > 1 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                      <Btn
+                        variant="secondary"
+                        onClick={() => setLibraryPage((p) => Math.max(1, p - 1))}
+                        disabled={libraryPage === 1}
+                      >
+                        Back
+                      </Btn>
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>
+                        Page {libraryPage} of {Math.max(1, Math.ceil(resourceLibrary.length / 4))}
                       </div>
+                      <Btn
+                        variant="secondary"
+                        onClick={() => setLibraryPage((p) => Math.min(Math.ceil(resourceLibrary.length / 4), p + 1))}
+                        disabled={libraryPage >= Math.ceil(resourceLibrary.length / 4)}
+                      >
+                        Next
+                      </Btn>
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -768,7 +767,6 @@ AdminClassDetail.propTypes = {
   formatDuration: PropTypes.func.isRequired,
   pillStyles: PropTypes.object.isRequired,
   deleteResource: PropTypes.func.isRequired,
-  addLessonResource: PropTypes.func.isRequired,
   onNavigate: PropTypes.func.isRequired,
   classLogs: PropTypes.array.isRequired,
   logsLoading: PropTypes.bool.isRequired,

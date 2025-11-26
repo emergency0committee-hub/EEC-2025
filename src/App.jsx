@@ -101,8 +101,8 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem("cg_lang", lang);
-      // Set document direction for RTL support
-      document.documentElement.dir = lang === "AR" ? "rtl" : "ltr";
+      // Set document direction (only LTR locales remain)
+      document.documentElement.dir = "ltr";
       document.documentElement.lang = lang.toLowerCase();
     } catch (e) {
       console.warn("Failed to save language preference:", e);
@@ -334,7 +334,7 @@ export default function App() {
   }, [currentRole, currentAiAccess]);
 
   if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />;
-  if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
   if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
   if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;
@@ -360,7 +360,7 @@ export default function App() {
     }
     return <AIEducator onNavigate={onNavigate} />;
   }
-  if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-manage-users") {

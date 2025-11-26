@@ -10,7 +10,7 @@ const TAB_LABELS = [
 ];
 
 export default function AdminTabsPanel({
-  selectedClass,
+  selectedClass = "",
   adminViewTab,
   onChangeTab,
   adminChatRefresh,
@@ -79,8 +79,4 @@ AdminTabsPanel.propTypes = {
     classListProps: PropTypes.object.isRequired,
     classDetailProps: PropTypes.object.isRequired,
   }).isRequired,
-};
-
-AdminTabsPanel.defaultProps = {
-  selectedClass: "",
 };

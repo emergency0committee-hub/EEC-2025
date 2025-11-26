@@ -1,4 +1,4 @@
-// src/pages/Home.jsx
+﻿// src/pages/Home.jsx
 import React from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
@@ -10,7 +10,7 @@ import { LANGS, STR } from "../i18n/strings.js";
 const HOME_CARDS = {
   EN: {
     career: {
-      title: "Career Assessments",
+      title: "Career Guidance",
       desc: "Explore your interests and aptitudes with a scenario-based RIASEC test and curated role matches.",
       cta: "Open",
     },
@@ -37,62 +37,33 @@ const HOME_CARDS = {
       cta: "Verify",
     },
   },
-  AR: {
-    career: {
-      title: "\u0627\u062e\u062a\u0628\u0627\u0631\u0627\u062a \u0627\u0644\u0645\u064a\u0648\u0644 \u0627\u0644\u0645\u0647\u0646\u064a\u0629",
-      desc: "\u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0647\u062a\u0645\u0627\u062a\u0643 \u0648\u0642\u062f\u0631\u0627\u062a\u0643 \u0639\u0628\u0631 \u0627\u062e\u062a\u0628\u0627\u0631 RIASEC \u062a\u0641\u0627\u0639\u0644\u064a \u0648\u062a\u0648\u0635\u064a\u0627\u062a \u0648\u0638\u0627\u0626\u0641 \u0645\u062e\u0635\u0635\u0629.",
-      cta: "\u0627\u0641\u062a\u062d",
-    },
-    satDiagnostic: {
-      title: "\u0627\u062e\u062a\u0628\u0627\u0631 SAT \u062a\u0634\u062e\u064a\u0635\u064a",
-      desc: "\u064a\u062d\u0627\u0643\u064a SAT \u0627\u0644\u0631\u0642\u0645\u064a \u0645\u0639 \u0623\u0642\u0633\u0627\u0645 \u0645\u0648\u0642\u0651\u062a\u0629 \u0648\u062a\u0642\u0631\u064a\u0631 \u0646\u062a\u0627\u0626\u062c \u0634\u0627\u0645\u0644.",
-      cta: "\u0627\u0641\u062a\u062d",
-    },
-    satTraining: {
-      title: "\u062a\u062f\u0631\u064a\u0628 SAT",
-      desc: "\u062a\u062f\u0631\u0651\u0628 \u0639\u0644\u0649 \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0648\u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0648\u0627\u0644\u0631\u064a\u0627\u0636\u064a\u0627\u062a \u062d\u0633\u0628 \u0627\u0644\u0645\u0647\u0627\u0631\u0629 \u0645\u0646 \u062f\u0648\u0646 \u062a\u0648\u0642\u064a\u062a.",
-      cta: "\u0627\u0641\u062a\u062d",
-    },
-    aiEducator: {
-      title: "\u0627\u0644\u0645\u062f\u0631\u0651\u0633 \u0627\u0644\u0630\u0643\u064a",
-      desc: "\u062f\u0631\u0648\u0633 \u0645\u062a\u0643\u064a\u0641\u0629\u060c \u062a\u063a\u0630\u064a\u0629 \u0631\u0627\u062c\u0639\u0629 \u0641\u0648\u0631\u064a\u0629\u060c \u0648\u062e\u0637\u0637 \u062f\u0631\u0627\u0633\u0629 \u0634\u062e\u0635\u064a\u0629.",
-      cta: "\u0627\u0641\u062a\u062d",
-      locked: "\u0627\u0637\u0644\u0628 \u0635\u0644\u0627\u062d\u064a\u0629",
-      lockedMessage: "\u0645\u062a\u0627\u062d \u0641\u0642\u0637 \u0644\u0644\u0645\u0639\u0644\u0651\u0645\u064a\u0646 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u064a\u0646.",
-    },
-    certificate: {
-      title: "\u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0634\u0647\u0627\u062f\u0629",
-      desc: "\u062a\u0623\u0643\u062f \u0645\u0646 \u0635\u062d\u0629 \u0634\u0647\u0627\u062f\u0629 EEC \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0631\u0642\u0645\u0647\u0627 \u0627\u0644\u0645\u0645\u064a\u0632.",
-      cta: "\u062a\u062d\u0642\u0642 \u0627\u0644\u0622\u0646",
-    },
-  },
   FR: {
     career: {
-      title: "\u00c9valuations de carri\u00e8re",
-      desc: "Explorez vos int\u00e9r\u00eats et aptitudes gr\u00e2ce au mod\u00e8le RIASEC et \u00e0 des sc\u00e9narios immersifs.",
+      title: "Orientation professionnelle",
+      desc: "Explorez vos intérêts et aptitudes grâce au modèle RIASEC et à des scénarios immersifs.",
       cta: "Ouvrir",
     },
     satDiagnostic: {
       title: "Test diagnostique SAT",
-      desc: "Simule le SAT num\u00e9rique avec des modules chronom\u00e9tr\u00e9s et un rapport complet.",
+      desc: "Simule le SAT numérique avec des modules chronométrés et un rapport complet.",
       cta: "Ouvrir",
     },
     satTraining: {
-      title: "Entra\u00eenement SAT",
-      desc: "Travaillez Lecture & \u00c9criture et Math\u00e9matiques par comp\u00e9tence sans minuterie.",
+      title: "Entraînement SAT",
+      desc: "Travaillez Lecture & Écriture et Mathématiques par compétence sans minuterie.",
       cta: "Ouvrir",
     },
     aiEducator: {
       title: "Enseignant IA",
-      desc: "Le\u00e7ons adaptatives, retours instantan\u00e9s et plans d'\u00e9tude personnalis\u00e9s.",
+      desc: "Leçons adaptatives, retours instantanés et plans d'étude personnalisés.",
       cta: "Ouvrir",
-      locked: "Demander l'acc\u00e8s",
-      lockedMessage: "R\u00e9serv\u00e9 aux enseignants approuv\u00e9s.",
+      locked: "Demander l'accès",
+      lockedMessage: "Réservé aux enseignants approuvés.",
     },
     certificate: {
-      title: "V\u00e9rifier un certificat",
-      desc: "Confirmez l'authenticit\u00e9 d'un certificat EEC gr\u00e2ce \u00e0 son identifiant unique.",
-      cta: "V\u00e9rifier",
+      title: "Vérifier un certificat",
+      desc: "Confirmez l'authenticité d'un certificat EEC grâce à son identifiant unique.",
+      cta: "Vérifier",
     },
   },
 };
@@ -113,7 +84,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
 
   const lockedLabelMap = {
     EN: { label: "Request Access", message: "Limited to approved educators." },
-    AR: { label: "\u0627\u0637\u0644\u0628 \u0635\u0644\u0627\u062d\u064a\u0629", message: "\u0645\u062a\u0627\u062d \u0641\u0642\u0637 \u0644\u0644\u0645\u0639\u0644\u0645\u064a\u0646 \u0627\u0644\u0645\u0639\u062a\u0645\u062f\u064a\u0646." },
     FR: { label: "Demander l'acc\u00e8s", message: "R\u00e9serv\u00e9 aux enseignants approuv\u00e9s." },
   };
   const lockedCopy = lockedLabelMap[lang] || lockedLabelMap.EN;
@@ -137,7 +107,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto" }} />
             <span style={{ fontWeight: 600, fontSize: 18 }}>
-              {lang === "AR" ? "\u0644\u062c\u0646\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0649\u0621 \u0627\u0644\u0627\u0642\u062a\u0635\u0627\u062f\u064a\u0629" : "EEC"}
+              EEC
             </span>
           </div>
         }
@@ -176,68 +146,77 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           gap: 16,
         }}
       >
-        <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h3 style={{ marginTop: 0, color: "#111827" }}>{home.career.title}</h3>
-            <div>
-              <Btn variant="primary" to="career" onClick={navTo("career")}>
-                {home.career.cta}
-              </Btn>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h3 style={{ marginTop: 0, color: "#111827" }}>{home.satDiagnostic.title}</h3>
-            <div>
-              <Btn variant="primary" to="sat" onClick={navTo("sat")}>
-                {home.satDiagnostic.cta}
-              </Btn>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h3 style={{ marginTop: 0, color: "#111827" }}>{home.satTraining.title}</h3>
-            <div>
-              <Btn variant="secondary" to="sat-training" onClick={navTo("sat-training")}>
-                {home.satTraining.cta}
-              </Btn>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h3 style={{ marginTop: 0, color: "#111827" }}>{home.aiEducator.title}</h3>
+        {[
+          {
+            key: "career",
+            title: home.career.title,
+            desc: home.career.desc,
+            cta: home.career.cta,
+            onClick: navTo("career"),
+            variant: "primary",
+            extra: null,
+          },
+          {
+            key: "satDiag",
+            title: home.satDiagnostic.title,
+            desc: home.satDiagnostic.desc,
+            cta: home.satDiagnostic.cta,
+            onClick: navTo("sat"),
+            variant: "primary",
+            extra: null,
+          },
+          {
+            key: "satTraining",
+            title: home.satTraining.title,
+            desc: home.satTraining.desc,
+            cta: home.satTraining.cta,
+            onClick: navTo("sat-training"),
+            variant: "primary",
+            extra: null,
+          },
+          {
+            key: "aiEducator",
+            title: home.aiEducator.title,
+            desc: home.aiEducator.desc,
+            cta: canAccessAIEducator ? home.aiEducator.cta : aiLockedLabel,
+            onClick: handleAiEducatorClick,
+            variant: "primary",
+            disabled: !canAccessAIEducator,
+            extra: !canAccessAIEducator ? (
+              <small style={{ color: "#9ca3af", fontSize: 12 }}>{aiLockedMessage}</small>
+            ) : null,
+          },
+          {
+            key: "verify",
+            title: home.certificate.title,
+            desc: home.certificate.desc,
+            cta: home.certificate.cta,
+            onClick: navTo("verify-certificate"),
+            variant: "primary",
+            extra: null,
+          },
+        ].map((card) => (
+          <Card key={card.key}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <Btn
-                variant="secondary"
-                onClick={handleAiEducatorClick}
-                disabled={!canAccessAIEducator}
-                style={!canAccessAIEducator ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
-              >
-                {canAccessAIEducator ? home.aiEducator.cta : aiLockedLabel}
-              </Btn>
-              {!canAccessAIEducator && (
-                <small style={{ color: "#9ca3af", fontSize: 12 }}>{aiLockedMessage}</small>
+              <h3 style={{ marginTop: 0, color: "#111827" }}>{card.title}</h3>
+              {card.desc && (
+                <p style={{ margin: 0, color: "#6b7280", fontSize: 14, lineHeight: 1.4 }}>
+                  {card.desc}
+                </p>
               )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <Btn
+                  variant={card.variant}
+                  onClick={card.onClick}
+                  disabled={card.disabled}
+                >
+                  {card.cta}
+                </Btn>
+                {card.extra}
+              </div>
             </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h3 style={{ marginTop: 0, color: "#111827" }}>{home.certificate.title}</h3>
-            <div>
-              <Btn variant="primary" to="verify-certificate" onClick={navTo("verify-certificate")}>
-                {home.certificate.cta}
-              </Btn>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        ))}
       </div>
 
       <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, marginTop: 8 }}>
@@ -246,3 +225,4 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
     </PageWrap>
   );
 }
+

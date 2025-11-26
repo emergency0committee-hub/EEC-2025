@@ -1,16 +1,19 @@
 // src/pages/admin/SATDashboard.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
-import SATTable from "./SATTable.jsx";
+import AdminTable from "./AdminTable.jsx";
 
 export default function SATDashboard({ onNavigate }) {
   SATDashboard.propTypes = { onNavigate: PropTypes.func.isRequired };
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tableSort, setTableSort] = useState("ts_desc");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   useEffect(() => {
     (async () => {
@@ -96,6 +99,42 @@ export default function SATDashboard({ onNavigate }) {
     }
   };
 
+  // Derived: sorted and paged submissions (name/school/time similar to career table)
+  const getSchool = (submission) => {
+    const p = submission?.participant || submission?.profile || {};
+    return (p.school || "").trim().toLowerCase();
+  };
+  const sortedSubmissions = useMemo(() => {
+    const list = [...rows];
+    list.sort((a, b) => {
+      const pa = a.participant || a.profile || {};
+      const pb = b.participant || b.profile || {};
+      const nameA = (pa.name || pa.email || a.user_email || "").toLowerCase();
+      const nameB = (pb.name || pb.email || b.user_email || "").toLowerCase();
+      const schoolA = getSchool(a);
+      const schoolB = getSchool(b);
+      const tsA = new Date(a.ts || a.created_at || pa.finished_at || pa.started_at || 0).getTime();
+      const tsB = new Date(b.ts || b.created_at || pb.finished_at || pb.started_at || 0).getTime();
+      if (tableSort === "school" || tableSort === "school_desc") {
+        const cmp = schoolA.localeCompare(schoolB) || nameA.localeCompare(nameB);
+        return tableSort === "school_desc" ? -cmp : cmp;
+      }
+      if (tableSort === "ts" || tableSort === "ts_desc") {
+        const cmp = (Number.isFinite(tsA) ? tsA : 0) - (Number.isFinite(tsB) ? tsB : 0);
+        return tableSort === "ts_desc" ? -cmp : cmp;
+      }
+      const cmp = nameA.localeCompare(nameB) || schoolA.localeCompare(schoolB);
+      return tableSort === "name_desc" ? -cmp : cmp;
+    });
+    return list;
+  }, [rows, tableSort]);
+  const pagedSubmissions = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedSubmissions.slice(start, start + PAGE_SIZE);
+  }, [sortedSubmissions, page]);
+  const totalPages = Math.max(1, Math.ceil(sortedSubmissions.length / PAGE_SIZE));
+  useEffect(() => { setPage(1); }, [rows.length, tableSort]);
+
   return (
     <PageWrap>
       <HeaderBar title="SAT Submissions" right={null} />
@@ -123,8 +162,33 @@ export default function SATDashboard({ onNavigate }) {
         </p>
         {loading ? (
           <p style={{ color: "#6b7280" }}>Loading SAT submissions...</p>
+        ) : sortedSubmissions.length > 0 ? (
+          <>
+            <AdminTable
+              submissions={pagedSubmissions}
+              onViewSubmission={onView}
+              onDeleteSubmission={onDelete}
+              onSort={setTableSort}
+              sortKey={tableSort}
+            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+              <Btn variant="secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                Prev
+              </Btn>
+              <span style={{ color: "#374151", fontSize: 13 }}>
+                Page {page} of {totalPages}
+              </span>
+              <Btn
+                variant="secondary"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+              >
+                Next
+              </Btn>
+            </div>
+          </>
         ) : (
-          <SATTable rows={rows} onView={onView} onDelete={onDelete} />
+          <p style={{ color: "#6b7280" }}>No SAT submissions found.</p>
         )}
         <div style={{ marginTop: 16 }}>
           <Btn variant="back" onClick={() => onNavigate("home")}>Back to Home</Btn>

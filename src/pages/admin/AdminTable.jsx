@@ -58,7 +58,7 @@ export default function AdminTable({
     </svg>
   );
 
-  const IconButton = ({ title, ariaLabel, variant = "neutral", onClick, children }) => {
+  const IconButton = ({ title, ariaLabel, variant = "neutral", onClick, onAuxClick, children }) => {
     const base = {
       display: "inline-flex",
       alignItems: "center",
@@ -75,6 +75,7 @@ export default function AdminTable({
     return (
       <button
         onClick={onClick}
+        onAuxClick={onAuxClick}
         title={title}
         aria-label={ariaLabel || title}
         style={style}
@@ -140,7 +141,12 @@ export default function AdminTable({
                 <td style={{ padding: 12 }}>{duration}</td>
                 <td style={{ padding: 12 }}>
                   <div style={{ display: "inline-flex", gap: 8 }}>
-                    <IconButton title="View details" ariaLabel="View details" onClick={() => onViewSubmission(sub)}>
+                    <IconButton
+                      title="View details"
+                      ariaLabel="View details"
+                      onClick={(e) => onViewSubmission(sub, e)}
+                      onAuxClick={(e) => onViewSubmission(sub, e)}
+                    >
                       <EyeIcon />
                     </IconButton>
                     {onEditSubmission && (

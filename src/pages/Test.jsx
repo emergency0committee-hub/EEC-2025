@@ -141,12 +141,13 @@ function pillarAggAndCountsFromAnswers(questions, ansTF) {
 // Using PaletteOverlay component for question navigation
 
 /* ====================== MAIN COMPONENT ====================== */
-export default function Test({ onNavigate, lang = "EN", setLang }) {
+export default function Test({ onNavigate, lang = "EN", setLang, preview = false }) {
   const lenR = Q_RIASEC.length;
   const INTRO = 0;
   const R_START = 1;
   const LAST = R_START + Math.max(0, lenR - 1);
   const totalQuestions = lenR;
+  const isPreview = Boolean(preview);
 
   const indexFromPage = (p) => (p >= R_START && p <= LAST ? p - R_START + 1 : 0);
   const pageFromIndex = (idx) => R_START + (idx - 1);
@@ -302,6 +303,21 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
       active = false;
     };
   }, [authUser, profileReloadKey]);
+
+  // Preview mode: skip access/profile and jump straight to questions without saving
+  useEffect(() => {
+    if (!isPreview || previewInitRef.current) return;
+    previewInitRef.current = true;
+    setCgUnlocked(true);
+    const chosen = (examLang || lang || "EN") || "EN";
+    setExamLang(chosen);
+    try { localStorage.setItem("cg_exam_lang", chosen); } catch {}
+    setExamLocked(true);
+    setShuffledRIASEC(shuffleArray(Q_RIASEC));
+    setStartTs(Date.now());
+    setPage(R_START);
+  }, [isPreview, lang, examLang, R_START]);
+
   useEffect(() => {
     const handleStorage = (event) => {
       if (event.key === "cg_timer_min") {
@@ -317,6 +333,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
   const cd = useCountdown(timerMin * 60);
   const hasEndedRef = useRef(false);
   const [startTs, setStartTs] = useState(null);
+  const previewInitRef = useRef(false);
 
   const [shuffledRIASEC, setShuffledRIASEC] = useState([]);
 
@@ -659,7 +676,7 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         started_at: startTs ? new Date(startTs).toISOString() : null,
         finished_at: new Date(finishedAt).toISOString(),
       };
-      await saveTestSubmission({
+      const submissionPayload = {
         profile: participant,
         answers: ansTF,
         radarData,
@@ -667,16 +684,24 @@ export default function Test({ onNavigate, lang = "EN", setLang }) {
         pillarAgg,
         pillarCounts,
         topCodes,
-      });
+      };
+      const goToResults = () =>
+        onNavigate("results", {
+          radarData,
+          areaPercents: areaPerc,
+          interestPercents: interestsPerc,
+          participant: { ...profile, ts: Date.now() },
+          pillarAgg,
+          pillarCounts,
+        });
 
-      onNavigate("results", {
-        radarData,
-        areaPercents: areaPerc,
-        interestPercents: interestsPerc,
-        participant: { ...profile, ts: Date.now() },
-        pillarAgg,
-        pillarCounts,
-      });
+      if (isPreview) {
+        goToResults();
+        return;
+      }
+
+      await saveTestSubmission(submissionPayload);
+      goToResults();
     } catch (e) {
       console.error("Save failed:", e);
       const msg = e?.message || String(e);
