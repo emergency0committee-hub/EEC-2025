@@ -105,7 +105,7 @@ export default function OccupationScales({ radarByCode = {}, themeOrder }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const data = await loadOccupations();
+      const data = await loadOccupations({ force: true, cacheBuster: Date.now() });
       if (alive) setRows(Array.isArray(data) ? data : []);
     })();
     return () => {

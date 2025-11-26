@@ -117,21 +117,31 @@ export default function AdminTable({
             </th>
             <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Time</th>
             <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Duration</th>
+            <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Answered</th>
             <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Manage</th>
           </tr>
         </thead>
         <tbody>
           {submissions.map((sub) => {
             const p = sub.participant || sub.profile || {};
-            const name = p.name || "—";
-            const school = p.school || "—";
+            const name = p.name || "-";
+            const school = p.school || "-";
             const finished = p.finished_at || sub.ts || sub.created_at || null;
             const d = finished ? new Date(finished) : null;
             const dateStr = d
               ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })
-              : "—";
-            const timeStr = d ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "—";
+              : "-";
+            const timeStr = d ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "-";
             const duration = fmtDuration(p.started_at, p.finished_at);
+            let answered = "-";
+            if (Number.isFinite(p.answered_count)) answered = p.answered_count;
+            else if (Number.isFinite(p.answered)) answered = p.answered;
+            else if (Number.isFinite(sub.answered_count)) answered = sub.answered_count;
+            else if (Number.isFinite(sub.answer_count)) answered = sub.answer_count;
+            else if (Array.isArray(sub.answers)) answered = sub.answers.length;
+            else if (Array.isArray(sub.answers_json)) answered = sub.answers_json.length;
+            else if (sub.answers && typeof sub.answers === "object") answered = Object.keys(sub.answers).length;
+            else if (sub.answers_json && typeof sub.answers_json === "object") answered = Object.keys(sub.answers_json).length;
             return (
               <tr key={sub.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
                 <td style={{ padding: 12 }}>{name}</td>
@@ -139,6 +149,7 @@ export default function AdminTable({
                 <td style={{ padding: 12 }}>{dateStr}</td>
                 <td style={{ padding: 12 }}>{timeStr}</td>
                 <td style={{ padding: 12 }}>{duration}</td>
+                <td style={{ padding: 12 }}>{answered}</td>
                 <td style={{ padding: 12 }}>
                   <div style={{ display: "inline-flex", gap: 8 }}>
                     <IconButton

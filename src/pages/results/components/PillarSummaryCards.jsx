@@ -9,7 +9,7 @@ const DISC_LABELS = {
   C: "Compliance",
 };
 
-export default function PillarSummaryCards({ sections, scaleLabel }) {
+export default function PillarSummaryCards({ sections = [], scaleLabel = "Percent of Max" }) {
   if (!sections?.length) return null;
   return (
     <>
@@ -116,9 +116,4 @@ PillarSummaryCards.propTypes = {
     })
   ),
   scaleLabel: PropTypes.string,
-};
-
-PillarSummaryCards.defaultProps = {
-  sections: [],
-  scaleLabel: "Percent of Max",
 };

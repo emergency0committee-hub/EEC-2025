@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { PageWrap, HeaderBar } from "../components/Layout.jsx";
+import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 import { THEME_COLORS } from "../components/Chart.jsx";
 import OccupationScales from "../components/OccupationScales.jsx";
@@ -178,6 +178,56 @@ export default function Results({
     pillarCounts = submission.pillar_counts || pillarCounts;
     fromAdmin = true;
   }
+
+  /* ---------------------- Completion / validity check ---------------------- */
+  /* ---------------------- Completion / validity check ---------------------- */
+  const completionInfo = useMemo(() => {
+    const p = participant || {};
+    const answersArr = Array.isArray(submission?.answers)
+      ? submission.answers
+      : Array.isArray(p.answers)
+      ? p.answers
+      : Array.isArray(submission?.answers_json)
+      ? submission.answers_json
+      : [];
+    const answerObjectKeys =
+      submission?.answers && typeof submission.answers === "object" && !Array.isArray(submission.answers)
+        ? Object.keys(submission.answers).length
+        : submission?.answers_json && typeof submission.answers_json === "object" && !Array.isArray(submission.answers_json)
+        ? Object.keys(submission.answers_json).length
+        : null;
+    const answeredCount =
+      Number.isFinite(p.answered_count) ? p.answered_count :
+      Number.isFinite(p.answered) ? p.answered :
+      Number.isFinite(submission?.answered_count) ? submission.answered_count :
+      Number.isFinite(answerObjectKeys) ? answerObjectKeys :
+      Array.isArray(answersArr) ? answersArr.length :
+      0;
+    const totalQuestions =
+      Number.isFinite(p.total_questions) ? p.total_questions :
+      Number.isFinite(submission?.total_questions) ? submission.total_questions :
+      Number.isFinite(p.question_count) ? p.question_count :
+      Number.isFinite(submission?.question_count) ? submission.question_count :
+      Number.isFinite(answerObjectKeys) && answerObjectKeys > 0 ? answerObjectKeys :
+      answersArr.length > 0 ? answersArr.length :
+      null;
+    const startAt = p.started_at || submission?.started_at || submission?.ts || submission?.created_at || null;
+    const finishAt = p.finished_at || submission?.finished_at || null;
+    let durationMinutes = null;
+    if (startAt && finishAt) {
+      const ms = new Date(finishAt).getTime() - new Date(startAt).getTime();
+      if (Number.isFinite(ms)) durationMinutes = Math.max(0, ms / 60000);
+    }
+    const ratio = totalQuestions ? answeredCount / totalQuestions : null;
+    const isIncomplete =
+      (Number.isFinite(durationMinutes) && durationMinutes < 30) ||
+      (ratio !== null && ratio < 0.8);
+    return { answeredCount, totalQuestions, durationMinutes, isIncomplete };
+  }, [participant, submission]);
+
+  const effectiveRadar = completionInfo.isIncomplete ? [] : radarData;
+  const effectiveAreas = completionInfo.isIncomplete ? [] : areaPercents;
+  const effectiveInterest = completionInfo.isIncomplete ? [] : interestPercents;
   // Get selected sections from localStorage
   const selectedSections = useMemo(() => {
     try {
@@ -202,18 +252,18 @@ export default function Results({
   // Map of theme code to score
   const radarByCode = useMemo(() => {
     const m = {};
-    (radarData || []).forEach((d) => (m[d.code] = d.score ?? 0));
+    (effectiveRadar || []).forEach((d) => (m[d.code] = d.score ?? 0));
     return m;
-  }, [radarData]);
+  }, [effectiveRadar]);
 
   const themeOrder = useMemo(
-    () => [...(radarData || [])].sort((a, b) => b.score - a.score).map((d) => d.code),
-    [radarData]
+    () => [...(effectiveRadar || [])].sort((a, b) => b.score - a.score).map((d) => d.code),
+    [effectiveRadar]
   );
 
   const groupedAreas = useMemo(() => {
     const g = {};
-    (areaPercents || []).forEach((area) => {
+    (effectiveAreas || []).forEach((area) => {
       if (!g[area.code]) g[area.code] = [];
       g[area.code].push(area);
     });
@@ -251,8 +301,8 @@ export default function Results({
   }, [groupedAreas]);
 
   const sortedAllAreas = useMemo(
-    () => [...(areaPercents || [])].sort((a, b) => b.percent - a.percent),
-    [areaPercents]
+    () => [...(effectiveAreas || [])].sort((a, b) => b.percent - a.percent),
+    [effectiveAreas]
   );
   const topFive = sortedAllAreas.slice(0, 5);
   const leastThree = sortedAllAreas.slice(-3).reverse();
@@ -382,6 +432,28 @@ export default function Results({
     </>
   );
 
+  if (completionInfo.isIncomplete) {
+    return (
+      <PageWrap>
+        <style>{resultsPrintStyles}</style>
+        {headerBlock}
+        <CandidateDetailsCard rows={detailRows} />
+        <Card style={{ marginTop: 16 }}>
+          <h3 style={{ marginTop: 0, marginBottom: 6, color: "#b91c1c" }}>Result marked INCOMPLETE</h3>
+          <p style={{ margin: 0, color: "#6b7280" }}>
+            This submission is marked incomplete because it was completed in under 30 minutes with fewer than 80% of the answers.
+            Please retake the assessment under normal conditions.
+          </p>
+        </Card>
+        <div className="no-print" style={{ marginTop: 16 }}>
+          <Btn variant="secondary" onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}>
+            Back
+          </Btn>
+        </div>
+      </PageWrap>
+    );
+  }
+
   return (
     <PageWrap>
       <style>{resultsPrintStyles}</style>
@@ -405,202 +477,208 @@ export default function Results({
         headerBlock
       )}
 
-      {/* GROUP 3: Basic Interest Scales (theme cards) */}
-      {interestChunks.map((group, groupIdx) => (
-        <div
-          key={`interest-card-${groupIdx}`}
-          className="card section"
-          style={{
-            padding: 16,
-            marginTop: groupIdx === 0 ? 0 : 16,
-            pageBreakBefore: groupIdx === 0 ? "auto" : "always",
-            pageBreakAfter: groupIdx < interestChunks.length - 1 ? "always" : "auto",
-            pageBreakInside: "avoid",
-            breakInside: "avoid",
-          }}
-        >
-          <h3 style={{ margin: 0, color: "#111827" }}>
-            BASIC INTEREST SCALES
-          </h3>
-          <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
-            Percentages across specific interest areas within each RIASEC theme.
-          </p>
-          <div
-            style={{
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: 8,
-            marginTop: 8,
-            pageBreakInside: "avoid",
-            breakInside: "avoid",
-          }}
-          >
-            {group.map((code) => {
-              const themeScore = radarByCode[code] ?? 0;
-              const level = levelFromPct(themeScore);
-              const areas = groupedAreas[code] || [];
-              const color = THEME_COLORS[code] || "#2563eb";
-              const insight = interestInsights[code] || {};
-              return (
-                <div
-                  key={code}
-                  className="card avoid-break"
-                  style={{ padding: 16, background: "#ffffff", pageBreakInside: "avoid", breakInside: "avoid" }}
-                >
-                  <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "nowrap" }}>
+      <>
+          {/* GROUP 3: Basic Interest Scales (theme cards) */}
+          {interestChunks.map((group, groupIdx) => (
+            <div
+              key={`interest-card-${groupIdx}`}
+              className="card section"
+              style={{
+                padding: 16,
+                marginTop: groupIdx === 0 ? 0 : 16,
+                pageBreakBefore: groupIdx === 0 ? "auto" : "always",
+                pageBreakAfter: groupIdx < interestChunks.length - 1 ? "always" : "auto",
+                pageBreakInside: "avoid",
+                breakInside: "avoid",
+              }}
+            >
+              <h3 style={{ margin: 0, color: "#111827" }}>
+                BASIC INTEREST SCALES
+              </h3>
+              <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
+                Percentages across specific interest areas within each RIASEC theme.
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr",
+                  gap: 8,
+                  marginTop: 8,
+                  pageBreakInside: "avoid",
+                  breakInside: "avoid",
+                }}
+              >
+                {group.map((code) => {
+                  const themeScore = radarByCode[code] ?? 0;
+                  const level = levelFromPct(themeScore);
+                  const areas = groupedAreas[code] || [];
+                  const color = THEME_COLORS[code] || "#2563eb";
+                  const insight = interestInsights[code] || {};
+                  return (
                     <div
-                      style={{
-                        flex: "2 1 340px",
-                        minWidth: 280,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 12,
-                      }}
+                      key={code}
+                      className="card avoid-break"
+                      style={{ padding: 16, background: "#ffffff", pageBreakInside: "avoid", breakInside: "avoid" }}
                     >
-                      <div
-                        className="avoid-break"
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "baseline",
-                          gap: 12,
-                        }}
-                      >
-                        <h4 style={{ margin: 0, color: "#111827" }}>
-                          {THEME_NAME[code]}{" "}
-                          <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
-                            Level: {level}
-                          </span>
-                        </h4>
-                        <span
-                          aria-hidden
+                      <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "nowrap" }}>
+                        <div
                           style={{
-                            width: 14,
-                            height: 14,
-                            borderRadius: 3,
-                            background: color,
-                            display: "inline-block",
+                            flex: "2 1 340px",
+                            minWidth: 280,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 12,
                           }}
-                        />
-                      </div>
-                      <div>
-                        {areas.length ? (
-                          areas.map((a) => (
-                            <BarRow
-                              key={`${code}-${a.area}`}
-                              label={a.area}
-                              percent={a.percent}
-                              color={color}
+                        >
+                          <div
+                            className="avoid-break"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "baseline",
+                              gap: 12,
+                            }}
+                          >
+                            <h4 style={{ margin: 0, color: "#111827" }}>
+                              {THEME_NAME[code]}{" "}
+                              <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
+                                Level: {level}
+                              </span>
+                            </h4>
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: 3,
+                                background: color,
+                                display: "inline-block",
+                              }}
                             />
-                          ))
-                        ) : (
-                          <div style={{ color: "#6b7280", fontSize: 13 }}>
-                            No answers recorded for this theme.
                           </div>
-                        )}
+                          <div>
+                            {areas.length ? (
+                              areas.map((a) => (
+                                <BarRow
+                                  key={`${code}-${a.area}`}
+                                  label={a.area}
+                                  percent={a.percent}
+                                  color={color}
+                                />
+                              ))
+                            ) : (
+                              <div style={{ color: "#6b7280", fontSize: 13 }}>
+                                No answers recorded for this theme.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <aside
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 10,
+                            padding: 12,
+                            background: "#f8fafc",
+                            color: "#475569",
+                            fontSize: 13,
+                            flex: "1 1 220px",
+                            minWidth: 220,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, color: "#111827" }}>
+                            {insight.title || `${THEME_NAME[code] || code} Insights`}
+                          </div>
+                          <p style={{ margin: 0, lineHeight: 1.4 }}>
+                            {insight.summary || "Lean into this area with weekly practice to confirm the fit."}
+                          </p>
+                          {insight.uni && (
+                            <p style={{ margin: 0, lineHeight: 1.4 }}>
+                              <strong>University focus:</strong> {insight.uni}
+                            </p>
+                          )}
+                          {insight.real && (
+                            <p style={{ margin: 0, lineHeight: 1.4 }}>
+                              <strong>Real-life focus:</strong> {insight.real}
+                            </p>
+                          )}
+                        </aside>
                       </div>
                     </div>
-                    <aside
-                      style={{
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 10,
-                        padding: 12,
-                        background: "#f8fafc",
-                        color: "#475569",
-                        fontSize: 13,
-                        flex: "1 1 220px",
-                        minWidth: 220,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                      }}
-                    >
-                      <div style={{ fontWeight: 600, color: "#111827" }}>
-                        {insight.title || `${THEME_NAME[code] || code} Insights`}
-                      </div>
-                      <p style={{ margin: 0, lineHeight: 1.4 }}>
-                        {insight.summary || "Lean into this area with weekly practice to confirm the fit."}
-                      </p>
-                      {insight.uni && (
-                        <p style={{ margin: 0, lineHeight: 1.4 }}>
-                          <strong>University focus:</strong> {insight.uni}
-                        </p>
-                      )}
-                      {insight.real && (
-                        <p style={{ margin: 0, lineHeight: 1.4 }}>
-                          <strong>Real-life focus:</strong> {insight.real}
-                        </p>
-                      )}
-                    </aside>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {/* GROUP 4: Occupational Scales (kept together) */}
+          {!!effectiveRadar.length && (
+            <>
+              <div
+                style={{
+                  pageBreakBefore: "always",
+                  breakBefore: "page",
+                  height: 0,
+                  overflow: "hidden",
+                }}
+              />
+              <div className="section avoid-break">
+                <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
+              </div>
+            </>
+          )}
+
+          {/* PAGE BREAK before pillars, for a clean pillar page */}
+          <div className="no-print" style={{ height: 1 }} />
+          <div
+            style={{
+              pageBreakBefore: "always",
+              breakBefore: "page",
+              height: 0,
+              overflow: "hidden",
+            }}
+          />
+
+          {/* GROUP 5: Pillars - three elegant cards */}
+          <PillarSummaryCards sections={pillarSections} scaleLabel="Percent of Max" />
+
+          {/* RIASEC overview placed near the end */}
+          <div
+            style={{
+              pageBreakBefore: "always",
+              breakBefore: "page",
+              height: 0,
+              overflow: "hidden",
+            }}
+          />
+          <RiasecHeroSection radarData={effectiveRadar} />
+
+          {/* Top & Least Areas now at the end */}
+          <div className="section avoid-break">
+            <div
+              className="print-stack"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.3fr 1fr",
+                gap: 16,
+              }}
+            >
+              <ListBox title="Your Top Five Interest Areas" items={topFive} />
+              <ListBox title="Areas of Least Interest" items={leastThree} />
+            </div>
           </div>
-        </div>
-      ))}
-      {/* GROUP 4: Occupational Scales (kept together) */}
-      <div
-        style={{
-          pageBreakBefore: "always",
-          breakBefore: "page",
-          height: 0,
-          overflow: "hidden",
-        }}
-      />
-      <div className="section avoid-break">
-        <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
-      </div>
 
-      {/* PAGE BREAK before pillars, for a clean pillar page */}
-      <div className="no-print" style={{ height: 1 }} />
-      <div
-        style={{
-          pageBreakBefore: "always",
-          breakBefore: "page",
-          height: 0,
-          overflow: "hidden",
-        }}
-      />
-
-      {/* GROUP 5: Pillars - three elegant cards */}
-      <PillarSummaryCards sections={pillarSections} scaleLabel="Percent of Max" />
-
-      {/* RIASEC overview placed near the end */}
-      <div
-        style={{
-          pageBreakBefore: "always",
-          breakBefore: "page",
-          height: 0,
-          overflow: "hidden",
-        }}
-      />
-      <RiasecHeroSection radarData={radarData} />
-
-      {/* Top & Least Areas now at the end */}
-      <div className="section avoid-break">
-        <div
-          className="print-stack"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.3fr 1fr",
-            gap: 16,
-          }}
-        >
-          <ListBox title="Your Top Five Interest Areas" items={topFive} />
-          <ListBox title="Areas of Least Interest" items={leastThree} />
-        </div>
-      </div>
-
-      {/* Footer actions (hidden in print) */}
-      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-        <Btn variant="secondary" onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}>
-          {fromAdmin ? "Back to Submissions" : "Back Home"}
-        </Btn>
-        <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
-          Export PDF
-        </Btn>
-      </div>
+          {/* Footer actions (hidden in print) */}
+          <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <Btn variant="secondary" onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}>
+              {fromAdmin ? "Back to Submissions" : "Back Home"}
+            </Btn>
+            <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
+              Export PDF
+            </Btn>
+          </div>
+      </>
     </PageWrap>
   );
 }

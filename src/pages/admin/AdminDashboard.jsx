@@ -496,7 +496,11 @@ export default function AdminDashboard({ onNavigate }) {
       </style>
 
       <div className={`admin-bulk-screen${bulkActive ? " bulk-hide-print" : ""}`}>
-        <HeaderBar title="Test Submissions" right={null} />
+        <HeaderBar
+          title="Test Submissions"
+          right={null}
+        />
+
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Recent Test Submissions</h3>

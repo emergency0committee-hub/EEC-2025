@@ -12,7 +12,7 @@ const RIASEC_SUMMARIES = {
   C: "Detail-driven organizers who keep systems running with accuracy.",
 };
 
-export default function RiasecHeroSection({ radarData }) {
+export default function RiasecHeroSection({ radarData = [] }) {
   if (!radarData?.length) return null;
   const sorted = [...radarData].sort((a, b) => b.score - a.score);
   return (
@@ -90,8 +90,4 @@ RiasecHeroSection.propTypes = {
       score: PropTypes.number,
     })
   ),
-};
-
-RiasecHeroSection.defaultProps = {
-  radarData: [],
 };

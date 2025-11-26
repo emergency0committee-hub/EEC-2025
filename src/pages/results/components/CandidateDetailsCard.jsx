@@ -1,7 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
 
-export default function CandidateDetailsCard({ rows }) {
+export default function CandidateDetailsCard({ rows = [] }) {
   if (!rows?.length) return null;
   const columnTemplate = `repeat(${rows.length}, minmax(160px, 1fr))`;
   return (
@@ -23,6 +23,8 @@ export default function CandidateDetailsCard({ rows }) {
           gap: 18,
           marginTop: 14,
           alignItems: "flex-start",
+          wordBreak: "break-word",
+          overflowWrap: "anywhere",
         }}
       >
         {rows.map((row) => {
@@ -35,7 +37,17 @@ export default function CandidateDetailsCard({ rows }) {
               <div style={{ fontSize: 12, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase" }}>
                 {row.label}
               </div>
-              <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 16 }}>{value}</div>
+              <div
+                style={{
+                  fontWeight: 600,
+                  color: "#0f172a",
+                  fontSize: 16,
+                  wordBreak: "break-word",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {value}
+              </div>
             </div>
           );
         })}
@@ -51,8 +63,4 @@ CandidateDetailsCard.propTypes = {
       value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     })
   ),
-};
-
-CandidateDetailsCard.defaultProps = {
-  rows: [],
 };

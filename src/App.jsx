@@ -12,6 +12,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
 import AdminQuestionBank from "./pages/admin/AdminQuestionBank.jsx";
 import AdminManageUsers from "./pages/admin/AdminManageUsers.jsx";
 import AdminCertificates from "./pages/admin/AdminCertificates.jsx";
+import AdminLiveMonitor from "./pages/admin/AdminLiveMonitor.jsx";
 import SATAdmin from "./pages/admin/SATDashboard.jsx";
 import SATResults from "./pages/sat/SATResults.jsx";
 import SATTrainingAdmin from "./pages/admin/SATTrainingDashboard.jsx";
@@ -377,6 +378,7 @@ export default function App() {
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "admin-live-monitor") return <AdminLiveMonitor onNavigate={onNavigate} />;
   if (route === "admin-manage-users") {
     if (!canViewResults) {
       return (

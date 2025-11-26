@@ -71,32 +71,22 @@ function parseCsv(text) {
   return out;
 }
 
-/** Load once from Supabase storage */
-export async function loadOccupations() {
-  if (_cache) return _cache;
+/** Load occupations with optional cache bust */
+export async function loadOccupations(opts = {}) {
+  const { force = false, cacheBuster } = opts || {};
+  if (!force && _cache) return _cache;
+  if (force) _cache = null;
   try {
-    // 1) Try Supabase Storage bucket
-    try {
-      const { data, error } = await supabase.storage
-        .from("occupations")
-        .download("occupations.csv");
-      if (!error && data) {
-        const text = await data.text();
-        const rows = parseCsv(text);
-        if (rows.length) {
-          _cache = rows;
-          return _cache;
-        }
-      }
-    } catch {}
+    const bust = cacheBuster || import.meta?.env?.VITE_OCCUPATIONS_VERSION || "";
+    const q = bust ? `?v=${encodeURIComponent(bust)}` : "";
 
-    // 2) Fallback to bundled assets
+    // 1) Prefer bundled assets (updated with deploy)
     const base = (import.meta?.env?.BASE_URL || "/").replace(/\/$/, "/");
     const candidates = [
-      `${base}occupations.csv`,
-      `${base}data/occupations.csv`,
-      "/occupations.csv",
-      "/data/occupations.csv",
+      `${base}occupations.csv${q}`,
+      `${base}data/occupations.csv${q}`,
+      `/occupations.csv${q}`,
+      `/data/occupations.csv${q}`,
     ];
     for (const url of candidates) {
       try {
@@ -111,6 +101,21 @@ export async function loadOccupations() {
         }
       } catch {}
     }
+
+    // 2) Fallback to Supabase Storage bucket
+    try {
+      const { data, error } = await supabase.storage
+        .from("occupations")
+        .download(`occupations.csv${bust ? `?v=${bust}` : ""}`);
+      if (!error && data) {
+        const text = await data.text();
+        const rows = parseCsv(text);
+        if (rows.length) {
+          _cache = rows;
+          return _cache;
+        }
+      }
+    } catch {}
 
     console.warn("[occupations] No occupations.csv found in storage or assets.");
     _cache = [];
