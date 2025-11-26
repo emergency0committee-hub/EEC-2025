@@ -120,9 +120,11 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const [roleDraft, setRoleDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
   const [aiAccessDraft, setAiAccessDraft] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ name: "", email: "", school: "" });
   const [savingRole, setSavingRole] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingAiAccess, setSavingAiAccess] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   const loadUsers = async (focus = null) => {
@@ -201,6 +203,11 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       setRoleDraft(selectedUser.role || "");
       setPasswordDraft("");
       setAiAccessDraft(Boolean(selectedUser.ai_access));
+      setProfileDraft({
+        name: selectedUser.name || "",
+        email: selectedUser.email || "",
+        school: selectedUser.school || "",
+      });
       setSuccessMessage("");
     }
   }, [selectedUser]);
@@ -257,6 +264,29 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       alert(err?.message || copy.error);
     } finally {
       setSavingRole(false);
+    }
+  };
+
+  const doSaveProfile = async () => {
+    if (!selectedUser) return;
+    const table = import.meta.env.VITE_USERS_TABLE || "profiles";
+    const payload = {
+      name: (profileDraft.name || "").trim(),
+      email: (profileDraft.email || "").trim(),
+      school: (profileDraft.school || "").trim(),
+    };
+    setSavingProfile(true);
+    setSuccessMessage("");
+    try {
+      const { error } = await supabase.from(table).update(payload).eq("id", selectedUser.id);
+      if (error) throw error;
+      await loadUsers({ id: selectedUser.id, label: formatUserLabel({ ...selectedUser, ...payload }) });
+      setSuccessMessage("Profile updated.");
+    } catch (err) {
+      console.error("save profile", err);
+      alert(err?.message || "Failed to update profile.");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -383,6 +413,53 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
               <div style={{ fontWeight: 600 }}>{selectedUser.name || selectedUser.username || selectedUser.email}</div>
               <div style={{ color: "#6b7280", fontSize: 14 }}>{formatUserLabel(selectedUser)}</div>
             </div>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Name</span>
+              <input
+                type="text"
+                value={profileDraft.name}
+                onChange={(e) => {
+                  setProfileDraft((prev) => ({ ...prev, name: e.target.value }));
+                  setSuccessMessage("");
+                }}
+                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Email</span>
+              <input
+                type="email"
+                value={profileDraft.email}
+                onChange={(e) => {
+                  setProfileDraft((prev) => ({ ...prev, email: e.target.value }));
+                  setSuccessMessage("");
+                }}
+                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>School</span>
+              <input
+                type="text"
+                value={profileDraft.school}
+                onChange={(e) => {
+                  setProfileDraft((prev) => ({ ...prev, school: e.target.value }));
+                  setSuccessMessage("");
+                }}
+                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              />
+            </label>
+
+            <Btn
+              variant="secondary"
+              disabled={savingProfile}
+              onClick={doSaveProfile}
+            >
+              {savingProfile ? "Saving..." : "Save Profile"}
+            </Btn>
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 600 }}>{copy.roleLabel}</span>

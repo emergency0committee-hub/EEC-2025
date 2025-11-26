@@ -1,16 +1,13 @@
-// src/pages/admin/AdminDashboard.jsx
+﻿// src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
-import AdminTable from "./AdminTable2.jsx";
+import AdminTable from "./AdminTable.jsx";
 import AdminLegend from "./AdminLegend.jsx";
 import { supabase } from "../../lib/supabase.js";
 import Results from "../Results.jsx";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
-import { createRoot } from "react-dom/client";
-import resultsPrintStyles from "../results/printStyles.js";
+import { renderSubmissionToPdfA3 } from "../../lib/exportResults.jsx";
 
 export default function AdminDashboard({ onNavigate }) {
   AdminDashboard.propTypes = {
@@ -20,9 +17,18 @@ export default function AdminDashboard({ onNavigate }) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSchool, setSelectedSchool] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
   const [bulkSet, setBulkSet] = useState(null);
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState([]);
+  const [bulkSort, setBulkSort] = useState("name");
+  const [bulkPreviewOpen, setBulkPreviewOpen] = useState(false);
+  const [bulkPreviewList, setBulkPreviewList] = useState([]);
+  const [bulkPreviewIndex, setBulkPreviewIndex] = useState(0);
+  const [tableSort, setTableSort] = useState("ts_desc");
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 60);
     return Number.isFinite(saved) && saved > 0 ? saved : 60;
@@ -71,106 +77,68 @@ export default function AdminDashboard({ onNavigate }) {
       (sub) => getSchool(sub).trim().toLowerCase() === target
     );
   }, [submissions, selectedSchool]);
+  const sortedSubmissions = useMemo(() => {
+    const list = [...visibleSubmissions];
+    list.sort((a, b) => {
+      const pa = a.participant || a.profile || {};
+      const pb = b.participant || b.profile || {};
+      const nameA = (pa.name || pa.email || "").toLowerCase();
+      const nameB = (pb.name || pb.email || "").toLowerCase();
+      const schoolA = (pa.school || "").toLowerCase();
+      const schoolB = (pb.school || "").toLowerCase();
+      const tsA = new Date(a.ts || a.created_at || pa.finished_at || pa.started_at || 0).getTime();
+      const tsB = new Date(b.ts || b.created_at || pb.finished_at || pb.started_at || 0).getTime();
+      if (tableSort === "school" || tableSort === "school_desc") {
+        const cmp = schoolA.localeCompare(schoolB) || nameA.localeCompare(nameB);
+        return tableSort === "school_desc" ? -cmp : cmp;
+      }
+      if (tableSort === "ts" || tableSort === "ts_desc") {
+        const cmp = (Number.isFinite(tsA) ? tsA : 0) - (Number.isFinite(tsB) ? tsB : 0);
+        return tableSort === "ts_desc" ? -cmp : cmp;
+      }
+      const cmp = nameA.localeCompare(nameB) || schoolA.localeCompare(schoolB);
+      return tableSort === "name_desc" ? -cmp : cmp;
+    });
+    return list;
+  }, [visibleSubmissions, tableSort]);
+  const pagedSubmissions = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return sortedSubmissions.slice(start, start + PAGE_SIZE);
+  }, [sortedSubmissions, page]);
+  const totalPages = Math.max(1, Math.ceil(sortedSubmissions.length / PAGE_SIZE));
+  useEffect(() => {
+    setPage(1);
+  }, [selectedSchool, submissions.length, tableSort]);
+  const sortedModalSubmissions = useMemo(() => {
+    const list = [...visibleSubmissions];
+    list.sort((a, b) => {
+      const pa = a.participant || a.profile || {};
+      const pb = b.participant || b.profile || {};
+      const nameA = (pa.name || pa.email || "").toLowerCase();
+      const nameB = (pb.name || pb.email || "").toLowerCase();
+      const schoolA = (pa.school || "").toLowerCase();
+      const schoolB = (pb.school || "").toLowerCase();
+      const tsA = new Date(a.ts || a.created_at || pa.finished_at || pa.started_at || 0).getTime();
+      const tsB = new Date(b.ts || b.created_at || pb.finished_at || pb.started_at || 0).getTime();
+      if (bulkSort === "school" || bulkSort === "school_desc") {
+        const cmp = schoolA.localeCompare(schoolB) || nameA.localeCompare(nameB);
+        return bulkSort === "school_desc" ? -cmp : cmp;
+      }
+      if (bulkSort === "ts" || bulkSort === "ts_desc") {
+        const cmp = (Number.isFinite(tsA) ? tsA : 0) - (Number.isFinite(tsB) ? tsB : 0);
+        return bulkSort === "ts_desc" ? -cmp : cmp;
+      }
+      const cmp = nameA.localeCompare(nameB) || schoolA.localeCompare(schoolB);
+      return bulkSort === "name_desc" ? -cmp : cmp;
+    });
+    return list;
+  }, [visibleSubmissions, bulkSort]);
+  useEffect(() => {
+    setPage(1);
+  }, [selectedSchool, submissions.length]);
 
   // Render full Results layout to canvas, then into PDF
   // Render full Results layout to PDF (multi-page, matches single export)
-  const renderResultsToPdf = (submission) =>
-    new Promise((resolve, reject) => {
-      const container = document.createElement("div");
-      container.style.position = "fixed";
-      container.style.left = "-20000px";
-      container.style.top = "0";
-      container.style.width = "1000px";
-      container.style.padding = "24px";
-      container.style.background = "#ffffff";
-      container.style.zIndex = "-1";
-      container.style.opacity = "1";
-      document.body.appendChild(container);
-      const style = document.createElement("style");
-      style.textContent = `
-        ${resultsPrintStyles}
-        .no-print { display: none !important; visibility: hidden !important; }
-        .card {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-        .section, .avoid-break, .print-stack {
-          page-break-inside: avoid;
-          break-inside: avoid;
-        }
-      `;
-      container.appendChild(style);
-      const root = createRoot(container);
-      root.render(<Results submission={submission} fromAdmin onNavigate={() => {}} />);
-
-      const cleanup = () => {
-        try { root.unmount(); } catch {}
-        try { container.remove(); } catch {}
-      };
-
-      const makePdf = async () => {
-        try {
-          // Allow the DOM to render
-          await new Promise((r) => requestAnimationFrame(r));
-          await new Promise((r) => setTimeout(r, 300));
-          const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-          if (!canvas || !canvas.width || !canvas.height) throw new Error("Canvas render failed");
-
-          const pdf = new jsPDF({ unit: "pt", format: "a4" });
-          const pageWidth = pdf.internal.pageSize.getWidth();
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          const margin = 20;
-          const usableWidth = pageWidth - margin * 2;
-          const usableHeight = pageHeight - margin * 2;
-
-          // Compute the height in px that fits one PDF page
-          const ratio = usableWidth / canvas.width;
-          const pageCanvasHeight = Math.floor(usableHeight / ratio);
-
-          let rendered = 0;
-          let pageIndex = 0;
-
-          while (rendered < canvas.height) {
-            const sliceHeight = Math.min(pageCanvasHeight, canvas.height - rendered);
-            const pageCanvas = document.createElement("canvas");
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = sliceHeight;
-            const ctx = pageCanvas.getContext("2d");
-            ctx.drawImage(
-              canvas,
-              0,
-              rendered,
-              canvas.width,
-              sliceHeight,
-              0,
-              0,
-              canvas.width,
-              sliceHeight
-            );
-            const imgData = pageCanvas.toDataURL("image/png");
-            const imgHeightPt = (sliceHeight * usableWidth) / canvas.width;
-            if (pageIndex > 0) pdf.addPage();
-            pdf.addImage(imgData, "PNG", margin, margin, usableWidth, imgHeightPt, undefined, "FAST");
-            rendered += sliceHeight;
-            pageIndex += 1;
-          }
-
-          const buf = pdf.output("arraybuffer");
-          resolve(new Uint8Array(buf));
-        } catch (e) {
-          reject(e);
-        } finally {
-          cleanup();
-        }
-      };
-
-      makePdf();
-      setTimeout(() => {
-        cleanup();
-        reject(new Error("PDF render timeout"));
-      }, 30000);
-    });
-
   const crcTable = (() => {
     const table = new Uint32Array(256);
     for (let i = 0; i < 256; i++) {
@@ -263,14 +231,9 @@ export default function AdminDashboard({ onNavigate }) {
     return new Blob([zip], { type: "application/zip" });
   };
 
-  const handleBulkExport = async () => {
-    if (!selectedSchool) return;
-    const target = selectedSchool.trim().toLowerCase();
-    const entries = realSubmissions.filter(
-      (sub) => !sub?._demo && getSchool(sub).trim().toLowerCase() === target
-    );
-    if (!entries.length) {
-      alert("No submissions found for the selected school yet.");
+  const handleBulkExport = async (entries) => {
+    if (!entries || !entries.length) {
+      alert("Please select at least one submission.");
       return;
     }
     setBulkStatus("Preparing PDFs...");
@@ -279,7 +242,7 @@ export default function AdminDashboard({ onNavigate }) {
       const files = [];
       for (let i = 0; i < entries.length; i++) {
         const sub = entries[i];
-        const pdfData = await renderResultsToPdf(sub);
+        const pdfData = await renderSubmissionToPdfA3(sub, { fromAdmin: true });
         const nameSafe =
           (sub.participant?.name || sub.profile?.name || `student-${i + 1}`)
             .replace(/[^a-z0-9-_]+/gi, "_")
@@ -352,6 +315,29 @@ export default function AdminDashboard({ onNavigate }) {
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, []);
+
+  const openPreviewPdf = async (submission) => {
+    try {
+      const pdfData = await renderSubmissionToPdfA3(submission, { fromAdmin: true });
+      const blob = new Blob([pdfData], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank");
+      if (!win) {
+        // Fallback: trigger a download if the popup was blocked
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "preview.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return win;
+    } catch (err) {
+      console.error("Preview PDF failed", err);
+      alert("Failed to open preview PDF.");
+    }
+  };
 
   useEffect(() => {
     const fetchSubmissions = async () => {
@@ -508,104 +494,6 @@ export default function AdminDashboard({ onNavigate }) {
         <Card>
           <h3 style={{ marginTop: 0 }}>Recent Test Submissions</h3>
 
-          {schoolOptions.length > 0 && (
-            <div
-              className="no-print"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 16,
-                background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
-                padding: "12px 16px",
-              }}
-            >
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-                <label htmlFor="bulk-school" style={{ fontWeight: 600, color: "#374151" }}>
-                  Bulk export by school
-                </label>
-                <select
-                  id="bulk-school"
-                  value={selectedSchool}
-                  onChange={(e) => setSelectedSchool(e.target.value)}
-                  style={{
-                    minWidth: 220,
-                    padding: "10px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #d1d5db",
-                    fontSize: 14,
-                  }}
-                >
-                  <option value="">Select a school…</option>
-                  {schoolOptions.map((school) => (
-                    <option key={school} value={school}>
-                      {school}
-                    </option>
-                  ))}
-                </select>
-            </div>
-              {bulkStatus ? (
-                <div
-                  style={{
-                    minWidth: 140,
-                    maxWidth: 200,
-                    height: 40,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 12px",
-                    borderRadius: 12,
-                    background: "#0f172a",
-                    color: "#e2e8f0",
-                    boxShadow: "0 8px 18px rgba(15, 23, 42, 0.22)",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      height: 10,
-                      borderRadius: 999,
-                      background: "#1e293b",
-                      overflow: "hidden",
-                      boxShadow: "inset 0 0 0 1px #0b1220",
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${Math.min(100, Math.max(0, bulkProgress || 5))}%`,
-                        height: "100%",
-                        background: "linear-gradient(90deg, #38bdf8, #6366f1)",
-                        transition: "width 0.3s ease",
-                      }}
-                    />
-                  </div>
-                  <span style={{ fontSize: 12, color: "#cbd5e1", minWidth: 32, textAlign: "right" }}>
-                    {bulkProgress || 5}%
-                  </span>
-                </div>
-              ) : (
-                <Btn
-                  variant="primary"
-                  onClick={handleBulkExport}
-                  disabled={!selectedSchool || bulkActive}
-                  style={
-                    !selectedSchool || bulkActive
-                      ? { opacity: 0.6, cursor: "not-allowed" }
-                      : undefined
-                  }
-                >
-                  Export ZIP
-                </Btn>
-              )}
-            </div>
-          )}
-
           {bulkSet?.school && bulkEntries.length > 0 && (
             <div
               className="no-print"
@@ -628,11 +516,30 @@ export default function AdminDashboard({ onNavigate }) {
           {loading ? (
             <p style={{ color: "#6b7280" }}>Loading test submissions...</p>
           ) : visibleSubmissions.length > 0 ? (
-            <AdminTable
-              submissions={visibleSubmissions}
-              onViewSubmission={handleViewSubmission}
-              onDeleteSubmission={handleDeleteSubmission}
-            />
+            <>
+              <AdminTable
+                submissions={pagedSubmissions}
+                onViewSubmission={handleViewSubmission}
+                onDeleteSubmission={handleDeleteSubmission}
+                onSort={setTableSort}
+                sortKey={tableSort}
+              />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+                <Btn variant="secondary" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                  Prev
+                </Btn>
+                <span style={{ color: "#374151", fontSize: 13 }}>
+                  Page {page} of {totalPages}
+                </span>
+                <Btn
+                  variant="secondary"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                >
+                  Next
+                </Btn>
+              </div>
+            </>
           ) : (
             <p style={{ color: "#6b7280" }}>
               {selectedSchool
@@ -640,13 +547,201 @@ export default function AdminDashboard({ onNavigate }) {
                 : "No submissions available."}
             </p>
           )}
-          <div style={{ marginTop: 16 }}>
+
+          <div
+            className="no-print"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 12,
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginTop: 16,
+            }}
+          >
             <Btn variant="back" onClick={() => onNavigate("home")}>
               Back to Home
             </Btn>
+            {bulkStatus ? (
+              <div
+                style={{
+                  minWidth: 140,
+                  maxWidth: 200,
+                  height: 40,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 12px",
+                  borderRadius: 12,
+                  background: "#0f172a",
+                  color: "#e2e8f0",
+                  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.22)",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    height: 10,
+                    borderRadius: 999,
+                    background: "#1e293b",
+                    overflow: "hidden",
+                    boxShadow: "inset 0 0 0 1px #0b1220",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${Math.min(100, Math.max(0, bulkProgress || 5))}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, #38bdf8, #6366f1)",
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "#cbd5e1", minWidth: 32, textAlign: "right" }}>
+                  {bulkProgress || 5}%
+                </span>
+              </div>
+            ) : (
+              <Btn
+                variant="primary"
+                onClick={() => {
+                  setBulkSelectedIds(visibleSubmissions.map((s) => s.id));
+                  setBulkModalOpen(true);
+                }}
+                disabled={bulkActive || visibleSubmissions.length === 0}
+                style={
+                  bulkActive || !visibleSubmissions.length
+                    ? { opacity: 0.6, cursor: "not-allowed" }
+                    : undefined
+                }
+              >
+                Export ZIP
+              </Btn>
+            )}
           </div>
         </Card>
       </div>
+
+      {bulkModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1400,
+            padding: 12,
+          }}
+          onClick={() => setBulkModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: 16,
+              width: "min(720px, 95vw)",
+              boxShadow: "0 15px 40px rgba(0,0,0,0.12)",
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <h3 style={{ margin: 0 }}>Select submissions</h3>
+              <Btn variant="back" onClick={() => setBulkModalOpen(false)}>Close</Btn>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+              <Btn
+                variant="secondary"
+                onClick={() => setBulkSelectedIds(sortedModalSubmissions.map((s) => s.id))}
+              >
+                Select all
+              </Btn>
+              <Btn variant="back" onClick={() => setBulkSelectedIds([])}>Clear</Btn>
+              <div style={{ marginLeft: "auto", fontSize: 12, color: "#4b5563" }}>
+                Selected {bulkSelectedIds.length} of {sortedModalSubmissions.length}
+              </div>
+            </div>
+            <div style={{ maxHeight: "50vh", overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                    <th style={{ padding: 8, textAlign: "left" }}></th>
+                    <th
+                      style={{ padding: 8, textAlign: "left", cursor: "pointer" }}
+                      onClick={() => setBulkSort((prev) => (prev === "name" ? "name_desc" : "name"))}
+                    >
+                      Name {bulkSort.startsWith("name") ? (bulkSort === "name" ? "▲" : "▼") : ""}
+                    </th>
+                    <th
+                      style={{ padding: 8, textAlign: "left", cursor: "pointer" }}
+                      onClick={() => setBulkSort((prev) => (prev === "school" ? "school_desc" : "school"))}
+                    >
+                      School {bulkSort.startsWith("school") ? (bulkSort === "school" ? "▲" : "▼") : ""}
+                    </th>
+                    <th
+                      style={{ padding: 8, textAlign: "left", cursor: "pointer" }}
+                      onClick={() => setBulkSort((prev) => (prev === "ts" ? "ts_desc" : "ts"))}
+                    >
+                      Submitted {bulkSort.startsWith("ts") ? (bulkSort === "ts" ? "▲" : "▼") : ""}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedModalSubmissions.map((sub) => {
+                    const p = sub.participant || sub.profile || {};
+                    const checked = bulkSelectedIds.includes(sub.id);
+                    const ts = sub.ts || sub.created_at || p.finished_at || null;
+                    const dateStr = ts ? new Date(ts).toLocaleString() : "-";
+                    return (
+                      <tr key={sub.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                        <td style={{ padding: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const next = new Set(bulkSelectedIds);
+                              if (e.target.checked) next.add(sub.id);
+                              else next.delete(sub.id);
+                              setBulkSelectedIds(Array.from(next));
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: 8 }}>{p.name || p.email || "-"}</td>
+                        <td style={{ padding: 8 }}>{p.school || "-"}</td>
+                        <td style={{ padding: 8 }}>{dateStr}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <Btn variant="secondary" onClick={() => setBulkModalOpen(false)}>Cancel</Btn>
+              <Btn
+                variant="primary"
+                disabled={bulkSelectedIds.length === 0 || bulkActive}
+                onClick={() => {
+                  const selected = visibleSubmissions.filter((s) => bulkSelectedIds.includes(s.id));
+                  if (!selected.length) return;
+                  setBulkModalOpen(false);
+                  setBulkPreviewList(selected);
+                  setBulkPreviewIndex(0);
+                  setBulkPreviewOpen(true);
+                }}
+              >
+                {bulkActive ? "Working..." : "Export"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div
         className="bulk-print-wrap"
@@ -673,8 +768,115 @@ export default function AdminDashboard({ onNavigate }) {
           );
         })}
       </div>
+
+      {bulkPreviewOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1500,
+            padding: 12,
+          }}
+          onClick={() => {
+            setBulkPreviewOpen(false);
+            setBulkPreviewList([]);
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: 16,
+              width: "min(900px, 95vw)",
+              height: "min(90vh, 820px)",
+              boxShadow: "0 15px 40px rgba(0,0,0,0.12)",
+              display: "grid",
+              gridTemplateRows: "auto 1fr auto",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  Preview {bulkPreviewIndex + 1} of {bulkPreviewList.length}
+                </h3>
+                <div style={{ fontSize: 12, color: "#4b5563" }}>
+                  {bulkPreviewList[bulkPreviewIndex]?.participant?.name ||
+                    bulkPreviewList[bulkPreviewIndex]?.profile?.name ||
+                    "Submission"}
+                </div>
+              </div>
+              <Btn variant="back" onClick={() => { setBulkPreviewOpen(false); setBulkPreviewList([]); }}>
+                Close
+              </Btn>
+            </div>
+            <div style={{ overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 10, padding: 12, background: "#f9fafb" }}>
+              {bulkPreviewList[bulkPreviewIndex] ? (
+                <Results submission={bulkPreviewList[bulkPreviewIndex]} fromAdmin onNavigate={() => {}} />
+              ) : (
+                <p style={{ color: "#6b7280" }}>No submission selected.</p>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn
+                  variant="secondary"
+                  onClick={() => openPreviewPdf(bulkPreviewList[bulkPreviewIndex])}
+                  disabled={!bulkPreviewList[bulkPreviewIndex]}
+                >
+                  Open PDF preview / print
+                </Btn>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn
+                  variant="secondary"
+                  onClick={() => setBulkPreviewIndex((i) => Math.max(0, i - 1))}
+                  disabled={bulkPreviewIndex === 0}
+                >
+                  Previous
+                </Btn>
+                <Btn
+                  variant="secondary"
+                  onClick={() => setBulkPreviewIndex((i) => Math.min(bulkPreviewList.length - 1, i + 1))}
+                  disabled={bulkPreviewIndex >= bulkPreviewList.length - 1}
+                >
+                  Next
+                </Btn>
+                <Btn
+                  variant="primary"
+                  onClick={() => {
+                    setBulkPreviewOpen(false);
+                    handleBulkExport(bulkPreviewList);
+                  }}
+                  disabled={!bulkPreviewList.length || bulkActive}
+                >
+                  Start ZIP export
+                </Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </PageWrap>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 

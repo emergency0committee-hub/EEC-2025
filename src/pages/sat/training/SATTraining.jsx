@@ -865,23 +865,32 @@ export default function SATTraining({ onNavigate }) {
       if (!logRow || questionKey == null) return null;
       const key = String(questionKey);
       const answersSource = logRow.answers || {};
+      const resourceId = logRow.resource_id || answersSource.resourceId;
+      if (resourceId != null) {
+        const entry = resourceQuestionDataMap.get(String(resourceId));
+        if (entry) {
+          if (entry.data?.[key]?.text) return entry.data[key].text;
+          if (entry.texts[key]) return entry.texts[key];
+        }
+      }
+      if (questionDataCache[key]?.text) return questionDataCache[key].text;
+      if (questionTextCache[key]) return questionTextCache[key];
       const directMap = answersSource.questionTexts || answersSource.question_texts;
       if (directMap && directMap[key]) return directMap[key];
       const metricsSource = logRow.metrics || {};
       const metricMap = metricsSource.questionTexts || metricsSource.question_texts;
       if (metricMap && metricMap[key]) return metricMap[key];
-      const resourceId = logRow.resource_id || answersSource.resourceId;
+      if (questionTextCache[key]) return questionTextCache[key];
+      if (questionDataCache[key]?.text) return questionDataCache[key].text;
       if (resourceId != null) {
         const entry = resourceQuestionDataMap.get(String(resourceId));
         if (entry) {
           if (entry.texts[key]) return entry.texts[key];
-          if (questionTextCache[key]) return questionTextCache[key];
         }
       }
-      if (questionTextCache[key]) return questionTextCache[key];
       return null;
     },
-    [resourceQuestionDataMap, questionTextCache],
+    [resourceQuestionDataMap, questionTextCache, questionDataCache],
   );
   const resolveQuestionData = useCallback(
     (logRow, questionKey) => {
@@ -1472,58 +1481,63 @@ export default function SATTraining({ onNavigate }) {
 
     return insights;
   }, [classLogs]);
-  useEffect(() => {
+  const refreshClassData = useCallback(async () => {
     if (!isAdmin || !selectedClass) return;
-    (async () => {
+    try {
+      // Load student emails
+      const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+      const { data, error } = await supabase.from(table).select("student_email").eq("class_name", selectedClass).limit(5000);
+      if (error) throw error;
+      const emails = Array.from(new Set((data || []).map((r) => r.student_email).filter(Boolean)));
+      setClassEmails(emails);
+      // Load logs
+      setLogsLoading(true);
       try {
-        // Load student emails
-        const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
-        const { data, error } = await supabase.from(table).select("student_email").eq("class_name", selectedClass).limit(5000);
-        if (error) throw error;
-        const emails = Array.from(new Set((data || []).map(r => r.student_email).filter(Boolean)));
-        setClassEmails(emails);
-        // Load logs
-        setLogsLoading(true);
-        try {
-          if (emails.length > 0) {
-            const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
-            const { data: logs, error: lerr } = await supabase.from(tTable).select("*").in("user_email", emails).order("ts", { ascending: false }).limit(500);
-            if (lerr) throw lerr;
-            setClassLogs(logs || []);
-          } else {
-            setClassLogs([]);
-          }
-        } finally {
-          setLogsLoading(false);
-        }
-
-        // Load classwork resources
-        try {
-          setResLoading(true);
-          const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
-          const { data: rs, error: rerr } = await supabase
-            .from(rTable)
+        if (emails.length > 0) {
+          const tTable = import.meta.env.VITE_SAT_TRAINING_TABLE || "cg_sat_training";
+          const { data: logs, error: lerr } = await supabase
+            .from(tTable)
             .select("*")
-            .eq("class_name", selectedClass)
+            .in("user_email", emails)
             .order("ts", { ascending: false })
-            .limit(1000);
-          if (rerr) throw rerr;
-          setResources(rs || []);
-        } catch (e) {
-          console.warn(e);
-          setResources([]);
-        } finally {
-          setResLoading(false);
+            .limit(500);
+          if (lerr) throw lerr;
+          setClassLogs(logs || []);
+        } else {
+          setClassLogs([]);
         }
-      } catch (e) {
-        console.warn(e);
-        setClassEmails([]);
-        setClassLogs([]);
+      } finally {
         setLogsLoading(false);
       }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // Load classwork resources
+      try {
+        setResLoading(true);
+        const rTable = import.meta.env.VITE_CLASS_RES_TABLE || "cg_class_resources";
+        const { data: rs, error: rerr } = await supabase
+          .from(rTable)
+          .select("*")
+          .eq("class_name", selectedClass)
+          .order("ts", { ascending: false })
+          .limit(1000);
+        if (rerr) throw rerr;
+        setResources(rs || []);
+      } catch (e) {
+        console.warn(e);
+        setResources([]);
+      } finally {
+        setResLoading(false);
+      }
+    } catch (e) {
+      console.warn(e);
+      setClassEmails([]);
+      setClassLogs([]);
+      setLogsLoading(false);
+    }
   }, [isAdmin, selectedClass]);
+
+  useEffect(() => {
+    refreshClassData();
+  }, [refreshClassData]);
 
   const deleteResource = async (row) => {
     if (!row) return;
@@ -1719,6 +1733,7 @@ export default function SATTraining({ onNavigate }) {
     openClassLog,
     adaptiveInsights: classInsights,
     onDeleteLog: handleDeleteClassLog,
+    refreshClassData,
   };
 
 

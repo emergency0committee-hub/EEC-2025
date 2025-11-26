@@ -24,7 +24,7 @@ const PILLAR_INSIGHTS = {
   DISC: {
     title: "DISC Insights",
     summary:
-      "D = Drive (Dominance), I = Influence, S = Steadiness, C = Compliance. Higher bars show which style you lean on when collaborating—lean into your strongest letter during presentations, group projects, and conflict resolution.",
+      "Higher bars show which style you lean on when collaborating—lean into your strongest letter during presentations, group projects, and conflict resolution.",
   },
   "Bloom's Taxonomy": {
     title: "Bloom's Insights",
@@ -337,7 +337,7 @@ export default function Results({
   const bloomPct = useMemo(() => pctRowsFromTotals(totals.bloom, effectiveCounts.bloom), [totals, effectiveCounts]);
   const sdgPct   = useMemo(() => pctRowsFromTotals(totals.sdg,   effectiveCounts.sdg),   [totals, effectiveCounts]);
   const pillarSections = useMemo(() => {
-    const description = `% = (your total / (answered * ${RIASEC_SCALE_MAX})) * 100`;
+  const description = null;
     return [
       {
         title: "DISC",
@@ -420,7 +420,7 @@ export default function Results({
           }}
         >
           <h3 style={{ margin: 0, color: "#111827" }}>
-            BASIC INTEREST SCALES (Set {groupIdx + 1})
+            BASIC INTEREST SCALES
           </h3>
           <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
             Percentages across specific interest areas within each RIASEC theme.
@@ -540,6 +540,14 @@ export default function Results({
         </div>
       ))}
       {/* GROUP 4: Occupational Scales (kept together) */}
+      <div
+        style={{
+          pageBreakBefore: "always",
+          breakBefore: "page",
+          height: 0,
+          overflow: "hidden",
+        }}
+      />
       <div className="section avoid-break">
         <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
       </div>
@@ -596,6 +604,7 @@ export default function Results({
     </PageWrap>
   );
 }
+
 
 
 

@@ -18,7 +18,8 @@ const resultsPrintStyles = `
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: calc(297mm - 40mm);
+      /* A3 page height minus margins; keeps details anchored to bottom of first page */
+      min-height: calc(420mm - 60mm);
       page-break-after: always;
       padding-bottom: 24px;
     }

@@ -1,14 +1,24 @@
-// src/pages/admin/AdminTable.jsx
+ï»¿// src/pages/admin/AdminTable.jsx
 import React from "react";
 import PropTypes from "prop-types";
 
-export default function AdminTable({ submissions, onViewSubmission, onDeleteSubmission }) {
-  AdminTable.propTypes = {
-    submissions: PropTypes.array.isRequired,
-    onViewSubmission: PropTypes.func.isRequired,
-    onDeleteSubmission: PropTypes.func,
-  };
+AdminTable.propTypes = {
+  submissions: PropTypes.array.isRequired,
+  onViewSubmission: PropTypes.func.isRequired,
+  onDeleteSubmission: PropTypes.func,
+  onEditSubmission: PropTypes.func,
+  onSort: PropTypes.func,
+  sortKey: PropTypes.string,
+};
 
+export default function AdminTable({
+  submissions,
+  onViewSubmission,
+  onDeleteSubmission,
+  onEditSubmission,
+  onSort,
+  sortKey,
+}) {
   if (!submissions || submissions.length === 0) {
     return <p style={{ color: "#6b7280" }}>No submissions found.</p>;
   }
@@ -17,36 +27,93 @@ export default function AdminTable({ submissions, onViewSubmission, onDeleteSubm
     try {
       const s = startIso ? new Date(startIso).getTime() : NaN;
       const e = endIso ? new Date(endIso).getTime() : NaN;
-      if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return "—";
+      if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return "â€”";
       const sec = Math.round((e - s) / 1000);
       const mm = Math.floor(sec / 60).toString().padStart(2, "0");
       const ss = (sec % 60).toString().padStart(2, "0");
       return `${mm}:${ss}`;
     } catch {
-      return "—";
+      return "â€”";
     }
   };
 
   const EyeIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-      <path d="M12 5C7 5 2.73 8.11 1 12c1.73 3.89 6 7 11 7s9.27-3.11 11-7c-1.73-3.89-6-7-11-7Zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 .001 6.001A3 3 0 0 0 12 9Z" fill="#374151"/>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <path d="M2.458 12C3.732 7.943 7.522 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.478 0-8.268-2.943-9.542-7Z" stroke="#374151" strokeWidth="1.6"/>
+      <circle cx="12" cy="12" r="3" stroke="#374151" strokeWidth="1.6"/>
     </svg>
   );
 
   const TrashIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-      <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v8h-2V9Zm4 0h2v8h-2V9ZM7 9h2v8H7V9Z" fill="#ef4444"/>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <path d="M9.5 4h5l.75 2H20v2H4V6h4.75L9.5 4Z" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M7 9l1 10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-10" stroke="#ef4444" strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M10 11v7M14 11v7" stroke="#ef4444" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
+
+  const PencilIcon = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <path d="M14.5 4.5l5 5L9 20H4v-5l10.5-10.5Z" stroke="#374151" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
+  const IconButton = ({ title, ariaLabel, variant = "neutral", onClick, children }) => {
+    const base = {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      background: "#fff",
+      cursor: "pointer",
+      border: "1px solid #d1d5db",
+      transition: "background 120ms ease, box-shadow 120ms ease",
+    };
+    const style = variant === "danger" ? { ...base, border: "1px solid #ef4444" } : base;
+    return (
+      <button
+        onClick={onClick}
+        title={title}
+        aria-label={ariaLabel || title}
+        style={style}
+        onMouseEnter={(e) => (e.currentTarget.style.background = variant === "danger" ? "#fef2f2" : "#f9fafb")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+      >
+        {children}
+      </button>
+    );
+  };
+
+  const headerArrow = (key) => {
+    if (!sortKey || !sortKey.startsWith(key)) return "";
+    return sortKey === key ? "â–²" : "â–¼";
+  };
 
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
         <thead>
           <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-            <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Name</th>
-            <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>School</th>
-            <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Date</th>
+            <th
+              style={{ padding: 12, textAlign: "left", fontWeight: 600, cursor: onSort ? "pointer" : "default" }}
+              onClick={() => onSort?.(sortKey === "name" ? "name_desc" : "name")}
+            >
+              Name {headerArrow("name")}
+            </th>
+            <th
+              style={{ padding: 12, textAlign: "left", fontWeight: 600, cursor: onSort ? "pointer" : "default" }}
+              onClick={() => onSort?.(sortKey === "school" ? "school_desc" : "school")}
+            >
+              School {headerArrow("school")}
+            </th>
+            <th
+              style={{ padding: 12, textAlign: "left", fontWeight: 600, cursor: onSort ? "pointer" : "default" }}
+              onClick={() => onSort?.(sortKey === "ts" ? "ts_desc" : "ts")}
+            >
+              Submitted {headerArrow("ts")}
+            </th>
             <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Time</th>
             <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Duration</th>
             <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Manage</th>
@@ -55,12 +122,14 @@ export default function AdminTable({ submissions, onViewSubmission, onDeleteSubm
         <tbody>
           {submissions.map((sub) => {
             const p = sub.participant || sub.profile || {};
-            const name = p.name || "—";
-            const school = p.school || "—";
-            const finished = p.finished_at || sub.ts || null;
+            const name = p.name || "â€”";
+            const school = p.school || "â€”";
+            const finished = p.finished_at || sub.ts || sub.created_at || null;
             const d = finished ? new Date(finished) : null;
-            const dateStr = d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }) : "—";
-            const timeStr = d ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : "—";
+            const dateStr = d
+              ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })
+              : "â€”";
+            const timeStr = d ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "â€”";
             const duration = fmtDuration(p.started_at, p.finished_at);
             return (
               <tr key={sub.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
@@ -69,23 +138,25 @@ export default function AdminTable({ submissions, onViewSubmission, onDeleteSubm
                 <td style={{ padding: 12 }}>{dateStr}</td>
                 <td style={{ padding: 12 }}>{timeStr}</td>
                 <td style={{ padding: 12 }}>{duration}</td>
-                <td style={{ padding: 12, display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => onViewSubmission(sub)}
-                    title="View details"
-                    aria-label="View details"
-                    style={{ border: '1px solid #d1d5db', background: '#fff', padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}
-                  >
-                    <EyeIcon />
-                  </button>
-                  <button
-                    onClick={() => onDeleteSubmission?.(sub)}
-                    title="Delete submission"
-                    aria-label="Delete submission"
-                    style={{ border: '1px solid #ef4444', background: '#fff', color: '#ef4444', padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}
-                  >
-                    <TrashIcon />
-                  </button>
+                <td style={{ padding: 12 }}>
+                  <div style={{ display: "inline-flex", gap: 8 }}>
+                    <IconButton title="View details" ariaLabel="View details" onClick={() => onViewSubmission(sub)}>
+                      <EyeIcon />
+                    </IconButton>
+                    {onEditSubmission && (
+                      <IconButton title="Edit participant" ariaLabel="Edit participant" onClick={() => onEditSubmission(sub)}>
+                        <PencilIcon />
+                      </IconButton>
+                    )}
+                    <IconButton
+                      title="Delete submission"
+                      ariaLabel="Delete submission"
+                      variant="danger"
+                      onClick={() => onDeleteSubmission?.(sub)}
+                    >
+                      <TrashIcon />
+                    </IconButton>
+                  </div>
                 </td>
               </tr>
             );

@@ -568,7 +568,11 @@ export default function AdminClassDetail({
                 {logsLoading ? "Loading…" : `${classLogs.length} record${classLogs.length === 1 ? "" : "s"}`}
               </div>
             </div>
-            {classLogs.length === 0 ? (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+              <Btn variant="secondary" onClick={refreshClassData} disabled={logsLoading}>
+                {logsLoading ? "Refreshing..." : "Refresh"}
+              </Btn>
+            </div>{classLogs.length === 0 ? (
               <div style={{ color: "#6b7280", marginTop: 6 }}>No activity yet.</div>
             ) : (
               <div style={{ overflowX: "auto", marginTop: 6 }}>
@@ -772,6 +776,7 @@ AdminClassDetail.propTypes = {
   openClassLog: PropTypes.func.isRequired,
   adaptiveInsights: PropTypes.array.isRequired,
   onDeleteLog: PropTypes.func.isRequired,
+  refreshClassData: PropTypes.func.isRequired,
 };
 
 AdminClassDetail.defaultProps = {
@@ -779,3 +784,4 @@ AdminClassDetail.defaultProps = {
   highlightKey: null,
   catalogError: "",
 };
+

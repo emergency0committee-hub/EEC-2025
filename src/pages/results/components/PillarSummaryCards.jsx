@@ -41,11 +41,7 @@ export default function PillarSummaryCards({ sections, scaleLabel }) {
               <h3 style={{ margin: 0, color: "#111827" }}>
                 {section.title} ({scaleLabel})
               </h3>
-              {section.title === "DISC" && (
-                <p style={{ margin: 0, color: "#475569", fontSize: 13 }}>
-                  D = Drive (Dominance), I = Influence, S = Steadiness, C = Compliance
-                </p>
-              )}
+              {section.title === "DISC" && null}
               {section.description ? (
                 <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
                   {section.description}
