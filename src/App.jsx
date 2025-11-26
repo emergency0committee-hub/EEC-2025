@@ -28,6 +28,14 @@ import Btn from "./components/Btn.jsx";
 import { normalizeRoute, routeHref, isModifiedEvent } from "./lib/routes.js";
 // import { testSupabaseConnection } from "./lib/supabase.js";
 import { supabase } from "./lib/supabase.js";
+import HelperBot from "./components/HelperBot.jsx";
+
+const withHelper = (node, helper) => (
+  <>
+    {helper}
+    {node}
+  </>
+);
 
 function SatPlaceholder() { return null; }
 
@@ -333,7 +341,13 @@ export default function App() {
     return currentRole === "educator" && currentAiAccess;
   }, [currentRole, currentAiAccess]);
 
-  if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />;
+  const recentRoutes = [];
+
+  const helper = route === "home"
+    ? <HelperBot currentRoute={route} onNavigate={onNavigate} recentRoutes={recentRoutes} />
+    : null;
+
+  if (route === "home")   return withHelper(<Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />, helper);
   if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
   if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
@@ -494,6 +508,7 @@ export default function App() {
           Back Home
         </Btn>
       </Card>
+      <HelperBot currentRoute={route} onNavigate={onNavigate} recentRoutes={recentRoutes} />
     </PageWrap>
   );
 }
