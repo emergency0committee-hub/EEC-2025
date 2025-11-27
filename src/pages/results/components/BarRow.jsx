@@ -20,6 +20,9 @@ export default function BarRow({
           marginBottom: 4,
           gap: 16,
           alignItems: "flex-start",
+          WebkitPrintColorAdjust: "exact",
+          printColorAdjust: "exact",
+          colorAdjust: "exact",
         }}
       >
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
@@ -33,6 +36,9 @@ export default function BarRow({
                 borderRadius: 3,
                 background: chipColor,
                 display: "inline-block",
+                WebkitPrintColorAdjust: "exact",
+                printColorAdjust: "exact",
+                colorAdjust: "exact",
               }}
             />
           ) : null}
@@ -52,6 +58,9 @@ export default function BarRow({
           borderRadius: 6,
           overflow: "hidden",
           border: "1px solid #e5e7eb",
+          WebkitPrintColorAdjust: "exact",
+          printColorAdjust: "exact",
+          colorAdjust: "exact",
         }}
       >
         <div
@@ -59,6 +68,9 @@ export default function BarRow({
             width: `${safePercent}%`,
             height: "100%",
             background: color,
+            WebkitPrintColorAdjust: "exact",
+            printColorAdjust: "exact",
+            colorAdjust: "exact",
           }}
         />
       </div>
@@ -72,10 +84,4 @@ BarRow.propTypes = {
   color: PropTypes.string,
   subtitle: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
   chipColor: PropTypes.string,
-};
-
-BarRow.defaultProps = {
-  color: "#2563eb",
-  subtitle: null,
-  chipColor: null,
 };

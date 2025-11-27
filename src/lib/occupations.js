@@ -78,31 +78,28 @@ export async function loadOccupations(opts = {}) {
   if (force) _cache = null;
   try {
     const bust = cacheBuster || import.meta?.env?.VITE_OCCUPATIONS_VERSION || "";
-    const q = bust ? `?v=${encodeURIComponent(bust)}` : "";
 
-    // 1) Prefer bundled assets (updated with deploy)
-    const base = (import.meta?.env?.BASE_URL || "/").replace(/\/$/, "/");
-    const candidates = [
-      `${base}occupations.csv${q}`,
-      `${base}data/occupations.csv${q}`,
-      `/occupations.csv${q}`,
-      `/data/occupations.csv${q}`,
-    ];
-    for (const url of candidates) {
-      try {
-        const res = await fetch(url, { cache: "no-store" });
-        if (res.ok) {
-          const text = await res.text();
-          const rows = parseCsv(text);
-          if (rows.length) {
-            _cache = rows;
-            return _cache;
-          }
+    // 1) Supabase table (primary)
+    try {
+      const { data, error } = await supabase.from("occupations").select("*");
+      if (!error && Array.isArray(data) && data.length) {
+        const rows = data
+          .map((r) => {
+            const theme = normalizeTheme(r.theme || r.code || "");
+            const occupation = r.occupation || r.job_title || r.title || r.code || "";
+            return { ...r, occupation, theme };
+          })
+          .filter((r) => r.occupation && r.theme);
+        if (rows.length) {
+          _cache = rows;
+          return _cache;
         }
-      } catch {}
+      }
+    } catch (err) {
+      console.warn("[occupations] Table fetch failed, falling back to bucket", err);
     }
 
-    // 2) Fallback to Supabase Storage bucket
+    // 2) Supabase Storage bucket (fallback)
     try {
       const { data, error } = await supabase.storage
         .from("occupations")
@@ -117,7 +114,7 @@ export async function loadOccupations(opts = {}) {
       }
     } catch {}
 
-    console.warn("[occupations] No occupations.csv found in storage or assets.");
+    console.warn("[occupations] No occupations found in Supabase.");
     _cache = [];
     return _cache;
   } catch (e) {

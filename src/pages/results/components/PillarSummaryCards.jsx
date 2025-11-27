@@ -17,15 +17,15 @@ export default function PillarSummaryCards({ sections = [], scaleLabel = "Percen
         <div
           key={section.title}
           className="card section avoid-break pillar-card"
-          style={{ padding: 16 }}
+          style={{ padding: 16, boxShadow: "0 10px 20px rgba(0,0,0,0.08)" }}
         >
           <div
             className="chart-with-aside"
             style={{
               display: "flex",
               gap: 12,
-              flexWrap: "nowrap",
-              alignItems: "stretch",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
             }}
           >
             <div
@@ -49,19 +49,22 @@ export default function PillarSummaryCards({ sections = [], scaleLabel = "Percen
               ) : null}
               <div>
                 {section.data?.length ? (
-                  section.data.map(([label, pct]) => (
-                  <BarRow
-                    key={label}
-                    label={
-                      section.title === "DISC" && DISC_LABELS[label]
-                        ? DISC_LABELS[label]
-                        : label
-                    }
-                    percent={pct}
-                    color={section.color}
-                    chipColor={section.color}
-                  />
-                  ))
+                  section.data
+                    .slice()
+                    .sort((a, b) => (b?.[1] || 0) - (a?.[1] || 0))
+                    .map(([label, pct]) => (
+                      <BarRow
+                        key={label}
+                        label={
+                          section.title === "DISC" && DISC_LABELS[label]
+                            ? DISC_LABELS[label]
+                            : label
+                        }
+                        percent={pct}
+                        color={section.color}
+                        chipColor={section.color}
+                      />
+                    ))
                 ) : (
                   <div style={{ color: "#6b7280" }}>No data.</div>
                 )}
@@ -88,8 +91,25 @@ export default function PillarSummaryCards({ sections = [], scaleLabel = "Percen
               </div>
               <p style={{ margin: 0, lineHeight: 1.4 }}>
                 {section.insight?.body ||
-                  "These percentages highlight your focus areas. Higher bars indicate where you naturally invest energy."}
+                  "Bars on the left show how strongly you scored within this pillar. Longer bars = higher emphasis."}
               </p>
+              {section.data?.length ? (
+                <div style={{ lineHeight: 1.4 }}>
+                  <strong>Top areas:</strong>{" "}
+                  {section.data
+                    .slice()
+                    .sort((a, b) => (b?.[1] || 0) - (a?.[1] || 0))
+                    .slice(0, 3)
+                    .map(([label, pct]) => {
+                      const lbl =
+                        section.title === "DISC" && DISC_LABELS[label]
+                          ? DISC_LABELS[label]
+                          : label;
+                      return `${lbl} (${Math.round(pct || 0)}%)`;
+                    })
+                    .join(", ")}
+                </div>
+              ) : null}
             </aside>
           </div>
         </div>

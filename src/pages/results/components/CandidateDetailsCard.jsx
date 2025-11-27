@@ -12,6 +12,7 @@ export default function CandidateDetailsCard({ rows = [] }) {
         borderRadius: 16,
         border: "1px solid #d1d5db",
         background: "#ffffff",
+        boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
       }}
     >
       <h3 style={{ margin: 0, color: "#111827", fontSize: 20 }}>Candidate Details</h3>

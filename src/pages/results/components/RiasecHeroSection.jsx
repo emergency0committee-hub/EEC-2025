@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import PropTypes from "prop-types";
 import ResultsRadar from "../ResultsRadar.jsx";
 import ResultsRiasecBars from "../ResultsRiasecBars.jsx";
@@ -13,13 +13,14 @@ const RIASEC_SUMMARIES = {
 };
 
 export default function RiasecHeroSection({ radarData = [] }) {
-  if (!radarData?.length) return null;
-  const sorted = [...radarData].sort((a, b) => b.score - a.score);
+  const safeRadar = Array.isArray(radarData) ? radarData : [];
+  const sorted = [...safeRadar].sort((a, b) => (b?.score || 0) - (a?.score || 0));
+  const hasData = sorted.length > 0;
   return (
     <div className="section avoid-break">
-      <div className="card avoid-break" style={{ padding: 16 }}>
+      <div className="card avoid-break" style={{ padding: 16, boxShadow: "0 10px 20px rgba(0,0,0,0.08)" }}>
         <div className="avoid-break">
-          <ResultsRadar data={radarData} />
+          <ResultsRadar data={safeRadar} />
         </div>
         <div
           className="chart-with-aside"
@@ -43,7 +44,7 @@ export default function RiasecHeroSection({ radarData = [] }) {
             }}
           >
             <ResultsRiasecBars
-              rows={radarData.map((d) => ({ code: d.code, percent: d.score }))}
+              rows={safeRadar.map((d) => ({ code: d.code, percent: d.score }))}
             />
           </div>
           <aside
@@ -64,7 +65,7 @@ export default function RiasecHeroSection({ radarData = [] }) {
           >
             <div style={{ fontWeight: 600, color: "#0f172a" }}>RIASEC Insights</div>
             <p style={{ margin: 0 }}>
-              Bars are in descending order—your top letters show where you naturally invest energy.
+              Bars are in descending orderâ€”your top letters show where you naturally invest energy.
               Match clubs, coursework, or internships with those letters.
             </p>
             {sorted.slice(0, 3).map((entry) => (
@@ -91,3 +92,4 @@ RiasecHeroSection.propTypes = {
     })
   ),
 };
+

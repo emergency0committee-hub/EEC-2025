@@ -1,0 +1,487 @@
+{topOccupationDetail && (
+
+
+        <div className="section avoid-break">
+
+
+          <div
+
+
+            className="card avoid-break"
+
+
+            style={{
+
+
+              padding: 18,
+
+
+              boxShadow: "0 16px 30px rgba(0,0,0,0.08)",
+
+
+              border: "1px solid #e5e7eb",
+
+
+              borderRadius: 14,
+
+
+              background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+
+
+            }}
+
+
+          >
+
+
+            <div
+
+
+              style={{
+
+
+                display: "flex",
+
+
+                justifyContent: "space-between",
+
+
+                alignItems: "center",
+
+
+                gap: 12,
+
+
+                marginBottom: 12,
+
+
+                flexWrap: "wrap",
+
+
+              }}
+
+
+            >
+
+
+              <div>
+
+
+                <div style={{ fontSize: 12, letterSpacing: 0.6, color: "#6b7280", textTransform: "uppercase" }}>
+
+
+                  Top Occupation Focus
+
+
+                </div>
+
+
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>
+
+
+                  {topOccupationDetail.job_title || topOccupationDetail.occupation || occLabel(topOccupationDetail)}
+
+
+                </div>
+
+
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+
+
+                  <span
+
+
+                    style={{
+
+
+                      padding: "4px 10px",
+
+
+                      borderRadius: 20,
+
+
+                      background: `${themeColor(topOccupationDetail.theme)}15`,
+
+
+                      color: themeColor(topOccupationDetail.theme),
+
+
+                      fontSize: 12,
+
+
+                      fontWeight: 600,
+
+
+                    }}
+
+
+                  >
+
+
+                    Theme: {topOccupationDetail.theme || "—"}
+
+
+                  </span>
+
+
+                  <span
+
+
+                    style={{
+
+
+                      padding: "4px 10px",
+
+
+                      borderRadius: 20,
+
+
+                      background: "#eef2ff",
+
+
+                      color: "#4338ca",
+
+
+                      fontSize: 12,
+
+
+                      fontWeight: 600,
+
+
+                    }}
+
+
+                  >
+
+
+                    Also called: {topOccupationDetail.also_called || "—"}
+
+
+                  </span>
+
+
+                </div>
+
+
+              </div>
+
+
+              {topOccupationDetail.link && (
+
+
+                <a
+
+
+                  href={topOccupationDetail.link}
+
+
+                  target="_blank"
+
+
+                  rel="noreferrer"
+
+
+                  style={{
+
+
+                    padding: "8px 12px",
+
+
+                    background: "#2563eb",
+
+
+                    color: "#ffffff",
+
+
+                    borderRadius: 10,
+
+
+                    fontWeight: 600,
+
+
+                    textDecoration: "none",
+
+
+                    fontSize: 13,
+
+
+                    boxShadow: "0 8px 20px rgba(37,99,235,0.25)",
+
+
+                  }}
+
+
+                >
+
+
+                  View details
+
+
+                </a>
+
+
+              )}
+
+
+            </div>
+
+
+
+
+
+            <div
+
+
+              style={{
+
+
+                display: "grid",
+
+
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+
+
+                gap: 12,
+
+
+                color: "#374151",
+
+
+                fontSize: 14,
+
+
+              }}
+
+
+            >
+
+
+              {[
+
+
+                ["Summary", topOccupationDetail.summary],
+
+
+                ["Key duties", topOccupationDetail.duties],
+
+
+                ["Knowledge", topOccupationDetail.knowledge],
+
+
+                ["Skills", topOccupationDetail.skills],
+
+
+                ["Abilities", topOccupationDetail.abilities],
+
+
+                ["Personality fit", topOccupationDetail.personality],
+
+
+                ["Tech & tools", topOccupationDetail.technology_tools],
+
+
+                ["Education", topOccupationDetail.education],
+
+
+                ["Job outlook", topOccupationDetail.job_outlook],
+
+
+              [
+
+
+                "Salary range",
+
+
+                Number.isFinite(topOccupationDetail.salary_low)
+
+
+                  ? `$${topOccupationDetail.salary_low.toLocaleString()} - ${
+
+
+                      Number.isFinite(topOccupationDetail.salary_high)
+
+
+                        ? `$${topOccupationDetail.salary_high.toLocaleString()}`
+
+
+                        : Number.isFinite(topOccupationDetail.salary_typical)
+
+
+                        ? `$${topOccupationDetail.salary_typical.toLocaleString()}`
+
+
+                        : "—"
+
+
+                    }`
+
+
+                  : "—",
+
+
+              ],
+
+
+              ].map(([label, value]) => {
+
+
+                const formatValue = (v) => {
+
+
+                  if (v === null || v === undefined) return { type: "text", text: "—" };
+
+
+                  if (Array.isArray(v)) return { type: "list", items: v.map((item) => cleanText(item)).filter(Boolean) };
+
+
+                  if (typeof v === "object") {
+
+
+                    const groups = Object.entries(v).map(([k, val]) => {
+
+
+                      const items = Array.isArray(val) ? val.map((x) => cleanText(x)).filter(Boolean) : [cleanText(val)];
+
+
+                      return { header: k, items };
+
+
+                    });
+
+
+                    return { type: "groups", groups };
+
+
+                  }
+
+
+                  const txt = cleanText(v);
+
+
+                  if (txt.includes(",") && txt.split(",").length > 1) {
+
+
+                    return { type: "list", items: txt.split(",").map((s) => s.trim()).filter(Boolean) };
+
+
+                  }
+
+
+                  return { type: "text", text: txt || "—" };
+
+
+                };
+
+
+                const display = label === "Summary" ? { type: "text", text: cleanText(value) || "—" } : formatValue(value);
+
+
+                return (
+
+
+                <div
+
+
+                  key={label}
+
+
+                  style={{
+
+
+                    padding: 12,
+
+
+                    borderRadius: 10,
+
+
+                    border: "1px solid #e5e7eb",
+
+
+                    background: "#fff",
+
+
+                    minHeight: 70,
+
+
+                  }}
+
+
+                >
+
+
+                  <div style={{ color: "#2563eb", fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{label}</div>
+
+
+                  {display.type === "groups" ? (
+
+
+                    <div style={{ display: "grid", gap: 8 }}>
+
+
+                      {display.groups.map((g, gi) => (
+
+
+                        <div key={gi}>
+
+
+                          <div style={{ fontWeight: 700, color: "#111827", marginBottom: 4 }}>{g.header}</div>
+
+
+                          <ul style={{ margin: 0, paddingLeft: 18, color: "#111827", lineHeight: 1.4 }}>
+
+
+                            {g.items.length ? g.items.map((item, idx) => <li key={idx}>{renderWithHeader(item)}</li>) : <li>—</li>}
+
+
+                          </ul>
+
+
+                        </div>
+
+
+                      ))}
+
+
+                    </div>
+
+
+                  ) : display.type === "list" ? (
+
+
+                    <ul style={{ margin: 0, paddingLeft: 18, color: "#111827", lineHeight: 1.4 }}>
+
+                      {display.items.length ? display.items.map((item, idx) => <li key={idx}>{renderWithHeader(item)}</li>) : <li>—</li>}
+
+                    </ul>
+
+                  ) : (
+
+
+                    <div style={{ color: "#111827", lineHeight: 1.4 }}>{display.text}</div>
+
+
+                  )}
+
+
+                </div>
+
+
+                );
+
+
+              })}
+
+
+            </div>
+
+
+          </div>
+
+
+        </div>
+
+
+      )}
+
+
+

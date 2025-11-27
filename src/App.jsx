@@ -180,7 +180,7 @@ export default function App() {
       case "account":
         pageTitle = "Account";
         break;
-      case "admin-dashboard":
+      case "career-dashboard":
         pageTitle = "Career Dashboard";
         break;
       case "admin-sat":
@@ -377,7 +377,7 @@ export default function App() {
   }
   if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
   if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "admin-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "career-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-live-monitor") return <AdminLiveMonitor onNavigate={onNavigate} />;
   if (route === "admin-manage-users") {
     if (!canViewResults) {

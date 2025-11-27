@@ -7,7 +7,7 @@ const ROUTE_HINTS = [
   { label: "Career Guidance", route: "career" },
   { label: "SAT Diagnostic", route: "sat" },
   { label: "SAT Training", route: "sat-training" },
-  { label: "Career Dashboard", route: "admin-dashboard" },
+  { label: "Career Dashboard", route: "career-dashboard" },
   { label: "SAT Dashboard", route: "admin-sat" },
   { label: "Question Bank", route: "admin-question-bank" },
   { label: "Manage Users", route: "admin-manage-users" },

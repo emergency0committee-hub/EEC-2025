@@ -137,10 +137,10 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                 {menuLabels.manageUsers}
               </MenuItem>
               <MenuItem
-                to="admin-dashboard"
+                to="career-dashboard"
                 onSelect={(event) => {
                   setOpen(false);
-                  onNavigate("admin-dashboard", null, event);
+                  onNavigate("career-dashboard", null, event);
                 }}
               >
                 {menuLabels.careerDashboard}

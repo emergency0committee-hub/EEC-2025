@@ -1,11 +1,12 @@
 ﻿// src/pages/Home.jsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import { LANGS, STR } from "../i18n/strings.js";
+import { supabase } from "../lib/supabase.js";
 
 const HOME_CARDS = {
   EN: {
@@ -77,6 +78,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
     canAccessAIEducator: PropTypes.bool,
   };
 
+  const [currentUser, setCurrentUser] = useState(null);
+  const [checkingResult, setCheckingResult] = useState(false);
+
   const t = STR[lang] || STR.EN;
   const home = HOME_CARDS[lang] || HOME_CARDS.EN;
 
@@ -98,6 +102,45 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           window.alert(aiLockedMessage);
         }
       };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.email) setCurrentUser(parsed);
+      }
+    } catch (e) {
+      console.warn("Failed to read current user", e);
+    }
+  }, []);
+
+  const handleCareerClick = async (event) => {
+    // If no user info, just go to test
+    if (!currentUser?.email) {
+      return onNavigate("career", null, event);
+    }
+    event?.preventDefault?.();
+    setCheckingResult(true);
+    try {
+      const { data, error } = await supabase
+        .from("cg_results")
+        .select("*")
+        .eq("user_email", currentUser.email)
+        .order("ts", { ascending: false })
+        .limit(1)
+        .single();
+      if (error || !data) {
+        return onNavigate("career", null, event);
+      }
+      onNavigate("results", { resultId: data.id, submission: data });
+    } catch (e) {
+      console.warn("Failed to check existing result", e);
+      onNavigate("career", null, event);
+    } finally {
+      setCheckingResult(false);
+    }
+  };
 
   return (
     <PageWrap>
@@ -152,9 +195,11 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             title: home.career.title,
             desc: home.career.desc,
             cta: home.career.cta,
-            onClick: navTo("career"),
+            onClick: handleCareerClick,
             variant: "primary",
-            extra: null,
+            extra: checkingResult ? (
+              <small style={{ color: "#9ca3af", fontSize: 12 }}>Checking for existing result...</small>
+            ) : null,
           },
           {
             key: "satDiag",

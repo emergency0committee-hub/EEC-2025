@@ -11,7 +11,7 @@ export default function BasicInterestScales({
   themeDescriptions,
 }) {
   return (
-    <div className="card section" style={{ padding: 16 }}>
+    <div>
       <h3 style={{ margin: 0, color: "#111827" }}>BASIC INTEREST SCALES</h3>
       <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
         Percentages across specific interest areas within each RIASEC theme.
@@ -33,7 +33,15 @@ export default function BasicInterestScales({
               className="card avoid-break basic-scale-card"
               style={{ padding: 16, background: "#ffffff" }}
             >
-              <div className="chart-with-aside">
+              <div
+                className="chart-with-aside"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 16,
+                  alignItems: "flex-start",
+                }}
+              >
                 <div
                   className="chart-main"
                   style={{
@@ -113,8 +121,17 @@ export default function BasicInterestScales({
                   </div>
                   <p style={{ margin: 0, lineHeight: 1.4 }}>
                     {insight.summary ||
-                      "This theme highlights where your motivations and strengths converge. Focus on the longest bars to see which activities energize you most."}
+                      "Bars on the left show how strongly you reacted to each sub-area. Longer bars = higher interest/energy."}
                   </p>
+                  {areas.length > 0 && (
+                    <div style={{ lineHeight: 1.4 }}>
+                      <strong>Top areas:</strong>{" "}
+                      {areas
+                        .slice(0, 3)
+                        .map((a) => `${a.area} (${Math.round(a.percent)}%)`)
+                        .join(", ")}
+                    </div>
+                  )}
                   {insight.uni && (
                     <p style={{ margin: 0, lineHeight: 1.4 }}>
                       <strong>University focus:</strong> {insight.uni}

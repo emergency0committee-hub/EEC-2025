@@ -19,7 +19,9 @@ export default function ResultsRiasecBars({ rows = [] }) {
       {(!rows || !rows.length) ? (
         <div style={{ color: "#6b7280" }}>No answered RIASEC items to display.</div>
       ) : (
-        rows.map((row) => {
+        [...rows]
+          .sort((a, b) => (b.percent ?? b.score ?? 0) - (a.percent ?? a.score ?? 0))
+          .map((row) => {
           const code = row.code;
           const color = THEME_COLORS?.[code] || "#2563eb";
           const pct = Math.round(Number(row.percent ?? row.score ?? 0));
@@ -28,7 +30,6 @@ export default function ResultsRiasecBars({ rows = [] }) {
             <BarRow
               key={code}
               label={label}
-              subtitle={code}
               percent={pct}
               color={color}
               chipColor={color}

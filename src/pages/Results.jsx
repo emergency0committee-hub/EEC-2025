@@ -1,687 +1,665 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
-import Btn from "../components/Btn.jsx";
+﻿import React, { useEffect, useMemo, useState } from "react";
+import RiasecHeroSection from "./results/components/RiasecHeroSection.jsx";
+import BasicInterestScales from "./results/components/BasicInterestScales.jsx";
+import PillarSummaryCards from "./results/components/PillarSummaryCards.jsx";
 import { THEME_COLORS } from "../components/Chart.jsx";
 import OccupationScales from "../components/OccupationScales.jsx";
-import ResultsMatches from "./results/ResultsMatches.jsx";
-import RiasecHeroSection from "./results/components/RiasecHeroSection.jsx";
-import PillarSummaryCards from "./results/components/PillarSummaryCards.jsx";
+import { PageWrap } from "../components/Layout.jsx";
+import HeaderCard from "./results/components/HeaderCard.jsx";
 import CandidateDetailsCard from "./results/components/CandidateDetailsCard.jsx";
-import resultsPrintStyles from "./results/printStyles.js";
-import { Q_UNIFIED as Q, RIASEC_SCALE_MAX } from "../questionBank.js";
+import { loadOccupations } from "../lib/occupations.js";
 import { supabase } from "../lib/supabase.js";
-import { loadOccupations, pickByPrimaryLetter } from "../lib/occupations.js";
 
-const THEME_NAME = {
-  E: "ENTERPRISING",
-  A: "ARTISTIC",
-  R: "REALISTIC",
-  I: "INVESTIGATIVE",
-  S: "SOCIAL",
-  C: "CONVENTIONAL",
-};
-const PILLAR_INSIGHTS = {
-  DISC: {
-    title: "DISC Insights",
-    summary:
-      "Higher bars show which style you lean on when collaborating—lean into your strongest letter during presentations, group projects, and conflict resolution.",
-  },
-  "Bloom's Taxonomy": {
-    title: "Bloom's Insights",
-    summary:
-      "These levels reflect the cognitive depth you use most. If analysis/evaluation ranks highest, seek classes that let you synthesize information before presenting.",
-  },
-  "UN Sustainable Development Goals": {
-    title: "SDG Insights",
-    summary:
-      "This highlights which global challenges resonate most. Use your top SDG to guide service projects, essays, or capstone ideas so your work feels meaningful.",
-  },
-};
-const INTEREST_CONTEXT = {
-  R: {
-    uni: "Choose lab-heavy science, engineering, or technical electives so you keep building with tools.",
-    real: "Volunteer for maker events or maintenance projects to keep your hands-on strengths sharp.",
-  },
-  I: {
-    uni: "Join research assistantships or analytics clubs to feed your curiosity.",
-    real: "Sign up for hackathons or citizen-science projects to investigate real problems.",
-  },
-  A: {
-    uni: "Balance theory courses with studio/performance electives and leave each term with new portfolio pieces.",
-    real: "Enter design or storytelling competitions to iterate quickly with real briefs.",
-  },
-  S: {
-    uni: "Take service-learning or peer-mentoring classes to practice facilitation.",
-    real: "Coach, tutor, or mentor weekly so you stay energized by helping others.",
-  },
-  E: {
-    uni: "Join entrepreneurship clubs, case competitions, or student government to sharpen persuasion.",
-    real: "Lead fundraising drives or community campaigns to rally teams around bold targets.",
-  },
-  C: {
-    uni: "Pick electives in accounting, operations, or data management to refine accuracy.",
-    real: "Manage budgets or logistics for clubs so others rely on your organization.",
-  },
-};
-
-function colorForPct(pct) {
-  const p = Math.max(0, Math.min(100, Number(pct || 0)));
-  if (p < 20) return "#ef4444";
-  if (p < 40) return "#f97316";
-  if (p < 60) return "#facc15";
-  if (p < 80) return "#84cc16";
-  return "#22c55e";
-}
-
-function levelFromPct(p) {
-  if (p >= 75) return "Very High";
-  if (p >= 55) return "High";
-  if (p >= 40) return "Moderate";
-  return "Little";
-}
-
-function BarRow({ label, percent, color = "#2563eb" }) {
-  return (
-    <div className="avoid-break" style={{ marginBottom: 10 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 13,
-          color: "#374151",
-          marginBottom: 4,
-        }}
-      >
-        <span>{label}</span>
-        <span>{Math.round(percent)}%</span>
-      </div>
-      <div
-        style={{
-          height: 10,
-          background: "#f3f4f6",
-          borderRadius: 6,
-          overflow: "hidden",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <div
-          style={{
-            width: `${Math.max(0, Math.min(100, percent))}%`,
-            height: "100%",
-            background: color,
-          }}
-        />
-      </div>
-    </div>
+/**
+ * Minimal rebuild: header + candidate details.
+ * Fetches cg_results by resultId and hydrates with profiles data.
+ */
+export default function Results({ resultId, participant, submission = null, onNavigate, fromAdmin = false }) {
+  const [participantData, setParticipantData] = useState(participant || null);
+  const [resultData, setResultData] = useState(
+    participant
+      ? {
+          radarData: participant?.radar_data || [],
+          areaPercents: participant?.area_percents || [],
+          pillarAgg: participant?.pillar_agg || {},
+          pillarCounts: participant?.pillar_counts || {},
+        }
+      : null
   );
-}
+  const resolvedResultId = resultId || submission?.id;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [occupations, setOccupations] = useState([]);
 
-function ListBox({ title, items }) {
-  return (
-    <div className="card avoid-break" style={{ padding: 16 }}>
-      <h4 style={{ margin: 0, color: "#111827" }}>{title}</h4>
-      <ol style={{ margin: "8px 0 0", paddingLeft: 18, color: "#374151" }}>
-        {items.map((it, i) => (
-          <li key={i} style={{ margin: "4px 0" }}>
-            <span style={{ fontWeight: 600 }}>{it.area}</span>{" "}
-            <span style={{ color: "#6b7280" }}>({Math.round(it.percent)}%)</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
+  // Seed from submission payload (when navigated from dashboard)
+  useEffect(() => {
+    if (!submission) return;
+    const subParticipant = submission.participant || submission.profile || {};
+    setParticipantData({
+      ...subParticipant,
+      class_name: subParticipant.class_name || submission.profile?.class_name || subParticipant.grade,
+      phone: subParticipant.phone || submission.profile?.phone,
+      email: subParticipant.email || submission.profile?.email || submission.user_email,
+    });
+    setResultData({
+      radarData: submission.radar_data || [],
+      areaPercents: submission.area_percents || [],
+      pillarAgg: submission.pillar_agg || {},
+      pillarCounts: submission.pillar_counts || {},
+      answers: submission.answers || {},
+      durationSeconds:
+        submission.duration_sec ??
+        (typeof submission.duration_minutes === "number" ? submission.duration_minutes * 60 : undefined),
+    });
+  }, [submission]);
 
-/* ---------------------- Pillar helpers (percentages) ---------------------- */
-function buildBankDenominators() {
-  const discCount = { D: 0, I: 0, S: 0, C: 0 };
-  const bloomCount = {};
-  const sdgCount = {};
-  for (const q of Q || []) {
-    if (q?.DISC && discCount[q.DISC] != null) discCount[q.DISC] += 1;
-    if (q?.BLOOM) bloomCount[q.BLOOM] = (bloomCount[q.BLOOM] || 0) + 1;
-    if (q?.UN_Goal) sdgCount[q.UN_Goal] = (sdgCount[q.UN_Goal] || 0) + 1;
-  }
-  return { discCount, bloomCount, sdgCount };
-}
+  useEffect(() => {
+    if (!resolvedResultId) return;
 
-function pctRowsFromTotals(totals, counts) {
-  const out = [];
-  for (const [label, sum] of Object.entries(totals || {})) {
-    const count = counts?.[label] || 0;
-    const max = count * RIASEC_SCALE_MAX;
-    const pct = max > 0 ? Math.round((Number(sum || 0) / max) * 100) : 0;
-    out.push([label, pct]);
-  }
-  out.sort((a, b) => b[1] - a[1]);
-  return out;
-}
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: resultRow, error: resultErr } = await supabase
+          .from("cg_results")
+          .select("*")
+          .eq("id", resolvedResultId)
+          .single();
+        if (resultErr) throw resultErr;
 
-export default function Results({
-  radarData = [],          // [{ code, score }]
-  areaPercents = [],       // [{ area, code, percent }]
-  interestPercents = [],   // (optional)
-  onNavigate,
-  participant,
-  showParticipantHeader = false,
-  fromAdmin = false,
-  submission,
-  pillarAgg,
-  pillarCounts,
-}) {
-  // If an admin passed a 'submission' record, derive props from it
-  if (submission) {
-    radarData = submission.radar_data || radarData;
-    areaPercents = submission.area_percents || areaPercents;
-    participant = submission.participant || submission.profile || participant;
-    pillarAgg = submission.pillar_agg || pillarAgg;
-    pillarCounts = submission.pillar_counts || pillarCounts;
-    fromAdmin = true;
-  }
+        let profile = null;
+        if (resultRow?.user_email) {
+          const { data: profileRows } = await supabase
+            .from("profiles")
+            .select(
+              "email, full_name, name, username, school, school_name, organization, org, company, class_name, phone"
+            )
+            .eq("email", resultRow.user_email)
+            .limit(1);
+          profile = Array.isArray(profileRows) && profileRows.length ? profileRows[0] : null;
+        }
 
-  /* ---------------------- Completion / validity check ---------------------- */
-  /* ---------------------- Completion / validity check ---------------------- */
-  const completionInfo = useMemo(() => {
-    const p = participant || {};
-    const answersArr = Array.isArray(submission?.answers)
-      ? submission.answers
-      : Array.isArray(p.answers)
-      ? p.answers
-      : Array.isArray(submission?.answers_json)
-      ? submission.answers_json
-      : [];
-    const answerObjectKeys =
-      submission?.answers && typeof submission.answers === "object" && !Array.isArray(submission.answers)
-        ? Object.keys(submission.answers).length
-        : submission?.answers_json && typeof submission.answers_json === "object" && !Array.isArray(submission.answers_json)
-        ? Object.keys(submission.answers_json).length
-        : null;
-    const answeredCount =
-      Number.isFinite(p.answered_count) ? p.answered_count :
-      Number.isFinite(p.answered) ? p.answered :
-      Number.isFinite(submission?.answered_count) ? submission.answered_count :
-      Number.isFinite(answerObjectKeys) ? answerObjectKeys :
-      Array.isArray(answersArr) ? answersArr.length :
-      0;
-    const totalQuestions =
-      Number.isFinite(p.total_questions) ? p.total_questions :
-      Number.isFinite(submission?.total_questions) ? submission.total_questions :
-      Number.isFinite(p.question_count) ? p.question_count :
-      Number.isFinite(submission?.question_count) ? submission.question_count :
-      Number.isFinite(answerObjectKeys) && answerObjectKeys > 0 ? answerObjectKeys :
-      answersArr.length > 0 ? answersArr.length :
-      null;
-    const startAt = p.started_at || submission?.started_at || submission?.ts || submission?.created_at || null;
-    const finishAt = p.finished_at || submission?.finished_at || null;
-    let durationMinutes = null;
-    if (startAt && finishAt) {
-      const ms = new Date(finishAt).getTime() - new Date(startAt).getTime();
-      if (Number.isFinite(ms)) durationMinutes = Math.max(0, ms / 60000);
-    }
-    const ratio = totalQuestions ? answeredCount / totalQuestions : null;
-    const isIncomplete =
-      (Number.isFinite(durationMinutes) && durationMinutes < 30) ||
-      (ratio !== null && ratio < 0.8);
-    return { answeredCount, totalQuestions, durationMinutes, isIncomplete };
-  }, [participant, submission]);
+        const participantObj = resultRow?.participant || {};
+        const merged = {
+          ...participantObj,
+          name: profile?.full_name || profile?.name || participantObj?.name,
+          full_name: profile?.full_name || participantObj?.full_name,
+          username: profile?.username || participantObj?.username,
+          class_name: profile?.class_name || participantObj?.class_name,
+          email: resultRow?.user_email || participantObj?.email || profile?.email,
+          phone: participantObj?.phone || profile?.phone,
+          school:
+            profile?.school ||
+            profile?.school_name ||
+            profile?.organization ||
+            profile?.org ||
+            profile?.company ||
+            participantObj?.school,
+          ts: resultRow?.ts || resultRow?.created_at,
+        };
 
-  const effectiveRadar = completionInfo.isIncomplete ? [] : radarData;
-  const effectiveAreas = completionInfo.isIncomplete ? [] : areaPercents;
-  const effectiveInterest = completionInfo.isIncomplete ? [] : interestPercents;
-  // Get selected sections from localStorage
-  const selectedSections = useMemo(() => {
-    try {
-      const stored = localStorage.getItem("selectedResultsSections");
-      return stored ? JSON.parse(stored) : {
-        riasec: true,
-        areas: true,
-        scales: true,
-        occupations: true,
-        pillars: true,
-      };
-    } catch {
-      return {
-        riasec: true,
-        areas: true,
-        scales: true,
-        occupations: true,
-        pillars: true,
-      };
-    }
+        setParticipantData(merged);
+        setResultData({
+          radarData: resultRow?.radar_data || [],
+          areaPercents: resultRow?.area_percents || [],
+          pillarAgg: resultRow?.pillar_agg || {},
+          pillarCounts: resultRow?.pillar_counts || {},
+          answers: resultRow?.answers || {},
+          durationSeconds:
+            resultRow?.duration_sec ??
+            (typeof resultRow?.duration_minutes === "number" ? resultRow.duration_minutes * 60 : undefined) ??
+            participantObj?.duration_sec ??
+            (typeof participantObj?.duration_minutes === "number"
+              ? participantObj.duration_minutes * 60
+              : undefined),
+        });
+      } catch (err) {
+        setError(err.message || "Failed to load result.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [resolvedResultId]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const rows = await loadOccupations({ force: true, cacheBuster: Date.now() });
+      if (alive) setOccupations(Array.isArray(rows) ? rows : []);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
-  // Map of theme code to score
-  const radarByCode = useMemo(() => {
-    const m = {};
-    (effectiveRadar || []).forEach((d) => (m[d.code] = d.score ?? 0));
-    return m;
-  }, [effectiveRadar]);
+
+  const rows = [
+    { label: "Name", value: participantData?.name || participantData?.full_name || "-" },
+    { label: "School", value: participantData?.school || "-" },
+    {
+      label: "Grade/Class",
+      value:
+        participantData?.class_name ||
+        participantData?.grade ||
+        participantData?.grade_level ||
+        participantData?.class ||
+        "-",
+    },
+    { label: "Phone", value: participantData?.phone || "-" },
+  ];
+
+  const radarData = resultData?.radarData || [];
+  const areaPercents = resultData?.areaPercents || [];
+  const pillarAgg = resultData?.pillarAgg || {};
+  const pillarCounts = resultData?.pillarCounts || {};
+  const answersObj = resultData?.answers || {};
+  const answeredCount = Object.keys(answersObj || {}).length;
+  const totalQuestions = 300;
+  const answeredPct = totalQuestions > 0 ? answeredCount / totalQuestions : 0;
+  const durationSeconds = (() => {
+    // prefer explicit duration fields
+    const d = resultData?.durationSeconds;
+    if (typeof d === "number" && Number.isFinite(d)) return d;
+    // fallback to participant duration_sec
+    const pDur = participantData?.duration_sec;
+    if (typeof pDur === "number" && Number.isFinite(pDur)) return pDur;
+    // fallback: compute from started/finished timestamps if available
+    const start = participantData?.started_at ? new Date(participantData.started_at).getTime() : null;
+    const end = participantData?.finished_at ? new Date(participantData.finished_at).getTime() : null;
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return Math.round((end - start) / 1000);
+    }
+    return null;
+  })();
+  const durationMinutes =
+    typeof durationSeconds === "number" && Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
+  const isIncomplete =
+    (durationMinutes != null && durationMinutes < 30) || answeredPct < 0.8;
 
   const themeOrder = useMemo(
-    () => [...(effectiveRadar || [])].sort((a, b) => b.score - a.score).map((d) => d.code),
-    [effectiveRadar]
+    () => [...radarData].sort((a, b) => b.score - a.score).map((d) => d.code),
+    [radarData]
   );
+
+  const radarByCode = useMemo(() => {
+    const m = {};
+    (radarData || []).forEach((d) => {
+      m[d.code] = d.score ?? 0;
+    });
+    return m;
+  }, [radarData]);
 
   const groupedAreas = useMemo(() => {
     const g = {};
-    (effectiveAreas || []).forEach((area) => {
-      if (!g[area.code]) g[area.code] = [];
-      g[area.code].push(area);
+    (areaPercents || []).forEach((a) => {
+      if (!g[a.code]) g[a.code] = [];
+      g[a.code].push(a);
     });
-    Object.keys(g).forEach((key) => g[key].sort((a, b) => b.percent - a.percent));
+    Object.keys(g).forEach((k) => g[k].sort((x, y) => y.percent - x.percent));
     return g;
   }, [areaPercents]);
 
-  const interestInsights = useMemo(() => {
-    const map = {};
-    Object.keys(groupedAreas).forEach((code) => {
-      const areas = groupedAreas[code] || [];
-      if (!areas.length) {
-        map[code] = {
-          title: `${THEME_NAME[code] || code} Insights`,
-          summary: "No responses recorded for this theme yet.",
-          uni: INTEREST_CONTEXT[code]?.uni,
-          real: INTEREST_CONTEXT[code]?.real,
-        };
-        return;
-      }
-      const topArea = areas[0]?.area;
-      const runners = areas.slice(1, 3).map((item) => item.area).filter(Boolean);
-      const summary =
-        runners.length > 0
-          ? `Strongest pull: ${topArea}. You also lean toward ${runners.join(" and ")}.`
-          : `Strongest pull: ${topArea}. Lean into it with weekly reps.`;
-      map[code] = {
-        title: `${THEME_NAME[code] || code} Insights`,
-        summary,
-        uni: INTEREST_CONTEXT[code]?.uni,
-        real: INTEREST_CONTEXT[code]?.real,
-      };
-    });
-    return map;
-  }, [groupedAreas]);
-
-  const sortedAllAreas = useMemo(
-    () => [...(effectiveAreas || [])].sort((a, b) => b.percent - a.percent),
-    [effectiveAreas]
-  );
-  const topFive = sortedAllAreas.slice(0, 5);
-  const leastThree = sortedAllAreas.slice(-3).reverse();
-  const dash = "\u2014";
-  const normalizeValue = (value) => {
-    if (value == null) return null;
-    if (typeof value === "number") return String(value);
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      return trimmed.length ? trimmed : null;
-    }
-    return null;
+  const THEME_NAMES = {
+    R: "Realistic",
+    I: "Investigative",
+    A: "Artistic",
+    S: "Social",
+    E: "Enterprising",
+    C: "Conventional",
   };
-  const displayValue = (...values) => {
-    for (const candidate of values) {
-      const normalized = normalizeValue(candidate);
-      if (normalized) return normalized;
+
+  const scoreFromTheme = (themeStr = "") => {
+    const weights = [0.6, 0.25, 0.15];
+    const letters = String(themeStr || "")
+      .toUpperCase()
+      .replace(/[^RIASEC]/g, "")
+      .split("");
+    if (!letters.length) return 0;
+    let score = 0;
+    for (let i = 0; i < Math.min(3, letters.length); i++) {
+      const L = letters[i];
+      const pct = radarByCode[L] ?? 0;
+      score += pct * weights[i];
     }
-    return dash;
+    return score;
   };
-  const candidateName = displayValue(participant?.name, participant?.fullName, participant?.email);
-  const schoolValue = displayValue(participant?.school);
-  const classValue = displayValue(
-    participant?.className,
-    participant?.class,
-    participant?.grade,
-    participant?.section,
-    participant?.classroom
-  );
-  const phoneValue = displayValue(participant?.phone, participant?.tel, participant?.phoneNumber);
-  const detailRows = useMemo(
-    () => [
-      { label: "Name", value: candidateName },
-      { label: "School", value: schoolValue },
-      { label: "Class", value: classValue },
-      { label: "Phone", value: phoneValue },
-    ],
-    [candidateName, schoolValue, classValue, phoneValue]
-  );
-  const shouldShowParticipantCard =
-    showParticipantHeader || detailRows.some((row) => row.value && row.value !== dash);
-  const interestChunks = useMemo(() => {
-    const groups = [];
-    for (let i = 0; i < themeOrder.length; i += 3) {
-      groups.push(themeOrder.slice(i, i + 3));
-    }
-    return groups;
-  }, [themeOrder]);
 
-  /* ---------------------- Load pillars & counts (partial-safe) ---------------------- */
-  const { totals, counts } = useMemo(() => {
-    if (pillarAgg || pillarCounts) {
-      return {
-        totals: pillarAgg || { disc: {}, bloom: {}, sdg: {} },
-        counts: pillarCounts || { discCount: {}, bloomCount: {}, sdgCount: {} },
-      };
-    }
-    try {
-      const rows = JSON.parse(localStorage.getItem("cg_submissions_v1") || "[]");
-      const last = Array.isArray(rows) && rows.length ? rows[rows.length - 1] : null;
-      if (last) {
-        return {
-          totals: last.pillarAgg || { disc: {}, bloom: {}, sdg: {} },
-          counts: last.pillarCounts || { discCount: {}, bloomCount: {}, sdgCount: {} },
-        };
+  const scoredOccupations = useMemo(() => {
+    return (occupations || []).map((occ) => ({
+      ...occ,
+      _score: scoreFromTheme(occ.theme, radarByCode),
+    }));
+  }, [occupations, radarByCode]);
+
+  const topFiveOcc = useMemo(
+    () => [...scoredOccupations].sort((a, b) => b._score - a._score).slice(0, 5),
+    [scoredOccupations]
+  );
+  const leastFiveOcc = useMemo(
+    () => [...scoredOccupations].sort((a, b) => a._score - b._score).slice(0, 5),
+    [scoredOccupations]
+  );
+  const topOccupation = useMemo(() => (topFiveOcc.length ? topFiveOcc[0] : null), [topFiveOcc]);
+  const themeColorFor = (themeStr) => {
+    const letter = String(themeStr || "").toUpperCase().replace(/[^RIASEC]/g, "").charAt(0);
+    return THEME_COLORS?.[letter] || "#0f172a";
+  };
+
+  const parseMaybe = (val) => {
+    if (val == null) return null;
+    if (typeof val === "object") return val;
+    if (typeof val !== "string") return val;
+    const trimmed = val.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        return JSON.parse(trimmed);
+      } catch (e) {
+        try {
+          return JSON.parse(trimmed.replace(/'/g, '"'));
+        } catch {
+          return trimmed;
+        }
       }
-    } catch {}
-    return { totals: { disc: {}, bloom: {}, sdg: {} }, counts: { discCount: {}, bloomCount: {}, sdgCount: {} } };
-  }, [pillarAgg, pillarCounts]);
+    }
+    return trimmed;
+  };
 
-  const bankDenoms = useMemo(() => buildBankDenominators(), []);
-  const effectiveCounts = useMemo(() => {
-    const useAnswered = (obj) => obj && Object.keys(obj).length > 0;
-    return {
-      disc: useAnswered(counts.discCount) ? counts.discCount : bankDenoms.discCount,
-      bloom: useAnswered(counts.bloomCount) ? counts.bloomCount : bankDenoms.bloomCount,
-      sdg: useAnswered(counts.sdgCount) ? counts.sdgCount : bankDenoms.sdgCount,
-    };
-  }, [counts, bankDenoms]);
+  const normalizeArray = (val) => {
+    const parsed = parseMaybe(val);
+    if (Array.isArray(parsed)) return parsed;
+    if (typeof parsed === "string" && parsed.length) return [parsed];
+    return [];
+  };
 
-  const discPct  = useMemo(() => pctRowsFromTotals(totals.disc,  effectiveCounts.disc),  [totals, effectiveCounts]);
-  const bloomPct = useMemo(() => pctRowsFromTotals(totals.bloom, effectiveCounts.bloom), [totals, effectiveCounts]);
-  const sdgPct   = useMemo(() => pctRowsFromTotals(totals.sdg,   effectiveCounts.sdg),   [totals, effectiveCounts]);
-  const pillarSections = useMemo(() => {
-  const description = null;
+  const renderDictBlock = (title, dictVal, headerColor = "#2563eb", categoryColor = "#38bdf8") => {
+    const parsed = parseMaybe(dictVal);
+    if (!parsed) return null;
+    if (typeof parsed !== "object" || Array.isArray(parsed)) {
+      // fallback: simple string or list
+      const items = normalizeArray(parsed);
+      if (!items.length) return null;
+      return (
+        <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+          <strong>{title}:</strong> {items.join(", ")}
+        </div>
+      );
+    }
+    const entries = Object.entries(parsed);
+    if (!entries.length) return null;
+    return (
+      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+        <strong style={{ color: headerColor }}>{title}:</strong>
+        <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+          {entries.map(([key, vals], idx) => (
+            <li key={idx} style={{ margin: "2px 0" }}>
+              <span style={{ fontWeight: 700, color: categoryColor }}>{key}:</span>{" "}
+              {Array.isArray(vals) ? vals.join(", ") : String(vals)}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const renderPersonality = (personality, headerColor = "#2563eb") => {
+    const parsed = parseMaybe(personality);
+    if (!parsed || typeof parsed !== "object") return null;
+    const intro = parsed.intro || parsed.summary || null;
+    const traits = normalizeArray(parsed.traits);
+    if (!intro && !traits.length) return null;
+    return (
+      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+        <strong style={{ color: headerColor }}>Personality:</strong>
+        {intro && <div style={{ marginTop: 2 }}>{intro}</div>}
+        {traits.length > 0 && (
+          <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+            {traits.map((t, idx) => (
+              <li key={idx}>{t}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
+  const renderTech = (tech, headerColor = "#2563eb", categoryColor = "#38bdf8") => {
+    const parsed = parseMaybe(tech);
+    if (!parsed) return null;
+    const intro = parsed.intro || null;
+    const categories = parsed.categories && typeof parsed.categories === "object" ? parsed.categories : null;
+    if (!intro && !categories) return null;
+    return (
+      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+        <strong style={{ color: headerColor }}>Technology / Tools:</strong>
+        {intro && <div style={{ marginTop: 2 }}>{intro}</div>}
+        {categories && (
+          <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+            {Object.entries(categories).map(([cat, items], idx) => (
+              <li key={idx}>
+                <span style={{ fontWeight: 700, color: categoryColor }}>{cat}:</span>{" "}
+                {Array.isArray(items) ? items.join(", ") : String(items)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
+  const sections = useMemo(() => {
+    const maxScore = 5;
+    const makeRows = (totals = {}, counts = {}) =>
+      Object.entries(totals).map(([label, sum]) => {
+        const count = counts[label] || 0;
+        const pct = count > 0 ? Math.round((Number(sum || 0) / (count * maxScore)) * 100) : 0;
+        return [label, pct];
+      });
+
     return [
       {
         title: "DISC",
-        data: discPct,
+        data: makeRows(pillarAgg.disc || {}, pillarCounts.discCount || {}),
         color: "#6366f1",
-        description,
-        insight: PILLAR_INSIGHTS["DISC"],
+        insight: { title: "DISC insights" },
       },
       {
-        title: "Bloom's Taxonomy",
-        data: bloomPct,
+        title: "Bloom",
+        data: makeRows(pillarAgg.bloom || {}, pillarCounts.bloomCount || {}),
         color: "#06b6d4",
-        description,
-        insight: PILLAR_INSIGHTS["Bloom's Taxonomy"],
+        insight: { title: "Bloom insights" },
       },
       {
-        title: "UN Sustainable Development Goals",
-        data: sdgPct,
+        title: "UN SDG",
+        data: makeRows(pillarAgg.sdg || {}, pillarCounts.sdgCount || {}),
         color: "#f59e0b",
-        description,
-        insight: PILLAR_INSIGHTS["UN Sustainable Development Goals"],
+        insight: { title: "SDG insights" },
       },
     ];
-  }, [discPct, bloomPct, sdgPct]);
-
-  /* ---------------------- Print helpers ---------------------- */
-  const handlePrint = () => {
-    setTimeout(() => window.print(), 150);
-  };
-
-  const headerBlock = (
-    <>
-      <HeaderBar title={fromAdmin ? "Career Guidance Report" : "Results (Admin View)"} />
-      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
-        <Btn variant="secondary" onClick={() => onNavigate(fromAdmin ? "admin-dashboard" : "home")}>
-          {fromAdmin ? "Back to Submissions" : "Back Home"}
-        </Btn>
-        <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
-          Export PDF
-        </Btn>
-      </div>
-    </>
-  );
-
-  if (completionInfo.isIncomplete) {
-    return (
-      <PageWrap>
-        <style>{resultsPrintStyles}</style>
-        {headerBlock}
-        <CandidateDetailsCard rows={detailRows} />
-        <Card style={{ marginTop: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 6, color: "#b91c1c" }}>Result marked INCOMPLETE</h3>
-          <p style={{ margin: 0, color: "#6b7280" }}>
-            This submission is marked incomplete because it was completed in under 30 minutes with fewer than 80% of the answers.
-            Please retake the assessment under normal conditions.
-          </p>
-        </Card>
-        <div className="no-print" style={{ marginTop: 16 }}>
-          <Btn variant="secondary" onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}>
-            Back
-          </Btn>
-        </div>
-      </PageWrap>
-    );
-  }
+  }, [pillarAgg, pillarCounts]);
 
   return (
     <PageWrap>
-      <style>{resultsPrintStyles}</style>
+      <HeaderCard />
 
-      {shouldShowParticipantCard ? (
-        <div className="candidate-first-page">
-          <div className="candidate-title-block">
-            <HeaderBar title={fromAdmin ? "Career Guidance Report" : "Results (Admin View)"} />
-            <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, margin: "8px 0 12px" }}>
-              <Btn variant="secondary" onClick={() => onNavigate(fromAdmin ? "admin-dashboard" : "home")}>
-                {fromAdmin ? "Back to Submissions" : "Back Home"}
-              </Btn>
-              <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
-                Export PDF
-              </Btn>
-            </div>
-          </div>
-          <CandidateDetailsCard rows={detailRows} />
+      {loading && (
+        <div className="card" style={{ padding: 16, marginTop: 12 }}>
+          <div style={{ color: "#6b7280" }}>Loading submission…</div>
         </div>
-      ) : (
-        headerBlock
       )}
 
-      <>
-          {/* GROUP 3: Basic Interest Scales (theme cards) */}
-          {interestChunks.map((group, groupIdx) => (
-            <div
-              key={`interest-card-${groupIdx}`}
-              className="card section"
-              style={{
-                padding: 16,
-                marginTop: groupIdx === 0 ? 0 : 16,
-                pageBreakBefore: groupIdx === 0 ? "auto" : "always",
-                pageBreakAfter: groupIdx < interestChunks.length - 1 ? "always" : "auto",
-                pageBreakInside: "avoid",
-                breakInside: "avoid",
-              }}
-            >
-              <h3 style={{ margin: 0, color: "#111827" }}>
-                BASIC INTEREST SCALES
-              </h3>
-              <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
-                Percentages across specific interest areas within each RIASEC theme.
-              </p>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr",
-                  gap: 8,
-                  marginTop: 8,
-                  pageBreakInside: "avoid",
-                  breakInside: "avoid",
-                }}
-              >
-                {group.map((code) => {
-                  const themeScore = radarByCode[code] ?? 0;
-                  const level = levelFromPct(themeScore);
-                  const areas = groupedAreas[code] || [];
-                  const color = THEME_COLORS[code] || "#2563eb";
-                  const insight = interestInsights[code] || {};
-                  return (
-                    <div
-                      key={code}
-                      className="card avoid-break"
-                      style={{ padding: 16, background: "#ffffff", pageBreakInside: "avoid", breakInside: "avoid" }}
-                    >
-                      <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "nowrap" }}>
-                        <div
-                          style={{
-                            flex: "2 1 340px",
-                            minWidth: 280,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 12,
-                          }}
-                        >
-                          <div
-                            className="avoid-break"
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "baseline",
-                              gap: 12,
-                            }}
-                          >
-                            <h4 style={{ margin: 0, color: "#111827" }}>
-                              {THEME_NAME[code]}{" "}
-                              <span style={{ fontWeight: 400, color: "#6b7280", fontSize: 14 }}>
-                                Level: {level}
-                              </span>
-                            </h4>
-                            <span
-                              aria-hidden
-                              style={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: 3,
-                                background: color,
-                                display: "inline-block",
-                              }}
-                            />
-                          </div>
-                          <div>
-                            {areas.length ? (
-                              areas.map((a) => (
-                                <BarRow
-                                  key={`${code}-${a.area}`}
-                                  label={a.area}
-                                  percent={a.percent}
-                                  color={color}
-                                />
-                              ))
-                            ) : (
-                              <div style={{ color: "#6b7280", fontSize: 13 }}>
-                                No answers recorded for this theme.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <aside
-                          style={{
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 10,
-                            padding: 12,
-                            background: "#f8fafc",
-                            color: "#475569",
-                            fontSize: 13,
-                            flex: "1 1 220px",
-                            minWidth: 220,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 6,
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, color: "#111827" }}>
-                            {insight.title || `${THEME_NAME[code] || code} Insights`}
-                          </div>
-                          <p style={{ margin: 0, lineHeight: 1.4 }}>
-                            {insight.summary || "Lean into this area with weekly practice to confirm the fit."}
-                          </p>
-                          {insight.uni && (
-                            <p style={{ margin: 0, lineHeight: 1.4 }}>
-                              <strong>University focus:</strong> {insight.uni}
-                            </p>
-                          )}
-                          {insight.real && (
-                            <p style={{ margin: 0, lineHeight: 1.4 }}>
-                              <strong>Real-life focus:</strong> {insight.real}
-                            </p>
-                          )}
-                        </aside>
-                      </div>
+      {error && (
+        <div className="card" style={{ padding: 16, marginTop: 12, border: "1px solid #fecaca", background: "#fef2f2" }}>
+          <div style={{ color: "#b91c1c", fontWeight: 600 }}>Error</div>
+          <div style={{ color: "#6b7280" }}>{error}</div>
+        </div>
+      )}
+
+      <CandidateDetailsCard rows={rows} />
+
+      {isIncomplete && (
+        <div
+          className="card"
+          style={{
+            padding: 16,
+            marginTop: 12,
+            border: "1px solid #fcd34d",
+            background: "#fffbeb",
+            borderRadius: 12,
+          }}
+        >
+          <div style={{ color: "#92400e", fontWeight: 700, marginBottom: 6 }}>Marked Incomplete</div>
+          <div style={{ color: "#92400e" }}>
+            This submission was marked incomplete because it did not meet the minimum required completion criteria.
+          </div>
+        </div>
+      )}
+
+      {!isIncomplete && (
+        <>
+
+      <div
+        className="card section"
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+          marginTop: 12,
+        }}
+      >
+        <BasicInterestScales
+          themeOrder={themeOrder}
+          radarByCode={radarByCode}
+          groupedAreas={groupedAreas}
+          themeNameMap={THEME_NAMES}
+          themeColors={THEME_COLORS}
+          themeDescriptions={{}}
+        />
+      </div>
+
+      <div
+        className="card section"
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+          marginTop: 12,
+        }}
+      >
+        <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
+      </div>
+
+      <div
+        className="card section"
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+          marginTop: 12,
+        }}
+      >
+        <PillarSummaryCards sections={sections} scaleLabel="Percent of Max" />
+      </div>
+
+      <div
+        className="card section"
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+          marginTop: 12,
+        }}
+      >
+        <RiasecHeroSection radarData={radarData} />
+      </div>
+
+      <div
+        className="card section"
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+          marginTop: 12,
+        }}
+      >
+        <h3 style={{ margin: 0, color: "#111827" }}>Top & Least Occupations</h3>
+        <p style={{ margin: "6px 0 12px", color: "#6b7280", fontSize: 14 }}>
+          Highest and lowest matching roles based on your RIASEC profile.
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 16,
+          }}
+        >
+          <div className="card" style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 10 }}>
+            <h4 style={{ margin: "0 0 8px", color: "#0f172a" }}>Top 5</h4>
+            {topFiveOcc.length ? (
+              <ol style={{ margin: 0, paddingLeft: 18, color: "#374151", lineHeight: 1.4 }}>
+                {topFiveOcc.map((r, idx) => (
+                  <li key={`top-${idx}`} style={{ margin: "4px 0" }}>
+                    <span style={{ fontWeight: 600, color: themeColorFor(r.theme || r.code) }}>
+                      {r.occupation || r.title}
+                    </span>{" "}
+                    <span style={{ color: "#6b7280" }}>({Math.round(r._score)}%)</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div style={{ color: "#6b7280", fontSize: 13 }}>No occupations available.</div>
+            )}
+          </div>
+          <div className="card" style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 10 }}>
+            <h4 style={{ margin: "0 0 8px", color: "#0f172a" }}>Least 5</h4>
+            {leastFiveOcc.length ? (
+              <ol style={{ margin: 0, paddingLeft: 18, color: "#374151", lineHeight: 1.4 }}>
+                {leastFiveOcc.map((r, idx) => (
+                  <li key={`least-${idx}`} style={{ margin: "4px 0" }}>
+                    <span style={{ fontWeight: 600, color: themeColorFor(r.theme || r.code) }}>
+                      {r.occupation || r.title}
+                    </span>{" "}
+                    <span style={{ color: "#6b7280" }}>({Math.round(r._score)}%)</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div style={{ color: "#6b7280", fontSize: 13 }}>No occupations available.</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className="card section"
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+          marginTop: 12,
+        }}
+      >
+        <h3 style={{ margin: 0, color: "#111827" }}>Top Occupation Focus</h3>
+        {topOccupation ? (
+          <div style={{ marginTop: 10, display: "grid", gap: 12 }}>
+            {(() => {
+              const headerColor = themeColorFor(topOccupation.theme || topOccupation.code);
+              const categoryColor = headerColor ? `${headerColor}CC` : "#38bdf8"; // lighten a bit
+              return (
+                <>
+                  <div
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 700,
+                      color: headerColor,
+                    }}
+                  >
+                    {topOccupation.job_title || topOccupation.occupation || topOccupation.title || "Occupation"}{" "}
+                    <span style={{ color: "#6b7280", fontWeight: 500 }}>
+                      ({topOccupation.theme || topOccupation.code || "-"})
+                    </span>
+                  </div>
+                  {topOccupation.also_called && normalizeArray(topOccupation.also_called).length > 0 && (
+                    <div style={{ color: "#4b5563" }}>
+                      <strong style={{ color: headerColor }}>Also called:</strong>{" "}
+                      {normalizeArray(topOccupation.also_called).join(", ")}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          {/* GROUP 4: Occupational Scales (kept together) */}
-          {!!effectiveRadar.length && (
-            <>
-              <div
-                style={{
-                  pageBreakBefore: "always",
-                  breakBefore: "page",
-                  height: 0,
-                  overflow: "hidden",
-                }}
-              />
-              <div className="section avoid-break">
-                <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
-              </div>
-            </>
-          )}
+                  )}
 
-          {/* PAGE BREAK before pillars, for a clean pillar page */}
-          <div className="no-print" style={{ height: 1 }} />
-          <div
-            style={{
-              pageBreakBefore: "always",
-              breakBefore: "page",
-              height: 0,
-              overflow: "hidden",
-            }}
-          />
-
-          {/* GROUP 5: Pillars - three elegant cards */}
-          <PillarSummaryCards sections={pillarSections} scaleLabel="Percent of Max" />
-
-          {/* RIASEC overview placed near the end */}
-          <div
-            style={{
-              pageBreakBefore: "always",
-              breakBefore: "page",
-              height: 0,
-              overflow: "hidden",
-            }}
-          />
-          <RiasecHeroSection radarData={effectiveRadar} />
-
-          {/* Top & Least Areas now at the end */}
-          <div className="section avoid-break">
-            <div
-              className="print-stack"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.3fr 1fr",
-                gap: 16,
-              }}
-            >
-              <ListBox title="Your Top Five Interest Areas" items={topFive} />
-              <ListBox title="Areas of Least Interest" items={leastThree} />
-            </div>
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {topOccupation.summary && (
+                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+                        <strong style={{ color: headerColor }}>Summary:</strong> {topOccupation.summary}
+                      </div>
+                    )}
+                    {Array.isArray(topOccupation.duties) && topOccupation.duties.length > 0 && (
+                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+                        <strong style={{ color: headerColor }}>Key duties:</strong>
+                        <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                          {topOccupation.duties.map((duty, idx) => (
+                            <li key={idx}>{duty}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {renderDictBlock("Knowledge", topOccupation.knowledge, headerColor, categoryColor)}
+                    {renderDictBlock("Skills", topOccupation.skills, headerColor, categoryColor)}
+                    {renderDictBlock("Abilities", topOccupation.abilities, headerColor, categoryColor)}
+                    {renderPersonality(topOccupation.personality, headerColor)}
+                    {renderTech(topOccupation.technology_tools || topOccupation.technology, headerColor, categoryColor)}
+                    {topOccupation.education && (
+                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+                        <strong style={{ color: headerColor }}>Education:</strong> {topOccupation.education}
+                      </div>
+                    )}
+                    {topOccupation.job_outlook && (
+                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+                        <strong style={{ color: headerColor }}>Job outlook:</strong> {topOccupation.job_outlook}
+                      </div>
+                    )}
+                    {(topOccupation.salary_low || topOccupation.salary_typical || topOccupation.salary_high) && (
+                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
+                        <strong style={{ color: headerColor }}>Salary:</strong>{" "}
+                        {[
+                          topOccupation.salary_low ? `Low: ${topOccupation.salary_low}` : null,
+                          topOccupation.salary_typical ? `Typical: ${topOccupation.salary_typical}` : null,
+                          topOccupation.salary_high ? `High: ${topOccupation.salary_high}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" | ")}
+                      </div>
+                    )}
+                    {topOccupation.link && (
+                      <div>
+                        <a href={topOccupation.link} target="_blank" rel="noreferrer" style={{ color: headerColor }}>
+                          Learn more
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
+        ) : (
+          <div style={{ color: "#6b7280", marginTop: 8 }}>No occupation data available yet.</div>
+        )}
+      </div>
 
-          {/* Footer actions (hidden in print) */}
-          <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-            <Btn variant="secondary" onClick={() => onNavigate?.(fromAdmin ? "admin-dashboard" : "home")}>
-              {fromAdmin ? "Back to Submissions" : "Back Home"}
-            </Btn>
-            <Btn variant="primary" onClick={handlePrint} title="Export to PDF">
-              Export PDF
-            </Btn>
-          </div>
-      </>
+        </>
+      )}
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+        <button
+          onClick={() => onNavigate?.("career-dashboard")}
+          style={{
+            border: "1px solid #d1d5db",
+            background: "#fff",
+            color: "#374151",
+            padding: "10px 14px",
+            borderRadius: 8,
+            cursor: "pointer",
+          }}
+        >
+          Back to Submissions
+        </button>
+      </div>
     </PageWrap>
   );
 }
+
 
 
 

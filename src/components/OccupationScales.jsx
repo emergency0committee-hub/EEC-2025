@@ -67,7 +67,7 @@ function buildOccupationInsight(letter, bucket) {
     : "";
   const uniTip = UNIVERSITY_TIPS[letter] || "";
   const workTip = WORKPLACE_TIPS[letter] || "";
-  const mixDescription = describeThemeMix(top.theme);
+  const mixDescription = ""; // hide theme code description
   let action;
   if (score >= 80) {
     action = "Start building a portfolio or resume entry that mirrors this role’s responsibilities right away.";
@@ -78,7 +78,7 @@ function buildOccupationInsight(letter, bucket) {
   }
   return {
     title: `${letter} Match: ${top.occupation}`,
-    body: `Expect work that suits a ${mixDescription}. University focus: ${uniTip} Real-world focus: ${workTip}. ${runnerText} ${action}`,
+    body: `University focus: ${uniTip} Real-world focus: ${workTip}. ${runnerText} ${action}`,
   };
 }
 
@@ -137,154 +137,137 @@ export default function OccupationScales({ radarByCode = {}, themeOrder }) {
     return g;
   }, [rows, radarByCode]);
 
-  const chunks = [];
-  for (let i = 0; i < order.length; i += 3) {
-    chunks.push(order.slice(i, i + 3));
-  }
-
   return (
-    <>
-      {chunks.map((letters, idx) => (
-        <div
-          key={`occupational-set-${idx}`}
-          className="card section"
-          style={{
-            padding: 16,
-            marginTop: idx === 0 ? 0 : 12,
-            pageBreakBefore: idx === 0 ? "auto" : "always",
-            breakBefore: idx === 0 ? "auto" : "page",
-          }}
-        >
-          <h3 style={{ margin: 0, color: "#111827" }}>OCCUPATIONAL SCALES</h3>
-          <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
-            All occupations scored by your profile (weighted by theme codes like RIC, ASE, etc.).
-          </p>
-          <p style={{ margin: "4px 0 12px", color: "#475569", fontSize: 13 }}>
-            <strong>How to read:</strong> Panels are ordered by your dominant RIASEC letters. Each bar shows
-            the strength of fit between you and that career (0-100%). Higher bars mean your interests and aptitudes
-            align more with that occupation.
-          </p>
+    <div
+      className="card section"
+      style={{
+        padding: 16,
+        marginTop: 0,
+        boxShadow: "0 12px 24px rgba(0,0,0,0.08)",
+      }}
+    >
+      <h3 style={{ margin: 0, color: "#111827" }}>OCCUPATIONAL SCALES</h3>
+      <p style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>
+        Each bar shows how well your interests align with a role (0-100%); panels follow your dominant letters.
+      </p>
 
-          <div
-            className="print-stack"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: 16,
-              marginTop: 12,
-            }}
-          >
-            {letters.map((L) => {
-              const bucket = byPrimary[L] || [];
-              const color = COLORS[L];
-              return (
+      <div
+        className="print-stack"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 16,
+          marginTop: 12,
+        }}
+      >
+        {order.map((L) => {
+          const bucket = byPrimary[L] || [];
+          const color = COLORS[L];
+          return (
+            <div
+              key={L}
+              className="card avoid-break occupational-card"
+              style={{ padding: 16, background: "#ffffff", boxShadow: "0 10px 20px rgba(0,0,0,0.08)" }}
+            >
+              <div
+                className="chart-with-aside"
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "nowrap",
+                  alignItems: "stretch",
+                }}
+              >
                 <div
-                  key={L}
-                  className="card avoid-break occupational-card"
-                  style={{ padding: 16, background: "#ffffff" }}
+                  className="chart-main"
+                  style={{
+                    flex: "2 1 340px",
+                    minWidth: 280,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                  }}
                 >
                   <div
-                    className="chart-with-aside"
                     style={{
                       display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "baseline",
                       gap: 12,
-                      flexWrap: "nowrap",
-                      alignItems: "stretch",
                     }}
                   >
-                    <div
-                      className="chart-main"
+                    <h4 style={{ margin: 0, color: "#111827" }}>
+                      {bucket.length ? `${bucket.length} roles` : "No matches"}
+                    </h4>
+                    <span
                       style={{
-                        flex: "2 1 340px",
-                        minWidth: 280,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 12,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 3,
+                        background: color,
+                        display: "inline-block",
                       }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "baseline",
-                          gap: 12,
-                        }}
-                      >
-                        <h4 style={{ margin: 0, color: "#111827" }}>
-                          {L} — {bucket.length ? `${bucket.length} roles` : "No matches"}
-                        </h4>
-                        <span
-                          style={{
-                            width: 14,
-                            height: 14,
-                            borderRadius: 3,
-                            background: color,
-                            display: "inline-block",
-                          }}
+                    />
+                  </div>
+
+                  <div
+                    style={{
+                      maxHeight: 260,
+                      overflowY: "auto",
+                      paddingRight: 6,
+                    }}
+                  >
+                    {bucket.length ? (
+                      bucket.map((r, idx2) => (
+                        <BarRow
+                          key={`${L}-${idx2}`}
+                          label={r.occupation}
+                          percent={r._score}
+                          color={color}
+                          chipColor={color}
                         />
+                      ))
+                    ) : (
+                      <div style={{ color: "#6b7280", fontSize: 13 }}>
+                        No matching occupations to display.
                       </div>
-
-                      <div
-                        style={{
-                          maxHeight: 260,
-                          overflowY: "auto",
-                          paddingRight: 6,
-                        }}
-                      >
-                        {bucket.length ? (
-                          bucket.map((r, idx2) => (
-                            <BarRow
-                              key={`${L}-${idx2}`}
-                              label={r.occupation}
-                              subtitle={r.theme}
-                              percent={r._score}
-                              color={color}
-                              chipColor={color}
-                            />
-                          ))
-                        ) : (
-                          <div style={{ color: "#6b7280", fontSize: 13 }}>
-                            No matching occupations to display.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <aside
-                      className="chart-aside"
-                      style={{
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 10,
-                        padding: 12,
-                        background: "#f8fafc",
-                        color: "#475569",
-                        fontSize: 13,
-                        flex: "1 1 220px",
-                        minWidth: 220,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                      }}
-                    >
-                      {(() => {
-                        const insight = buildOccupationInsight(L, bucket);
-                        return (
-                          <>
-                            <div style={{ fontWeight: 600, color: "#111827" }}>
-                              {insight.title}
-                            </div>
-                            <p style={{ margin: 0, lineHeight: 1.4 }}>{insight.body}</p>
-                          </>
-                        );
-                      })()}
-                    </aside>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </>
+
+                <aside
+                  className="chart-aside"
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 10,
+                    padding: 12,
+                    background: "#f8fafc",
+                    color: "#475569",
+                    fontSize: 13,
+                    flex: "1 1 220px",
+                    minWidth: 220,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  {(() => {
+                    const insight = buildOccupationInsight(L, bucket);
+                    return (
+                      <>
+                        <div style={{ fontWeight: 600, color: "#111827" }}>
+                          {insight.title}
+                        </div>
+                        <p style={{ margin: 0, lineHeight: 1.4 }}>{insight.body}</p>
+                      </>
+                    );
+                  })()}
+                </aside>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
