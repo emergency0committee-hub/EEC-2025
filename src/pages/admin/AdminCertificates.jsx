@@ -172,7 +172,10 @@ export default function AdminCertificates({ onNavigate }) {
       <HeaderBar
         title="Certificates"
         right={
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>
+              Back to Home
+            </Btn>
             <Btn variant="secondary" onClick={loadCertificates}>
               Refresh
             </Btn>

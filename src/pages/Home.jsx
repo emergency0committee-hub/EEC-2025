@@ -25,6 +25,11 @@ const HOME_CARDS = {
       desc: "Practice Reading & Writing and Math by skill with untimed sets.",
       cta: "Open",
     },
+    schoolTraining: {
+      title: "School Training",
+      desc: "Dedicated portal for school programs to organize sessions and track progress.",
+      cta: "Open",
+    },
     aiEducator: {
       title: "AI Educator",
       desc: "Adaptive lessons, instant feedback, and personalized study plans.",
@@ -41,30 +46,35 @@ const HOME_CARDS = {
   FR: {
     career: {
       title: "Orientation professionnelle",
-      desc: "Explorez vos intérêts et aptitudes grâce au modèle RIASEC et à des scénarios immersifs.",
+      desc: "Explorez vos int\u00e9r\u00eats et aptitudes gr\u00e2ce au mod\u00e8le RIASEC et � des sc\u00e9narios immersifs.",
       cta: "Ouvrir",
     },
     satDiagnostic: {
       title: "Test diagnostique SAT",
-      desc: "Simule le SAT numérique avec des modules chronométrés et un rapport complet.",
+      desc: "Simule le SAT num\u00e9rique avec des modules chronom\u00e9tr\u00e9s et un rapport complet.",
       cta: "Ouvrir",
     },
     satTraining: {
-      title: "Entraînement SAT",
-      desc: "Travaillez Lecture & Écriture et Mathématiques par compétence sans minuterie.",
+      title: "Entra\u00eenement SAT",
+      desc: "Travaillez Lecture & \u00c9criture et Math\u00e9matiques par comp\u00e9tence sans minuterie.",
+      cta: "Ouvrir",
+    },
+    schoolTraining: {
+      title: "Formation scolaire",
+      desc: "Portail d\u00e9di\u00e9 aux programmes avec les \u00e9tablissements pour organiser et suivre les s\u00e9ances.",
       cta: "Ouvrir",
     },
     aiEducator: {
       title: "Enseignant IA",
-      desc: "Leçons adaptatives, retours instantanés et plans d'étude personnalisés.",
+      desc: "Le\u00e7ons adaptatives, retours instantan\u00e9s et plans d'\u00e9tude personnalis\u00e9s.",
       cta: "Ouvrir",
-      locked: "Demander l'accès",
-      lockedMessage: "Réservé aux enseignants approuvés.",
+      locked: "Demander l'acc\u00e8s",
+      lockedMessage: "R\u00e9serv\u00e9 aux enseignants approuv\u00e9s.",
     },
     certificate: {
-      title: "Vérifier un certificat",
-      desc: "Confirmez l'authenticité d'un certificat EEC grâce à son identifiant unique.",
-      cta: "Vérifier",
+      title: "V\u00e9rifier un certificat",
+      desc: "Confirmez l'authenticit\u00e9 d'un certificat EEC gr\u00e2ce � son identifiant unique.",
+      cta: "V\u00e9rifier",
     },
   },
 };
@@ -216,6 +226,15 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             desc: home.satTraining.desc,
             cta: home.satTraining.cta,
             onClick: navTo("sat-training"),
+            variant: "primary",
+            extra: null,
+          },
+          {
+            key: "schoolTraining",
+            title: (home.schoolTraining && home.schoolTraining.title) || "School Training",
+            desc: home.schoolTraining && home.schoolTraining.desc,
+            cta: (home.schoolTraining && home.schoolTraining.cta) || home.satTraining.cta,
+            onClick: navTo("school-training"),
             variant: "primary",
             extra: null,
           },

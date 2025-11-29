@@ -120,12 +120,20 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const [roleDraft, setRoleDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
   const [aiAccessDraft, setAiAccessDraft] = useState(false);
-  const [profileDraft, setProfileDraft] = useState({ name: "", email: "", school: "" });
+  const [profileDraft, setProfileDraft] = useState({
+    name: "",
+    email: "",
+    school: "",
+    username: "",
+    class_name: "",
+    phone: "",
+  });
   const [savingRole, setSavingRole] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [savingAiAccess, setSavingAiAccess] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
 
   const loadUsers = async (focus = null) => {
     setUsersLoading(true);
@@ -168,30 +176,53 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
     loadUsers();
   }, []);
 
-  const optionList = useMemo(() => {
-    return (users || []).map((user) => {
-      const label = formatUserLabel(user);
-      return {
-        id: user.id,
-        label,
-        searchIndex: label.toLowerCase(),
-      };
+  const filteredUsers = useMemo(() => {
+    if (!categoryFilter) return [];
+    const filter = categoryFilter.toLowerCase();
+    return (users || []).filter((user) => {
+      const role = (user.role || "").toLowerCase();
+      if (filter === "other") return role && !["student", "educator", "admin"].includes(role);
+      return role === filter;
     });
-  }, [users]);
+  }, [users, categoryFilter]);
+
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
+
+  const visibleUsers = useMemo(() => {
+    if (!searchTerm) return filteredUsers;
+    const lower = searchTerm.toLowerCase();
+    return filteredUsers.filter((user) => {
+      const candidates = [
+        formatUserLabel(user).toLowerCase(),
+        (user.email || "").toLowerCase(),
+        (user.name || "").toLowerCase(),
+        (user.username || "").toLowerCase(),
+        (user.school || "").toLowerCase(),
+      ];
+      return candidates.some((field) => field.includes(lower));
+    });
+  }, [filteredUsers, searchTerm]);
+
+  const pagedUsers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return visibleUsers.slice(start, start + PAGE_SIZE);
+  }, [visibleUsers, page]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleUsers.length / PAGE_SIZE));
 
   useEffect(() => {
-    if (!searchTerm) {
-      setSelectedUserId(null);
-      return;
-    }
-    const lower = searchTerm.toLowerCase();
-    const matches = optionList.filter((opt) => opt.searchIndex.includes(lower));
-    if (matches.length === 1) {
-      setSelectedUserId(matches[0].id);
-      const matchUser = users.find((u) => u.id === matches[0].id);
-      setRoleDraft(matchUser?.role || "");
-    }
-  }, [searchTerm, optionList, users]);
+    setSearchTerm("");
+    setSelectedUserId(null);
+    setPage(1);
+  }, [categoryFilter]);
+
+  const handleSelectUser = (user) => {
+    setSelectedUserId(user.id);
+    setRoleDraft(user.role || "");
+    setAiAccessDraft(Boolean(user.ai_access));
+    setSuccessMessage("");
+  };
 
   const selectedUser = useMemo(
     () => users.find((u) => u.id === selectedUserId) || null,
@@ -207,20 +238,13 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
         name: selectedUser.name || "",
         email: selectedUser.email || "",
         school: selectedUser.school || "",
+        username: selectedUser.username || "",
+        class_name: selectedUser.class_name || "",
+        phone: selectedUser.phone || "",
       });
       setSuccessMessage("");
     }
   }, [selectedUser]);
-
-  const handleSelectByLabel = (label) => {
-    const match = optionList.find((opt) => opt.label === label);
-    if (match) {
-      setSelectedUserId(match.id);
-      const matchUser = users.find((u) => u.id === match.id);
-      setRoleDraft(matchUser?.role || "");
-      setAiAccessDraft(Boolean(matchUser?.ai_access));
-    }
-  };
 
   const doSaveRole = async () => {
     if (!selectedUser) return;
@@ -274,6 +298,9 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       name: (profileDraft.name || "").trim(),
       email: (profileDraft.email || "").trim(),
       school: (profileDraft.school || "").trim(),
+      username: (profileDraft.username || "").trim(),
+      class_name: (profileDraft.class_name || "").trim(),
+      phone: (profileDraft.phone || "").trim(),
     };
     setSavingProfile(true);
     setSuccessMessage("");
@@ -366,19 +393,47 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
 
   return (
     <PageWrap>
-      <HeaderBar lang={lang} title={copy.title} right={headerRight} />
+      <HeaderBar
+        lang={lang}
+        title={copy.title}
+        right={
+          <>
+            <Btn variant="back" onClick={() => onNavigate("home")}>
+              Back to Home
+            </Btn>
+            {headerRight}
+          </>
+        }
+      />
       <Card>
         <p style={{ marginTop: 0, color: "#6b7280" }}>{copy.subtitle}</p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+          <label style={{ display: "grid", gap: 6, minWidth: 200 }}>
+            <span style={{ fontWeight: 600 }}>Select category</span>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                fontSize: 14,
+              }}
+            >
+              <option value="">Choose role category</option>
+              <option value="student">Students</option>
+              <option value="educator">Educators</option>
+              <option value="admin">Admins</option>
+              <option value="other">Other roles</option>
+            </select>
+          </label>
           <label style={{ display: "grid", gap: 6, minWidth: 240 }}>
             <span style={{ fontWeight: 600 }}>{copy.searchLabel}</span>
             <input
-              list="manage-users-options"
+              type="text"
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                handleSelectByLabel(e.target.value);
-              }}
+              disabled={!categoryFilter}
+              onChange={(e) => setSearchTerm(e.target.value)}
               placeholder={copy.searchPlaceholder}
               style={{
                 padding: "10px 12px",
@@ -387,13 +442,14 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
                 fontSize: 14,
               }}
             />
-            <datalist id="manage-users-options">
-              {optionList.map((opt) => (
-                <option key={opt.id} value={opt.label} />
-              ))}
-            </datalist>
           </label>
-          <Btn variant="secondary" onClick={() => setSearchTerm("")}>
+          <Btn
+            variant="secondary"
+            onClick={() => {
+              setSearchTerm("");
+              setSelectedUserId(null);
+            }}
+          >
             {copy.searchClear}
           </Btn>
           <Btn variant="secondary" onClick={() => loadUsers()}>
@@ -407,7 +463,79 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
           <p style={{ color: "#b91c1c" }}>{userError}</p>
         ) : users.length === 0 ? (
           <p style={{ color: "#6b7280" }}>{copy.empty}</p>
-        ) : selectedUser ? (
+        ) : (
+          <>
+            {categoryFilter ? (
+              visibleUsers.length ? (
+                <div style={{ overflowX: "auto", marginBottom: 16 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600, fontSize: 14 }}>
+                    <thead>
+                      <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                        <th style={{ padding: 8, textAlign: "left" }}>Name</th>
+                        <th style={{ padding: 8, textAlign: "left" }}>Email</th>
+                        <th style={{ padding: 8, textAlign: "left" }}>Role</th>
+                        <th style={{ padding: 8, textAlign: "left" }}>School</th>
+                        <th style={{ padding: 8, textAlign: "left" }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedUsers.map((user) => {
+                        const active = user.id === selectedUserId;
+                        return (
+                          <tr
+                            key={user.id}
+                            style={{
+                              borderBottom: "1px solid #e5e7eb",
+                              background: active ? "#f0f9ff" : "transparent",
+                            }}
+                          >
+                            <td style={{ padding: 8 }}>{user.name || user.username || user.email}</td>
+                            <td style={{ padding: 8 }}>{user.email || "—"}</td>
+                            <td style={{ padding: 8 }}>{user.role || "—"}</td>
+                            <td style={{ padding: 8 }}>{user.school || "—"}</td>
+                            <td style={{ padding: 8 }}>
+                              <Btn
+                                variant={active ? "primary" : "secondary"}
+                                onClick={() => handleSelectUser(user)}
+                              >
+                                {active ? "Selected" : "Select"}
+                              </Btn>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {visibleUsers.length > PAGE_SIZE && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+                      <Btn
+                        variant="secondary"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                      >
+                        Prev
+                      </Btn>
+                      <span style={{ color: "#374151", fontSize: 13 }}>
+                        Page {page} of {totalPages}
+                      </span>
+                      <Btn
+                        variant="secondary"
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={page >= totalPages}
+                      >
+                        Next
+                      </Btn>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p style={{ color: "#6b7280" }}>No users found for this category or search.</p>
+              )
+            ) : (
+              <p style={{ color: "#6b7280" }}>Choose a role category to display users.</p>
+            )}
+
+            {selectedUser ? (
           <div style={{ display: "grid", gap: 16, maxWidth: 480 }}>
             <div>
               <div style={{ fontWeight: 600 }}>{selectedUser.name || selectedUser.username || selectedUser.email}</div>
@@ -442,11 +570,55 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 600 }}>School</span>
-              <input
-                type="text"
+              <select
                 value={profileDraft.school}
                 onChange={(e) => {
                   setProfileDraft((prev) => ({ ...prev, school: e.target.value }));
+                  setSuccessMessage("");
+                }}
+                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              >
+                {SCHOOL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Username</span>
+              <input
+                type="text"
+                value={profileDraft.username}
+                onChange={(e) => {
+                  setProfileDraft((prev) => ({ ...prev, username: e.target.value }));
+                  setSuccessMessage("");
+                }}
+                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Grade/Class</span>
+              <input
+                type="text"
+                value={profileDraft.class_name}
+                onChange={(e) => {
+                  setProfileDraft((prev) => ({ ...prev, class_name: e.target.value }));
+                  setSuccessMessage("");
+                }}
+                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Phone</span>
+              <input
+                type="text"
+                value={profileDraft.phone}
+                onChange={(e) => {
+                  setProfileDraft((prev) => ({ ...prev, phone: e.target.value }));
                   setSuccessMessage("");
                 }}
                 style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db" }}
@@ -532,11 +704,21 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
 
             {successMessage && <p style={{ color: "#047857", fontWeight: 600 }}>{successMessage}</p>}
           </div>
-        ) : (
-          <p style={{ color: "#6b7280" }}>{copy.adminOnly}</p>
+            ) : (
+              <p style={{ color: "#6b7280" }}>Select a user from the table above to edit their details.</p>
+            )}
+          </>
         )}
       </Card>
     </PageWrap>
   );
 }
 
+const SCHOOL_OPTIONS = [
+  { value: "", label: "Select school" },
+  { value: "EEC", label: "EEC" },
+  { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
+  { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
+  { value: "Al - Jinan International School", label: "Al - Jinan International School" },
+  { value: "Canada Educational Center", label: "Canada Educational Center" },
+];

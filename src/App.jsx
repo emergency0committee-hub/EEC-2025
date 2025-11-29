@@ -1,4 +1,4 @@
-// src/App.jsx
+﻿// src/App.jsx
 import React, { useState, useMemo, useEffect } from "react";
 import PropTypes from "prop-types";
 import Blogs from "./pages/Blogs.jsx";
@@ -22,6 +22,7 @@ import SATIntro from "./pages/sat/SATIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
 import SATAssignment from "./pages/sat/SATAssignment.jsx";
 import SATTraining from "./pages/sat/training/SATTraining.jsx";
+import SchoolTraining from "./pages/SchoolTraining.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
@@ -202,6 +203,9 @@ export default function App() {
       case "sat-training":
         pageTitle = "SAT Training";
         break;
+      case "school-training":
+        pageTitle = "School Training";
+        break;
       case "sat-results": {
         const name =
           participant?.name ||
@@ -310,7 +314,8 @@ export default function App() {
     };
   }, [sessionTimeoutMs, setRoute, setResultsPayload]);
 
-  const currentUser = (() => {
+  const normalizeEmail = (value) => (typeof value === "string" ? value.trim().toLowerCase() : "");
+const currentUser = (() => {
     try {
       const raw = localStorage.getItem("cg_current_user_v1");
       if (!raw) return {};
@@ -320,7 +325,27 @@ export default function App() {
     }
   })();
   const currentRole = (currentUser.role || "").toLowerCase();
+  const currentEmail = normalizeEmail(currentUser.email || currentUser.user_email || "");
   const currentAiAccess = Boolean(currentUser.ai_access);
+
+  const extractResultEmail = (payload) => {
+    if (!payload) return "";
+    const submission = payload.submission || payload;
+    const participant =
+      submission?.participant ||
+      submission?.profile ||
+      payload.participant ||
+      {};
+    return (
+      submission?.user_email ||
+      payload?.user_email ||
+      participant?.email ||
+      participant?.contactEmail ||
+      participant?.guardianEmail ||
+      participant?.parentEmail ||
+      ""
+    );
+  };
 
   const canViewResults = useMemo(() => {
     try {
@@ -330,6 +355,12 @@ export default function App() {
       return false;
     }
   }, [route, currentRole]);
+
+  const canViewOwnResult = useMemo(() => {
+    if (!currentEmail) return false;
+    const candidateEmail = normalizeEmail(extractResultEmail(resultsPayload));
+    return Boolean(candidateEmail && candidateEmail === currentEmail);
+  }, [resultsPayload, currentEmail]);
 
   const canAccessQuestionBank = canViewResults;
   const canAccessAIEducator = useMemo(() => {
@@ -357,6 +388,7 @@ export default function App() {
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
+  if (route === "school-training") return <SchoolTraining onNavigate={onNavigate} />;
   if (route === "ai-educator") {
     if (!canAccessAIEducator) {
       return (
@@ -380,7 +412,7 @@ export default function App() {
   if (route === "career-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "admin-live-monitor") return <AdminLiveMonitor onNavigate={onNavigate} />;
   if (route === "admin-manage-users") {
-    if (!canViewResults) {
+    if (!canViewResults && !canViewOwnResult) {
       return (
         <PageWrap>
           <HeaderBar title="Not Authorized" right={null} />
@@ -514,4 +546,5 @@ export default function App() {
     </PageWrap>
   );
 }
+
 

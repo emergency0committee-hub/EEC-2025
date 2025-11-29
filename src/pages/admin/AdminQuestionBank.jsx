@@ -1269,7 +1269,10 @@ const validate = () => {
         lang={lang}
         title={copy.title}
         right={
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>
+              Back to Home
+            </Btn>
             <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
             <UserMenu lang={lang} onNavigate={onNavigate} />
           </div>

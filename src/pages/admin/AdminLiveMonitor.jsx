@@ -150,9 +150,14 @@ export default function AdminLiveMonitor({ onNavigate }) {
       <HeaderBar
         title="Live Test Monitor"
         right={(
-          <Btn variant="back" onClick={() => onNavigate("admin-dashboard")}>
-            Back to Dashboard
-          </Btn>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>
+              Back to Home
+            </Btn>
+            <Btn variant="back" onClick={() => onNavigate("admin-dashboard")}>
+              Back to Dashboard
+            </Btn>
+          </div>
         )}
       />
 

@@ -264,7 +264,14 @@ export default function Account({ onNavigate }) {
 
   return (
     <PageWrap>
-      <HeaderBar title="Account" right={null} />
+      <HeaderBar
+        title="Account"
+        right={
+          <Btn variant="back" onClick={() => onNavigate("home")}>
+            Back to Home
+          </Btn>
+        }
+      />
       {isAdmin && (
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
