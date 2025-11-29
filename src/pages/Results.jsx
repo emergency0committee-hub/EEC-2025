@@ -643,7 +643,7 @@ export default function Results({ resultId, participant, submission = null, onNa
       )}
       <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
         <button
-          onClick={() => onNavigate?.("career-dashboard")}
+          onClick={() => onNavigate?.(fromAdmin ? "career-dashboard" : "home")}
           style={{
             border: "1px solid #d1d5db",
             background: "#fff",
@@ -653,7 +653,7 @@ export default function Results({ resultId, participant, submission = null, onNa
             cursor: "pointer",
           }}
         >
-          Back to Submissions
+          {fromAdmin ? "Back to Submissions" : "Back Home"}
         </button>
       </div>
     </PageWrap>

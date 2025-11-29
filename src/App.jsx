@@ -483,7 +483,7 @@ const currentUser = (() => {
   if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
 
   if (route === "results") {
-    if (!canViewResults) {
+    if (!canViewResults && !canViewOwnResult) {
       return (
         <PageWrap>
           <HeaderBar title="Not Authorized" right={null} />
