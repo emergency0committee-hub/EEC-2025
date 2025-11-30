@@ -34,7 +34,15 @@ export default function CandidateDetailsCard({ rows = [] }) {
               ? "—"
               : row.value;
           return (
-            <div key={row.label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div
+              key={row.label}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                minWidth: 0,
+              }}
+            >
               <div style={{ fontSize: 12, color: "#6b7280", letterSpacing: 0.3, textTransform: "uppercase" }}>
                 {row.label}
               </div>
@@ -42,10 +50,12 @@ export default function CandidateDetailsCard({ rows = [] }) {
                 style={{
                   fontWeight: 600,
                   color: "#0f172a",
-                  fontSize: 16,
-                  wordBreak: "break-word",
-                  overflowWrap: "anywhere",
+                  fontSize: value?.length > 24 ? 14 : 16,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
+                title={value}
               >
                 {value}
               </div>

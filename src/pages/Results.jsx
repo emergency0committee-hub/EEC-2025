@@ -30,6 +30,27 @@ export default function Results({ resultId, participant, submission = null, onNa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [occupations, setOccupations] = useState([]);
+  const [topOccIndex, setTopOccIndex] = useState(0);
+  const [topOccAnim, setTopOccAnim] = useState("top-occ-slide-left");
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const styleId = "top-occ-slide-animations";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      @keyframes top-occ-slide-left {
+        from { opacity: 0; transform: translateX(40px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes top-occ-slide-right {
+        from { opacity: 0; transform: translateX(-40px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   // Seed from submission payload (when navigated from dashboard)
   useEffect(() => {
@@ -68,13 +89,14 @@ export default function Results({ resultId, participant, submission = null, onNa
         if (resultErr) throw resultErr;
 
         let profile = null;
-        if (resultRow?.user_email) {
+        const lookupEmail = resultRow?.user_email || resultRow?.email || participantObj?.email;
+        if (lookupEmail) {
           const { data: profileRows } = await supabase
             .from("profiles")
             .select(
               "email, full_name, name, username, school, school_name, organization, org, company, class_name, phone"
             )
-            .eq("email", resultRow.user_email)
+            .eq("email", lookupEmail)
             .limit(1);
           profile = Array.isArray(profileRows) && profileRows.length ? profileRows[0] : null;
         }
@@ -86,7 +108,7 @@ export default function Results({ resultId, participant, submission = null, onNa
           full_name: profile?.full_name || participantObj?.full_name,
           username: profile?.username || participantObj?.username,
           class_name: profile?.class_name || participantObj?.class_name,
-          email: resultRow?.user_email || participantObj?.email || profile?.email,
+          email: lookupEmail || participantObj?.email || profile?.email,
           phone: participantObj?.phone || profile?.phone,
           school:
             profile?.school ||
@@ -135,16 +157,11 @@ export default function Results({ resultId, participant, submission = null, onNa
   }, []);
 
   const rows = [
-    { label: "Name", value: participantData?.name || participantData?.full_name || "-" },
+    { label: "Email", value: participantData?.email || "-" },
     { label: "School", value: participantData?.school || "-" },
     {
       label: "Grade/Class",
-      value:
-        participantData?.class_name ||
-        participantData?.grade ||
-        participantData?.grade_level ||
-        participantData?.class ||
-        "-",
+      value: participantData?.class_name || "-",
     },
     { label: "Phone", value: participantData?.phone || "-" },
   ];
@@ -240,10 +257,35 @@ export default function Results({ resultId, participant, submission = null, onNa
     () => [...scoredOccupations].sort((a, b) => a._score - b._score).slice(0, 5),
     [scoredOccupations]
   );
-  const topOccupation = useMemo(() => (topFiveOcc.length ? topFiveOcc[0] : null), [topFiveOcc]);
+  useEffect(() => {
+    if (!topFiveOcc.length) {
+      if (topOccIndex !== 0) setTopOccIndex(0);
+      return;
+    }
+    if (topOccIndex >= topFiveOcc.length) {
+      setTopOccIndex(0);
+    }
+  }, [topFiveOcc, topOccIndex]);
+
+  const topOccupation = useMemo(
+    () => (topFiveOcc.length ? topFiveOcc[Math.min(topOccIndex, topFiveOcc.length - 1)] : null),
+    [topFiveOcc, topOccIndex]
+  );
   const themeColorFor = (themeStr) => {
     const letter = String(themeStr || "").toUpperCase().replace(/[^RIASEC]/g, "").charAt(0);
     return THEME_COLORS?.[letter] || "#0f172a";
+  };
+
+  const handleTopOccNav = (direction) => {
+    if (!topFiveOcc.length) return;
+    setTopOccAnim(direction === "prev" ? "top-occ-slide-right" : "top-occ-slide-left");
+    setTopOccIndex((prev) => {
+      if (!topFiveOcc.length) return 0;
+      if (direction === "prev") {
+        return (prev - 1 + topFiveOcc.length) % topFiveOcc.length;
+      }
+      return (prev + 1) % topFiveOcc.length;
+    });
   };
 
   const parseMaybe = (val) => {
@@ -393,6 +435,159 @@ export default function Results({ resultId, participant, submission = null, onNa
     ];
   }, [pillarAgg, pillarCounts]);
 
+  const parseSalaryValue = (val) => {
+    if (val == null) return null;
+    if (typeof val === "number" && Number.isFinite(val)) return val;
+    if (typeof val === "string") {
+      const cleaned = val.replace(/[^0-9.,-]/g, "").replace(/,/g, "");
+      const num = Number(cleaned);
+      return Number.isFinite(num) ? num : null;
+    }
+    return null;
+  };
+
+  const renderSalarySection = (lowRaw, typicalRaw, highRaw, accent) => {
+    const low = parseSalaryValue(lowRaw);
+    const typical = parseSalaryValue(typicalRaw);
+    const high = parseSalaryValue(highRaw);
+    if (!low && !typical && !high) return null;
+
+    if (!(low && typical && high) || high <= low) {
+      const text = [low ? `Low: ${lowRaw}` : null, typical ? `Typical: ${typicalRaw}` : null, high ? `High: ${highRaw}` : null]
+        .filter(Boolean)
+        .join(" | ");
+      return text || null;
+    }
+
+    const width = 360;
+    const height = 130;
+    const baseline = height - 30;
+    const typicalX = ((typical - low) / (high - low)) * width;
+    const accentColor = accent || "#0ea5e9";
+    const gradientId = `salaryGradient-${(accentColor || "").replace(/[^a-zA-Z0-9]/g, "")}`;
+    const formatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    const lowFormatted = formatter.format(low);
+    const typicalFormatted = formatter.format(typical);
+    const highFormatted = formatter.format(high);
+
+    const a = width - 2 * typicalX;
+    const b = 2 * typicalX;
+    const c = -typicalX;
+    let t = 0.5;
+    if (Math.abs(a) > 1e-6) {
+      const discriminant = b * b - 4 * a * c;
+      if (discriminant >= 0) {
+        const sqrtDisc = Math.sqrt(discriminant);
+        const tCandidate1 = (-b + sqrtDisc) / (2 * a);
+        const tCandidate2 = (-b - sqrtDisc) / (2 * a);
+        const candidates = [tCandidate1, tCandidate2].filter((val) => val >= 0 && val <= 1);
+        if (candidates.length) {
+          t = candidates.reduce((prev, curr) => (Math.abs(curr - 0.5) < Math.abs(prev - 0.5) ? curr : prev), candidates[0]);
+        }
+      }
+    }
+    const controlY = height * 0.1;
+    const typicalY =
+      (1 - t) * (1 - t) * baseline +
+      2 * (1 - t) * t * controlY +
+      t * t * baseline;
+
+    const ticks = [
+      { label: "Low", x: 0, text: lowFormatted, dashEnd: baseline + 6 },
+      { label: "Typical", x: typicalX, text: typicalFormatted, dashEnd: typicalY },
+      { label: "High", x: width, text: highFormatted, dashEnd: baseline + 6 },
+    ];
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={accentColor} stopOpacity="0.45" />
+              <stop offset="80%" stopColor={accentColor} stopOpacity="0.05" />
+              <stop offset="100%" stopColor={accentColor} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d={`M0 ${baseline} Q ${typicalX} ${controlY} ${width} ${baseline} L ${width} ${height} L 0 ${height} Z`}
+            fill={`url(#${gradientId})`}
+          />
+          <path
+            d={`M0 ${baseline} Q ${typicalX} ${controlY} ${width} ${baseline}`}
+            fill="none"
+            stroke={accentColor}
+            strokeWidth="3"
+          />
+          {ticks.map((mark) => (
+            <g key={mark.label}>
+              <line
+                x1={mark.x}
+                x2={mark.x}
+                y1={baseline}
+                y2={mark.dashEnd}
+                stroke="#94a3b8"
+                strokeDasharray="4 4"
+                strokeWidth="1"
+              />
+              <text
+                x={mark.x}
+                y={baseline + 18}
+                textAnchor={mark.label === "Low" ? "start" : mark.label === "High" ? "end" : "middle"}
+                fontSize="13"
+                fill="#475569"
+              >
+                {mark.text}
+              </text>
+            </g>
+          ))}
+          <circle cx={typicalX} cy={typicalY} r="6" fill={accentColor} />
+          <text x={typicalX} y={typicalY - 10} textAnchor="middle" fontSize="11" fill={accentColor}>
+            Typical
+          </text>
+        </svg>
+      </div>
+    );
+  };
+
+  const renderEducationSection = (educationRaw, accent) => {
+    if (!educationRaw) return null;
+    const match = educationRaw.match(/rated\s*(\d+(?:\.\d+)?)\s*(?:out\s+of|of|\/)?\s*5/i);
+    const rating = match ? Math.max(0, Math.min(5, parseFloat(match[1]))) : null;
+    const cleanedText = match ? educationRaw.replace(match[0], "").replace(/[()]/g, "").trim() : educationRaw;
+
+    if (rating == null) {
+      return <span>{cleanedText}</span>;
+    }
+
+    const rounded = Math.round(rating * 10) / 10;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <div style={{ flex: 1, display: "flex", gap: 4 }}>
+            {[0, 1, 2, 3, 4].map((idx) => (
+              <div
+                key={idx}
+                style={{
+                  flex: 1,
+                  height: 10,
+                  borderRadius: 4,
+                  background: idx < Math.round(rating) ? (accent || "#0ea5e9") : "#f3f4f6",
+                  boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.08)",
+                  transition: "background 0.2s",
+                }}
+              />
+            ))}
+          </div>
+          <span style={{ fontSize: 13, color: "#475569", minWidth: 60, textAlign: "right" }}>{rounded} / 5</span>
+        </div>
+        {cleanedText && (
+          <span style={{ color: "#475569", display: "block", marginTop: 4, lineHeight: 1.4 }}>{cleanedText}</span>
+        )}
+      </div>
+    );
+  };
+
   const renderSection = (title, icon, body, accent) => {
     if (!body) return null;
     return (
@@ -499,7 +694,7 @@ export default function Results({ resultId, participant, submission = null, onNa
           marginTop: 12,
         }}
       >
-        <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} />
+        <OccupationScales radarByCode={radarByCode} themeOrder={themeOrder} onNavigate={onNavigate} />
       </div>
 
       <div
@@ -600,7 +795,43 @@ export default function Results({ resultId, participant, submission = null, onNa
           marginTop: 12,
         }}
       >
-        <h3 style={{ margin: 0, color: "#111827" }}>Top Occupation Focus</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <h3 style={{ margin: 0, color: "#111827" }}>Top Occupation Focus</h3>
+          {topFiveOcc.length > 1 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", color: "#475569", fontSize: 13 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => handleTopOccNav("prev")}
+                  style={{
+                    border: "1px solid #d1d5db",
+                    background: "#fff",
+                    color: "#374151",
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    minWidth: 36,
+                  }}
+                >
+                  ←
+                </button>
+                <button
+                  onClick={() => handleTopOccNav("next")}
+                  style={{
+                    border: "1px solid #d1d5db",
+                    background: "#fff",
+                    color: "#374151",
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    minWidth: 36,
+                  }}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         {topOccupation ? (
           <div style={{ marginTop: 10, display: "grid", gap: 12 }}>
             {(() => {
@@ -645,7 +876,13 @@ export default function Results({ resultId, participant, submission = null, onNa
                 .filter(Boolean)
                 .join(" | ");
               return (
-                <>
+                <div
+                  key={topOccIndex}
+                  style={{
+                    animation: `${topOccAnim} 0.35s ease`,
+                    width: "100%",
+                  }}
+                >
                   <div
                     style={{
                       fontSize: 16,
@@ -700,7 +937,7 @@ export default function Results({ resultId, participant, submission = null, onNa
                     {renderSection(
                       "Education",
                       "🎓",
-                      topOccupation.education ? <span>{topOccupation.education}</span> : null,
+                      renderEducationSection(topOccupation.education, headerColor),
                       headerColor
                     )}
                     {renderSection(
@@ -710,9 +947,14 @@ export default function Results({ resultId, participant, submission = null, onNa
                       headerColor
                     )}
                     {renderSection(
-                      "Salary",
+                      "Yearly Salary",
                       "💰",
-                      salaryText ? <span>{salaryText}</span> : null,
+                      renderSalarySection(
+                        topOccupation.salary_low,
+                        topOccupation.salary_typical,
+                        topOccupation.salary_high,
+                        headerColor
+                      ) || (salaryText ? <span>{salaryText}</span> : null),
                       headerColor
                     )}
                     {renderSection(
@@ -722,11 +964,11 @@ export default function Results({ resultId, participant, submission = null, onNa
                         <a href={topOccupation.link} target="_blank" rel="noreferrer" style={{ color: headerColor }}>
                           View occupation profile
                         </a>
-                      ) : null,
+                    ) : null,
                       headerColor
                     )}
                   </div>
-                </>
+                </div>
               );
             })()}
           </div>

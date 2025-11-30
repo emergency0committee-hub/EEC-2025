@@ -49,7 +49,7 @@ function describeThemeMix(themeStr = "") {
   return `${mapped[0]}, ${mapped[1]}, and ${mapped[2]}`;
 }
 
-function buildOccupationInsight(letter, bucket) {
+export function buildOccupationInsight(letter, bucket) {
   if (!bucket.length) {
     return {
       title: `${letter} Opportunities`,
@@ -99,7 +99,7 @@ function scoreFromTheme(themeStr, radarByCode) {
   return score;
 }
 
-export default function OccupationScales({ radarByCode = {}, themeOrder }) {
+export default function OccupationScales({ radarByCode = {}, themeOrder, onNavigate }) {
   const [rows, setRows] = useState([]);
 
   useEffect(() => {
@@ -163,6 +163,9 @@ export default function OccupationScales({ radarByCode = {}, themeOrder }) {
         {order.map((L) => {
           const bucket = byPrimary[L] || [];
           const color = COLORS[L];
+          const visibleCount = Math.min(10, bucket.length);
+          const visibleRoles = bucket.slice(0, visibleCount);
+          const canExpand = bucket.length > 10 && typeof onNavigate === "function";
           return (
             <div
               key={L}
@@ -210,15 +213,9 @@ export default function OccupationScales({ radarByCode = {}, themeOrder }) {
                     />
                   </div>
 
-                  <div
-                    style={{
-                      maxHeight: 260,
-                      overflowY: "auto",
-                      paddingRight: 6,
-                    }}
-                  >
-                    {bucket.length ? (
-                      bucket.map((r, idx2) => (
+                  <div>
+                    {visibleRoles.length ? (
+                      visibleRoles.map((r, idx2) => (
                         <BarRow
                           key={`${L}-${idx2}`}
                           label={r.occupation}
@@ -233,6 +230,33 @@ export default function OccupationScales({ radarByCode = {}, themeOrder }) {
                       </div>
                     )}
                   </div>
+                  {canExpand && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payload = {
+                          letter: L,
+                          roles: bucket,
+                          color,
+                        };
+                        try {
+                          sessionStorage.setItem("cg_occ_full_payload", JSON.stringify(payload));
+                        } catch {}
+                        onNavigate?.("occupation-scales-full", payload);
+                      }}
+                      style={{
+                        alignSelf: "flex-start",
+                        marginTop: 8,
+                        background: "none",
+                        border: "none",
+                        color: color,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {`Show all ${bucket.length} roles`}
+                    </button>
+                  )}
                 </div>
 
                 <aside

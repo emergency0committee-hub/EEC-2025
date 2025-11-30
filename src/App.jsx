@@ -23,6 +23,7 @@ import SATExam from "./pages/sat/SATExam.jsx";
 import SATAssignment from "./pages/sat/SATAssignment.jsx";
 import SATTraining from "./pages/sat/training/SATTraining.jsx";
 import SchoolTraining from "./pages/SchoolTraining.jsx";
+import OccupationScaleFull from "./pages/results/OccupationScaleFull.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
@@ -91,6 +92,14 @@ export default function App() {
   });
   
   const [resultsPayload, setResultsPayload] = useState(null);
+  const [lastResultsPayload, setLastResultsPayload] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("cg_last_results_payload");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
   const BASE_TITLE = "EEC";
   const SESSION_TIMEOUT_MINUTES = Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES || 60);
   const sessionTimeoutMs = Number.isFinite(SESSION_TIMEOUT_MINUTES) && SESSION_TIMEOUT_MINUTES > 0
@@ -240,6 +249,15 @@ export default function App() {
     document.title = pageTitle ? `${BASE_TITLE} | ${pageTitle}` : BASE_TITLE;
   }, [route, resultsPayload]);
 
+  useEffect(() => {
+    if (route === "results" && resultsPayload) {
+      setLastResultsPayload(resultsPayload);
+      try {
+        sessionStorage.setItem("cg_last_results_payload", JSON.stringify(resultsPayload));
+      } catch {}
+    }
+  }, [route, resultsPayload]);
+
   const onNavigate = (to, data = null, event = null) => {
     const normalized = normalizeRoute(to);
 
@@ -358,9 +376,11 @@ const currentUser = (() => {
 
   const canViewOwnResult = useMemo(() => {
     if (!currentEmail) return false;
-    const candidateEmail = normalizeEmail(extractResultEmail(resultsPayload));
+    const candidateEmail = normalizeEmail(
+      extractResultEmail(resultsPayload) || extractResultEmail(lastResultsPayload)
+    );
     return Boolean(candidateEmail && candidateEmail === currentEmail);
-  }, [resultsPayload, currentEmail]);
+  }, [resultsPayload, lastResultsPayload, currentEmail]);
 
   const canAccessQuestionBank = canViewResults;
   const canAccessAIEducator = useMemo(() => {
@@ -481,6 +501,75 @@ const currentUser = (() => {
   if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "account") return <Account onNavigate={onNavigate} />;
   if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
+
+  if (route === "occupation-scales-full") {
+    if (!canViewResults && !canViewOwnResult) {
+      return (
+        <PageWrap>
+          <HeaderBar title="Not Authorized" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              Occupational matches are visible to administrators or the candidate assigned to this report.
+            </p>
+            <Btn
+              variant="primary"
+              to="home"
+              onClick={(e) => onNavigate("home", null, e)}
+            >
+              Back to Home
+            </Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    const payload =
+      resultsPayload ||
+      (() => {
+        try {
+          const raw = sessionStorage.getItem("cg_occ_full_payload");
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      })();
+    const backPayload =
+      lastResultsPayload ||
+      (() => {
+        try {
+          const raw = sessionStorage.getItem("cg_last_results_payload");
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      })();
+    if (!payload) {
+      return (
+        <PageWrap>
+          <HeaderBar title="No Data" right={null} />
+          <Card>
+            <p style={{ color: "#6b7280" }}>
+              We couldn&rsquo;t find the occupation list. Please return to the results page and try again.
+            </p>
+            <Btn
+              variant="primary"
+              to="results"
+              onClick={(e) => onNavigate("results", backPayload, e)}
+            >
+              Back to Results
+            </Btn>
+          </Card>
+        </PageWrap>
+      );
+    }
+    return (
+      <OccupationScaleFull
+        payload={payload}
+        canGoBack={backPayload}
+        isAdmin={canViewResults}
+        onNavigate={(to, data, event) => onNavigate(to, data ?? backPayload, event)}
+      />
+    );
+  }
 
   if (route === "results") {
     if (!canViewResults && !canViewOwnResult) {
