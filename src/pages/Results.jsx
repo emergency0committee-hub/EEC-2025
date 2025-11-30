@@ -273,7 +273,14 @@ export default function Results({ resultId, participant, submission = null, onNa
     return [];
   };
 
-  const renderDictBlock = (title, dictVal, headerColor = "#2563eb", categoryColor = "#38bdf8") => {
+  const renderDictBlock = (
+    title,
+    dictVal,
+    headerColor = "#2563eb",
+    categoryColor = "#38bdf8",
+    options = {}
+  ) => {
+    const { hideTitle = false } = options || {};
     const parsed = parseMaybe(dictVal);
     if (!parsed) return null;
     if (typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -282,7 +289,12 @@ export default function Results({ resultId, participant, submission = null, onNa
       if (!items.length) return null;
       return (
         <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-          <strong>{title}:</strong> {items.join(", ")}
+          {!hideTitle && (
+            <>
+              <strong>{title}:</strong>{" "}
+            </>
+          )}
+          {items.join(", ")}
         </div>
       );
     }
@@ -290,7 +302,7 @@ export default function Results({ resultId, participant, submission = null, onNa
     if (!entries.length) return null;
     return (
       <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-        <strong style={{ color: headerColor }}>{title}:</strong>
+        {!hideTitle && <strong style={{ color: headerColor }}>{title}:</strong>}
         <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
           {entries.map(([key, vals], idx) => (
             <li key={idx} style={{ margin: "2px 0" }}>
@@ -303,7 +315,8 @@ export default function Results({ resultId, participant, submission = null, onNa
     );
   };
 
-  const renderPersonality = (personality, headerColor = "#2563eb") => {
+  const renderPersonality = (personality, headerColor = "#2563eb", options = {}) => {
+    const { hideTitle = false } = options || {};
     const parsed = parseMaybe(personality);
     if (!parsed || typeof parsed !== "object") return null;
     const intro = parsed.intro || parsed.summary || null;
@@ -311,7 +324,7 @@ export default function Results({ resultId, participant, submission = null, onNa
     if (!intro && !traits.length) return null;
     return (
       <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-        <strong style={{ color: headerColor }}>Personality:</strong>
+        {!hideTitle && <strong style={{ color: headerColor }}>Personality:</strong>}
         {intro && <div style={{ marginTop: 2 }}>{intro}</div>}
         {traits.length > 0 && (
           <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
@@ -324,7 +337,8 @@ export default function Results({ resultId, participant, submission = null, onNa
     );
   };
 
-  const renderTech = (tech, headerColor = "#2563eb", categoryColor = "#38bdf8") => {
+  const renderTech = (tech, headerColor = "#2563eb", categoryColor = "#38bdf8", options = {}) => {
+    const { hideTitle = false } = options || {};
     const parsed = parseMaybe(tech);
     if (!parsed) return null;
     const intro = parsed.intro || null;
@@ -332,7 +346,7 @@ export default function Results({ resultId, participant, submission = null, onNa
     if (!intro && !categories) return null;
     return (
       <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-        <strong style={{ color: headerColor }}>Technology / Tools:</strong>
+        {!hideTitle && <strong style={{ color: headerColor }}>Technology / Tools:</strong>}
         {intro && <div style={{ marginTop: 2 }}>{intro}</div>}
         {categories && (
           <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
@@ -378,6 +392,40 @@ export default function Results({ resultId, participant, submission = null, onNa
       },
     ];
   }, [pillarAgg, pillarCounts]);
+
+  const renderSection = (title, icon, body, accent) => {
+    if (!body) return null;
+    return (
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          padding: "10px 0",
+          borderBottom: "1px solid #eef2ff",
+        }}
+      >
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: `${accent || "#e0f2fe"}33`,
+            color: accent || "#0f172a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 18,
+          }}
+        >
+          {icon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, color: accent || "#0f172a", marginBottom: 4 }}>{title}</div>
+          <div style={{ color: "#475569", lineHeight: 1.5 }}>{body}</div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <PageWrap>
@@ -558,6 +606,44 @@ export default function Results({ resultId, participant, submission = null, onNa
             {(() => {
               const headerColor = themeColorFor(topOccupation.theme || topOccupation.code);
               const categoryColor = headerColor ? `${headerColor}CC` : "#38bdf8"; // lighten a bit
+              const alsoCalledList = normalizeArray(topOccupation.also_called);
+              const knowledgeContent = renderDictBlock(
+                "Knowledge",
+                topOccupation.knowledge,
+                headerColor,
+                categoryColor,
+                { hideTitle: true }
+              );
+              const skillsContent = renderDictBlock(
+                "Skills",
+                topOccupation.skills,
+                headerColor,
+                categoryColor,
+                { hideTitle: true }
+              );
+              const abilitiesContent = renderDictBlock(
+                "Abilities",
+                topOccupation.abilities,
+                headerColor,
+                categoryColor,
+                { hideTitle: true }
+              );
+              const personalityContent = renderPersonality(topOccupation.personality, headerColor, { hideTitle: true });
+              const techContent = renderTech(
+                topOccupation.technology_tools || topOccupation.technology,
+                headerColor,
+                categoryColor,
+                {
+                  hideTitle: true,
+                }
+              );
+              const salaryText = [
+                topOccupation.salary_low ? `Low: ${topOccupation.salary_low}` : null,
+                topOccupation.salary_typical ? `Typical: ${topOccupation.salary_typical}` : null,
+                topOccupation.salary_high ? `High: ${topOccupation.salary_high}` : null,
+              ]
+                .filter(Boolean)
+                .join(" | ");
               return (
                 <>
                   <div
@@ -572,62 +658,72 @@ export default function Results({ resultId, participant, submission = null, onNa
                       ({topOccupation.theme || topOccupation.code || "-"})
                     </span>
                   </div>
-                  {topOccupation.also_called && normalizeArray(topOccupation.also_called).length > 0 && (
-                    <div style={{ color: "#4b5563" }}>
-                      <strong style={{ color: headerColor }}>Also called:</strong>{" "}
-                      {normalizeArray(topOccupation.also_called).join(", ")}
+                  {topOccupation.summary && (
+                    <p style={{ color: "#475569", marginTop: 6, lineHeight: 1.6 }}>{topOccupation.summary}</p>
+                  )}
+                  {alsoCalledList.length > 0 && (
+                    <div style={{ margin: "6px 0", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {alsoCalledList.map((label, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 999,
+                            background: `${headerColor}1a`,
+                            color: headerColor,
+                            fontSize: 13,
+                          }}
+                        >
+                          {label}
+                        </span>
+                      ))}
                     </div>
                   )}
-
-                  <div style={{ display: "grid", gap: 10 }}>
-                    {topOccupation.summary && (
-                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-                        <strong style={{ color: headerColor }}>Summary:</strong> {topOccupation.summary}
-                      </div>
-                    )}
-                    {Array.isArray(topOccupation.duties) && topOccupation.duties.length > 0 && (
-                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-                        <strong style={{ color: headerColor }}>Key duties:</strong>
-                        <ul style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                  <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 12 }}>
+                    {renderSection(
+                      "Key duties",
+                      "🗂️",
+                      Array.isArray(topOccupation.duties) && topOccupation.duties.length ? (
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
                           {topOccupation.duties.map((duty, idx) => (
                             <li key={idx}>{duty}</li>
                           ))}
                         </ul>
-                      </div>
+                      ) : null,
+                      headerColor
                     )}
-                    {renderDictBlock("Knowledge", topOccupation.knowledge, headerColor, categoryColor)}
-                    {renderDictBlock("Skills", topOccupation.skills, headerColor, categoryColor)}
-                    {renderDictBlock("Abilities", topOccupation.abilities, headerColor, categoryColor)}
-                    {renderPersonality(topOccupation.personality, headerColor)}
-                    {renderTech(topOccupation.technology_tools || topOccupation.technology, headerColor, categoryColor)}
-                    {topOccupation.education && (
-                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-                        <strong style={{ color: headerColor }}>Education:</strong> {topOccupation.education}
-                      </div>
+                    {renderSection("Knowledge", "📘", knowledgeContent, headerColor)}
+                    {renderSection("Skills", "🛠️", skillsContent, headerColor)}
+                    {renderSection("Abilities", "🎯", abilitiesContent, headerColor)}
+                    {renderSection("Personality", "✨", personalityContent, headerColor)}
+                    {renderSection("Technology / Tools", "💻", techContent, headerColor)}
+                    {renderSection(
+                      "Education",
+                      "🎓",
+                      topOccupation.education ? <span>{topOccupation.education}</span> : null,
+                      headerColor
                     )}
-                    {topOccupation.job_outlook && (
-                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-                        <strong style={{ color: headerColor }}>Job outlook:</strong> {topOccupation.job_outlook}
-                      </div>
+                    {renderSection(
+                      "Job outlook",
+                      "📈",
+                      topOccupation.job_outlook ? <span>{topOccupation.job_outlook}</span> : null,
+                      headerColor
                     )}
-                    {(topOccupation.salary_low || topOccupation.salary_typical || topOccupation.salary_high) && (
-                      <div style={{ color: "#4b5563", lineHeight: 1.5 }}>
-                        <strong style={{ color: headerColor }}>Salary:</strong>{" "}
-                        {[
-                          topOccupation.salary_low ? `Low: ${topOccupation.salary_low}` : null,
-                          topOccupation.salary_typical ? `Typical: ${topOccupation.salary_typical}` : null,
-                          topOccupation.salary_high ? `High: ${topOccupation.salary_high}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" | ")}
-                      </div>
+                    {renderSection(
+                      "Salary",
+                      "💰",
+                      salaryText ? <span>{salaryText}</span> : null,
+                      headerColor
                     )}
-                    {topOccupation.link && (
-                      <div>
+                    {renderSection(
+                      "Learn more",
+                      "🔗",
+                      topOccupation.link ? (
                         <a href={topOccupation.link} target="_blank" rel="noreferrer" style={{ color: headerColor }}>
-                          Learn more
+                          View occupation profile
                         </a>
-                      </div>
+                      ) : null,
+                      headerColor
                     )}
                   </div>
                 </>
