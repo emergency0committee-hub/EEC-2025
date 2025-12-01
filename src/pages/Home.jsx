@@ -1,4 +1,4 @@
-ï»¿// src/pages/Home.jsx
+// src/pages/Home.jsx
 import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
@@ -46,7 +46,7 @@ const HOME_CARDS = {
   FR: {
     career: {
       title: "Orientation professionnelle",
-      desc: "Explorez vos int\u00e9r\u00eats et aptitudes gr\u00e2ce au mod\u00e8le RIASEC et à des sc\u00e9narios immersifs.",
+      desc: "Explorez vos int\u00e9r\u00eats et aptitudes gr\u00e2ce au mod\u00e8le RIASEC et ? des sc\u00e9narios immersifs.",
       cta: "Ouvrir",
     },
     satDiagnostic: {
@@ -73,7 +73,7 @@ const HOME_CARDS = {
     },
     certificate: {
       title: "V\u00e9rifier un certificat",
-      desc: "Confirmez l'authenticit\u00e9 d'un certificat EEC gr\u00e2ce à son identifiant unique.",
+      desc: "Confirmez l'authenticit\u00e9 d'un certificat EEC gr\u00e2ce ? son identifiant unique.",
       cta: "V\u00e9rifier",
     },
   },
@@ -90,6 +90,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
 
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingResult, setCheckingResult] = useState(false);
+  const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
 
   const t = STR[lang] || STR.EN;
   const home = HOME_CARDS[lang] || HOME_CARDS.EN;
@@ -126,6 +127,10 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   }, []);
 
   const handleCareerClick = async (event) => {
+    if (isSchoolAccount) {
+      event?.preventDefault?.();
+      return onNavigate("career-dashboard", null, event);
+    }
     // If no user info, just go to test
     if (!currentUser?.email) {
       return onNavigate("career", null, event);
@@ -289,4 +294,6 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
     </PageWrap>
   );
 }
+
+
 

@@ -9,6 +9,8 @@ AdminTable.propTypes = {
   onEditSubmission: PropTypes.func,
   onSort: PropTypes.func,
   sortKey: PropTypes.string,
+  allowDelete: PropTypes.bool,
+  allowEdit: PropTypes.bool,
 };
 
 export default function AdminTable({
@@ -18,6 +20,8 @@ export default function AdminTable({
   onEditSubmission,
   onSort,
   sortKey,
+  allowDelete = true,
+  allowEdit = true,
 }) {
   if (!submissions || submissions.length === 0) {
     return <p style={{ color: "#6b7280" }}>No submissions found.</p>;
@@ -160,19 +164,21 @@ export default function AdminTable({
                     >
                       <EyeIcon />
                     </IconButton>
-                    {onEditSubmission && (
+                    {allowEdit && onEditSubmission && (
                       <IconButton title="Edit participant" ariaLabel="Edit participant" onClick={() => onEditSubmission(sub)}>
                         <PencilIcon />
                       </IconButton>
                     )}
-                    <IconButton
-                      title="Delete submission"
-                      ariaLabel="Delete submission"
-                      variant="danger"
-                      onClick={() => onDeleteSubmission?.(sub)}
-                    >
-                      <TrashIcon />
-                    </IconButton>
+                    {allowDelete && onDeleteSubmission && (
+                      <IconButton
+                        title="Delete submission"
+                        ariaLabel="Delete submission"
+                        variant="danger"
+                        onClick={() => onDeleteSubmission?.(sub)}
+                      >
+                        <TrashIcon />
+                      </IconButton>
+                    )}
                   </div>
                 </td>
               </tr>

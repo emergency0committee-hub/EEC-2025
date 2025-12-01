@@ -333,6 +333,7 @@ export default function App() {
   }, [sessionTimeoutMs, setRoute, setResultsPayload]);
 
   const normalizeEmail = (value) => (typeof value === "string" ? value.trim().toLowerCase() : "");
+  const normalizeSchool = (value) => (typeof value === "string" ? value.trim().toLowerCase() : "");
 const currentUser = (() => {
     try {
       const raw = localStorage.getItem("cg_current_user_v1");
@@ -345,6 +346,7 @@ const currentUser = (() => {
   const currentRole = (currentUser.role || "").toLowerCase();
   const currentEmail = normalizeEmail(currentUser.email || currentUser.user_email || "");
   const currentAiAccess = Boolean(currentUser.ai_access);
+  const currentSchool = normalizeSchool(currentUser.school || currentUser.school_name || currentUser.organization || currentUser.org || currentUser.company || "");
 
   const extractResultEmail = (payload) => {
     if (!payload) return "";
@@ -361,6 +363,22 @@ const currentUser = (() => {
       participant?.contactEmail ||
       participant?.guardianEmail ||
       participant?.parentEmail ||
+      ""
+    );
+  };
+  const extractResultSchool = (payload) => {
+    if (!payload) return "";
+    const submission = payload.submission || payload;
+    const participant =
+      submission?.participant ||
+      submission?.profile ||
+      payload.participant ||
+      {};
+    return (
+      participant?.school ||
+      submission?.school ||
+      submission?.profile?.school ||
+      payload?.school ||
       ""
     );
   };
@@ -381,6 +399,13 @@ const currentUser = (() => {
     );
     return Boolean(candidateEmail && candidateEmail === currentEmail);
   }, [resultsPayload, lastResultsPayload, currentEmail]);
+  const canViewSchoolResult = useMemo(() => {
+    if (currentRole !== "school" || !currentSchool) return false;
+    const candidateSchool = normalizeSchool(
+      extractResultSchool(resultsPayload) || extractResultSchool(lastResultsPayload)
+    );
+    return Boolean(candidateSchool) && candidateSchool === currentSchool;
+  }, [resultsPayload, lastResultsPayload, currentRole, currentSchool]);
 
   const canAccessQuestionBank = canViewResults;
   const canAccessAIEducator = useMemo(() => {
@@ -503,7 +528,7 @@ const currentUser = (() => {
   if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
 
   if (route === "occupation-scales-full") {
-    if (!canViewResults && !canViewOwnResult) {
+    if (!canViewResults && !canViewOwnResult && !canViewSchoolResult) {
       return (
         <PageWrap>
           <HeaderBar title="Not Authorized" right={null} />
@@ -572,13 +597,13 @@ const currentUser = (() => {
   }
 
   if (route === "results") {
-    if (!canViewResults && !canViewOwnResult) {
+    if (!canViewResults && !canViewOwnResult && !canViewSchoolResult) {
       return (
         <PageWrap>
           <HeaderBar title="Not Authorized" right={null} />
           <Card>
             <p style={{ color: "#6b7280" }}>
-              Results are visible to administrators only.
+              You are not authorized to view this result.
             </p>
             <Btn
               variant="primary"

@@ -1,4 +1,4 @@
-﻿// src/pages/admin/AdminDashboard.jsx
+// src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
@@ -29,6 +29,26 @@ export default function AdminDashboard({ onNavigate }) {
   const [bulkPreviewList, setBulkPreviewList] = useState([]);
   const [bulkPreviewIndex, setBulkPreviewIndex] = useState(0);
   const [tableSort, setTableSort] = useState("ts_desc");
+  const [currentUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const viewerSchool = (currentUser?.school || "").trim();
+  const viewerSchoolKey = viewerSchool.toLowerCase();
+  const viewerRole = (currentUser?.role || "").toLowerCase();
+  const lockSchoolToUser = Boolean(viewerSchool) && viewerRole === "school";
+  const activeSchoolFilter = lockSchoolToUser ? viewerSchool : selectedSchool;
+  const canManageSubmissions = viewerRole === "admin";
+
+  useEffect(() => {
+    if (lockSchoolToUser && selectedSchool !== viewerSchool) {
+      setSelectedSchool(viewerSchool);
+    }
+  }, [lockSchoolToUser, viewerSchool, selectedSchool]);
   const [timerMin, setTimerMin] = useState(() => {
     const saved = Number(localStorage.getItem("cg_timer_min") || 60);
     return Number.isFinite(saved) && saved > 0 ? saved : 60;
@@ -70,14 +90,20 @@ export default function AdminDashboard({ onNavigate }) {
 
   const bulkEntries = bulkSet?.entries || [];
   const bulkActive = bulkEntries.length > 0;
+  const canViewSubmission = (submission) => {
+    if (!lockSchoolToUser || canManageSubmissions) return true;
+    if (!viewerSchoolKey) return false;
+    const submissionSchool = getSchool(submission).toLowerCase();
+    return submissionSchool && submissionSchool === viewerSchoolKey;
+  };
 
   const visibleSubmissions = useMemo(() => {
-    if (!selectedSchool) return submissions;
-    const target = selectedSchool.trim().toLowerCase();
+    if (!activeSchoolFilter) return submissions;
+    const target = activeSchoolFilter.trim().toLowerCase();
     return submissions.filter(
       (sub) => getSchool(sub).trim().toLowerCase() === target
     );
-  }, [submissions, selectedSchool]);
+  }, [submissions, activeSchoolFilter]);
   const sortedSubmissions = useMemo(() => {
     const list = [...visibleSubmissions];
     list.sort((a, b) => {
@@ -109,7 +135,7 @@ export default function AdminDashboard({ onNavigate }) {
   const totalPages = Math.max(1, Math.ceil(sortedSubmissions.length / PAGE_SIZE));
   useEffect(() => {
     setPage(1);
-  }, [selectedSchool, submissions.length, tableSort]);
+  }, [activeSchoolFilter, submissions.length, tableSort]);
   const sortedModalSubmissions = useMemo(() => {
     const list = [...visibleSubmissions];
     list.sort((a, b) => {
@@ -136,7 +162,7 @@ export default function AdminDashboard({ onNavigate }) {
   }, [visibleSubmissions, bulkSort]);
   useEffect(() => {
     setPage(1);
-  }, [selectedSchool, submissions.length]);
+  }, [activeSchoolFilter, submissions.length]);
 
   // Render full Results layout to canvas, then into PDF
   // Render full Results layout to PDF (multi-page, matches single export)
@@ -256,10 +282,11 @@ export default function AdminDashboard({ onNavigate }) {
       setBulkStatus("Zipping files...");
       setBulkProgress(95);
       const zipBlob = buildZip(files);
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${selectedSchool.replace(/\s+/g, "_") || "school"}_submissions.zip`;
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        const safeSchoolName = (activeSchoolFilter || "school").replace(/\s+/g, "_");
+        a.download = `${safeSchoolName || "school"}_submissions.zip`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -414,6 +441,10 @@ export default function AdminDashboard({ onNavigate }) {
   }, []);
 
   const handleViewSubmission = async (submission, event) => {
+    if (!canViewSubmission(submission)) {
+      alert("You can only view results for students in your school.");
+      return;
+    }
     const isNewTab = event && (event.ctrlKey || event.metaKey || event.button === 1 || event.type === "auxclick");
     if (isNewTab) {
       event.preventDefault();
@@ -504,23 +535,27 @@ export default function AdminDashboard({ onNavigate }) {
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Recent Test Submissions</h3>
-            <Btn
-              variant="primary"
-              onClick={() =>
-                onNavigate("test", {
-                  preview: true,
-                  previewTitle: "Career Test Preview",
-                })
-              }
-            >
-              Preview Career Test
-            </Btn>
+            {canManageSubmissions && (
+              <Btn
+                variant="primary"
+                onClick={() =>
+                  onNavigate("test", {
+                    preview: true,
+                    previewTitle: "Career Test Preview",
+                  })
+                }
+              >
+                Preview Career Test
+              </Btn>
+            )}
           </div>
-          <p style={{ color: "#6b7280", marginTop: 8 }}>
-            Open the full Career Guidance test in preview mode to review the experience. No data is saved while in preview.
-          </p>
+          {canManageSubmissions && (
+            <p style={{ color: "#6b7280", marginTop: 8 }}>
+              Open the full Career Guidance test in preview mode to review the experience. No data is saved while in preview.
+            </p>
+          )}
 
-          {bulkSet?.school && bulkEntries.length > 0 && (
+          {canManageSubmissions && bulkSet?.school && bulkEntries.length > 0 && (
             <div
               className="no-print"
               style={{
@@ -546,7 +581,9 @@ export default function AdminDashboard({ onNavigate }) {
               <AdminTable
                 submissions={pagedSubmissions}
                 onViewSubmission={handleViewSubmission}
-                onDeleteSubmission={handleDeleteSubmission}
+                onDeleteSubmission={canManageSubmissions ? handleDeleteSubmission : null}
+                allowDelete={canManageSubmissions}
+                allowEdit={canManageSubmissions}
                 onSort={setTableSort}
                 sortKey={tableSort}
               />
@@ -568,8 +605,8 @@ export default function AdminDashboard({ onNavigate }) {
             </>
           ) : (
             <p style={{ color: "#6b7280" }}>
-              {selectedSchool
-                ? `No submissions found for ${selectedSchool} yet.`
+              {activeSchoolFilter
+                ? `No submissions found for ${activeSchoolFilter} yet.`
                 : "No submissions available."}
             </p>
           )}
@@ -588,69 +625,70 @@ export default function AdminDashboard({ onNavigate }) {
             <Btn variant="back" onClick={() => onNavigate("home")}>
               Back to Home
             </Btn>
-            {bulkStatus ? (
-              <div
-                style={{
-                  minWidth: 140,
-                  maxWidth: 200,
-                  height: 40,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 12px",
-                  borderRadius: 12,
-                  background: "#0f172a",
-                  color: "#e2e8f0",
-                  boxShadow: "0 8px 18px rgba(15, 23, 42, 0.22)",
-                }}
-              >
+            {canManageSubmissions &&
+              (bulkStatus ? (
                 <div
                   style={{
-                    flex: 1,
-                    height: 10,
-                    borderRadius: 999,
-                    background: "#1e293b",
-                    overflow: "hidden",
-                    boxShadow: "inset 0 0 0 1px #0b1220",
+                    minWidth: 140,
+                    maxWidth: 200,
+                    height: 40,
                     display: "flex",
                     alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    borderRadius: 12,
+                    background: "#0f172a",
+                    color: "#e2e8f0",
+                    boxShadow: "0 8px 18px rgba(15, 23, 42, 0.22)",
                   }}
                 >
                   <div
                     style={{
-                      width: `${Math.min(100, Math.max(0, bulkProgress || 5))}%`,
-                      height: "100%",
-                      background: "linear-gradient(90deg, #38bdf8, #6366f1)",
-                      transition: "width 0.3s ease",
+                      flex: 1,
+                      height: 10,
+                      borderRadius: 999,
+                      background: "#1e293b",
+                      overflow: "hidden",
+                      boxShadow: "inset 0 0 0 1px #0b1220",
+                      display: "flex",
+                      alignItems: "center",
                     }}
-                  />
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, bulkProgress || 5))}%`,
+                        height: "100%",
+                        background: "linear-gradient(90deg, #38bdf8, #6366f1)",
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 12, color: "#cbd5e1", minWidth: 32, textAlign: "right" }}>
+                    {bulkProgress || 5}%
+                  </span>
                 </div>
-                <span style={{ fontSize: 12, color: "#cbd5e1", minWidth: 32, textAlign: "right" }}>
-                  {bulkProgress || 5}%
-                </span>
-              </div>
-            ) : (
-              <Btn
-                variant="primary"
-                onClick={() => {
-                  setBulkSelectedIds(visibleSubmissions.map((s) => s.id));
-                  setBulkModalOpen(true);
-                }}
-                disabled={bulkActive || visibleSubmissions.length === 0}
-                style={
-                  bulkActive || !visibleSubmissions.length
-                    ? { opacity: 0.6, cursor: "not-allowed" }
-                    : undefined
-                }
-              >
-                Export ZIP
-              </Btn>
-            )}
+              ) : (
+                <Btn
+                  variant="primary"
+                  onClick={() => {
+                    setBulkSelectedIds(visibleSubmissions.map((s) => s.id));
+                    setBulkModalOpen(true);
+                  }}
+                  disabled={bulkActive || visibleSubmissions.length === 0}
+                  style={
+                    bulkActive || !visibleSubmissions.length
+                      ? { opacity: 0.6, cursor: "not-allowed" }
+                      : undefined
+                  }
+                >
+                  Export ZIP
+                </Btn>
+              ))}
           </div>
         </Card>
       </div>
 
-      {bulkModalOpen && (
+      {canManageSubmissions && bulkModalOpen && (
         <div
           role="dialog"
           aria-modal="true"
@@ -795,7 +833,7 @@ export default function AdminDashboard({ onNavigate }) {
         })}
       </div>
 
-      {bulkPreviewOpen && (
+      {canManageSubmissions && bulkPreviewOpen && (
         <div
           role="dialog"
           aria-modal="true"

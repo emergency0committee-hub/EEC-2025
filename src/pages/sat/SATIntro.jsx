@@ -12,9 +12,7 @@ export default function SATIntro({ onNavigate }) {
   const [authUser, setAuthUser] = useState(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [unlocked, setUnlocked] = useState(() => {
-    try { return localStorage.getItem("sat_access_ok_v1") === "1"; } catch { return false; }
-  });
+  const [unlocked, setUnlocked] = useState(false);
   const staffPreviewRole = useMemo(() => {
     try {
       const raw = localStorage.getItem("cg_current_user_v1");
@@ -51,6 +49,8 @@ export default function SATIntro({ onNavigate }) {
     );
   }
 
+  const hasAccess = canPreview || unlocked;
+
   return (
     <PageWrap>
       <HeaderBar title="SAT Diagnostic" />
@@ -73,7 +73,7 @@ export default function SATIntro({ onNavigate }) {
             </div>
           </div>
         )}
-        {!unlocked ? (
+        {!hasAccess ? (
           <>
             <h3 style={{ marginTop: 0 }}>Access Code Required</h3>
             <p style={{ color: "#6b7280" }}>
@@ -92,7 +92,6 @@ export default function SATIntro({ onNavigate }) {
                 onClick={() => {
                   const expected = (import.meta.env.VITE_SAT_ACCESS_CODE || "").trim();
                   if (expected && code.trim() !== expected) { setError("Invalid access code"); return; }
-                  try { localStorage.setItem("sat_access_ok_v1", "1"); } catch {}
                   setUnlocked(true);
                 }}
               >Unlock</Btn>
