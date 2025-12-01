@@ -31,6 +31,12 @@ const BANK_LABELS = {
   english: "English Bank",
   tests: "Test Bank",
 };
+const getTestSectionQuestionCount = (subject) =>
+  String(subject || "")
+    .trim()
+    .toLowerCase() === "english"
+    ? "27"
+    : "22";
 
 const defaultDurationForKind = (kind) => {
   const value = String(kind || "quiz").toLowerCase();
@@ -96,16 +102,18 @@ const createDefaultAutoAssign = (bankId = "math") => {
   const supportsMathUnits = bank.supportsUnitLesson && subject === "math";
   const unit = supportsMathUnits ? FIRST_MATH_UNIT : "";
   const lesson = supportsMathUnits ? firstLessonForUnit(unit) : "";
+  const isTests = bank.id === "tests";
+  const defaultCount = isTests ? getTestSectionQuestionCount(subject) : "10";
   return {
     bank: bank.id,
     subject,
-    kind: bank.id === "tests" ? "test" : "quiz",
-    questionCount: "10",
-    durationMin: defaultDurationForKind(bank.id === "tests" ? "test" : "quiz"),
+    kind: isTests ? "test" : "quiz",
+    questionCount: defaultCount,
+    durationMin: defaultDurationForKind(isTests ? "test" : "quiz"),
     title: "",
     unit,
     lesson,
-    difficulty: bank.id === "tests" ? DEFAULT_DIFFICULTY : "",
+    difficulty: isTests ? DEFAULT_DIFFICULTY : "",
   };
 };
 
@@ -186,7 +194,7 @@ export default function SATTraining({ onNavigate }) {
     setClassEmails([]);
   };
   // Class sub-tabs (admin view)
-  const [classTab, setClassTab] = useState("classwork"); // classwork | analytics
+  const [classTab, setClassTab] = useState("classwork"); // classwork | analytics | testing
   const [adminViewTab, setAdminViewTab] = useState("classwork"); // stream | classwork | people
   const [assignForm, setAssignForm] = useState({ email: "", className: "" });
   const [savingAssign, setSavingAssign] = useState(false);
@@ -266,6 +274,23 @@ export default function SATTraining({ onNavigate }) {
   );
   const [autoAssign, setAutoAssign] = useState(() => createDefaultAutoAssign("math"));
   const [autoGenerating, setAutoGenerating] = useState(false);
+  useEffect(() => {
+    if (classTab === "testing") {
+      setAutoAssign((prev) => {
+        if (prev.bank === "tests") return prev;
+        const next = { ...prev };
+        next.bank = "tests";
+        next.kind = "test";
+        next.durationMin = defaultDurationForKind("test");
+        next.difficulty = next.difficulty || DEFAULT_DIFFICULTY;
+        if (!next.subject || !["math", "english"].includes(String(next.subject).toLowerCase())) {
+          next.subject = "math";
+        }
+        next.questionCount = getTestSectionQuestionCount(next.subject);
+        return next;
+      });
+    }
+  }, [classTab]);
 
   const openClassLog = (row) => setViewClassLog(row);
   const closeClassLog = () => setViewClassLog(null);
@@ -672,25 +697,27 @@ export default function SATTraining({ onNavigate }) {
     warn: { background: "#fef3c7", color: "#92400e" },
   };
 
+  const resolveResourceMetaSource = (resource) => {
+    if (resource?.payload && typeof resource.payload === "object") {
+      if (resource.payload.meta && typeof resource.payload.meta === "object") return resource.payload.meta;
+      if (resource.payload.settings && typeof resource.payload.settings === "object") return resource.payload.settings;
+    }
+    if (resource?.meta && typeof resource.meta === "object") return resource.meta;
+    if (resource?.settings && typeof resource.settings === "object") return resource.settings;
+    if (resource?.url && String(resource.url).startsWith("data:application/json")) {
+      try {
+        const base64 = String(resource.url).split(",")[1] || "";
+        const json = decodeURIComponent(escape(window.atob(base64)));
+        const obj = JSON.parse(json);
+        if (obj && typeof obj.meta === "object") return obj.meta;
+      } catch {}
+    }
+    return null;
+  };
+
   const extractResourceMeta = (resource) => {
     const meta = baseMeta(resource?.kind);
-    const src = (() => {
-      if (resource?.payload && typeof resource.payload === "object") {
-        if (resource.payload.meta && typeof resource.payload.meta === "object") return resource.payload.meta;
-        if (resource.payload.settings && typeof resource.payload.settings === "object") return resource.payload.settings;
-      }
-      if (resource?.meta && typeof resource.meta === "object") return resource.meta;
-      if (resource?.settings && typeof resource.settings === "object") return resource.settings;
-      if (resource?.url && String(resource.url).startsWith("data:application/json")) {
-        try {
-          const base64 = String(resource.url).split(",")[1] || "";
-          const json = decodeURIComponent(escape(window.atob(base64)));
-          const obj = JSON.parse(json);
-          if (obj && typeof obj.meta === "object") return obj.meta;
-        } catch {}
-      }
-      return null;
-    })();
+    const src = resolveResourceMetaSource(resource);
     if (src) {
       if (src.durationSec != null && Number.isFinite(Number(src.durationSec))) {
         meta.durationSec = Math.max(0, Number(src.durationSec));
@@ -793,9 +820,29 @@ export default function SATTraining({ onNavigate }) {
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [catalogLoadingBank, setCatalogLoadingBank] = useState(null);
   const [catalogError, setCatalogError] = useState(null);
+  const activeBank = useMemo(() => resolveBankConfig(autoAssign.bank), [autoAssign.bank]);
+  const activeSubject = activeBank.subjectLocked
+    ? activeBank.defaultSubject
+    : autoAssign.subject || activeBank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
+  const isTestBank = activeBank.id === "tests";
+  const showMathSelectors = activeBank.supportsUnitLesson && activeSubject === "math" && !isTestBank;
+  const showDifficultySelector = isTestBank && activeSubject === "math";
+  const activeLessons = MATH_LESSON_OPTIONS[autoAssign.unit] || [];
+  const subjectDisplayLabel =
+    SUBJECT_OPTIONS.find((opt) => opt.value === activeSubject)?.label?.EN || activeSubject;
+  const activeBankLabel = BANK_LABELS[activeBank.id] || "Question Bank";
+
   const usedQuestionIds = useMemo(() => {
     const ids = new Set();
+    const targetBank = String(activeBank.id || "").toLowerCase();
     (resources || []).forEach((resource) => {
+      const metaSrc = resolveResourceMetaSource(resource) || {};
+      const resourceBank = String(
+        metaSrc.questionBank || metaSrc.question_bank || resource?.bank || resource?.payload?.bank || ""
+      )
+        .trim()
+        .toLowerCase();
+      if (targetBank && resourceBank && resourceBank !== targetBank) return;
       const questions = getResourceQuestions(resource) || [];
       questions.forEach((question) => {
         let key = null;
@@ -805,7 +852,7 @@ export default function SATTraining({ onNavigate }) {
       });
     });
     return ids;
-  }, [resources]);
+  }, [resources, activeBank.id]);
   const [questionTextCache, setQuestionTextCache] = useState({});
   const [questionDataCache, setQuestionDataCache] = useState({});
   const resourceQuestionDataMap = useMemo(() => {
@@ -1041,7 +1088,12 @@ export default function SATTraining({ onNavigate }) {
           next.difficulty = "";
         }
       } else if (field === "subject") {
-        next.subject = String(value || "");
+        const normalizedSubject = String(value || "").trim().toLowerCase();
+        next.subject = normalizedSubject || "";
+        const bankConfig = resolveBankConfig(next.bank);
+        if (bankConfig.id === "tests") {
+          next.questionCount = getTestSectionQuestionCount(normalizedSubject || bankConfig.defaultSubject || "math");
+        }
       } else if (field === "kind") {
         const kindValue = String(rawValue || "quiz").toLowerCase();
         next.kind = kindValue;
@@ -1073,6 +1125,7 @@ export default function SATTraining({ onNavigate }) {
         if (!editingDuration && !next.durationMin) {
           next.durationMin = defaultDurationForKind("test");
         }
+        next.questionCount = getTestSectionQuestionCount(subjectValue);
         if (subjectValue === "math" && !next.difficulty) {
           next.difficulty = DEFAULT_DIFFICULTY;
         } else if (subjectValue !== "math") {
@@ -1091,6 +1144,7 @@ export default function SATTraining({ onNavigate }) {
       if (field === "bank") {
         if (isTestBank) {
           next.difficulty = next.difficulty || DEFAULT_DIFFICULTY;
+          next.questionCount = getTestSectionQuestionCount(subjectValue);
         } else {
           next.difficulty = "";
         }
@@ -1234,15 +1288,30 @@ export default function SATTraining({ onNavigate }) {
       return;
     }
     const bank = resolveBankConfig(autoAssign.bank);
-    const subject = bank.subjectLocked
+    let subject = bank.subjectLocked
       ? bank.defaultSubject
       : autoAssign.subject || bank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
+    if (bank.id === "tests") {
+      const normalized = String(subject || "").trim().toLowerCase();
+      if (normalized !== "math" && normalized !== "english") {
+        alert("Select math or english before generating a test.");
+        return;
+      }
+      subject = normalized;
+    }
     const isTestBank = bank.id === "tests";
     const supportsMathUnits = bank.supportsUnitLesson && subject === "math" && !isTestBank;
     const showDifficultySelector = isTestBank && subject === "math";
     const unitValue = supportsMathUnits ? autoAssign.unit : "";
     const lessonValue = supportsMathUnits ? autoAssign.lesson : "";
-    const requestedCount = Number.parseInt(autoAssign.questionCount, 10);
+    let requestedCount = Number.parseInt(autoAssign.questionCount, 10);
+    if (isTestBank) {
+      const targetCount = Number(getTestSectionQuestionCount(subject));
+      requestedCount = targetCount;
+      setAutoAssign((prev) =>
+        prev.questionCount === String(targetCount) ? prev : { ...prev, questionCount: String(targetCount) }
+      );
+    }
     if (!Number.isFinite(requestedCount) || requestedCount <= 0) {
       alert("Enter how many questions you want to include.");
       return;
@@ -1310,7 +1379,40 @@ export default function SATTraining({ onNavigate }) {
       if (requestedCount > availableCount) {
         alert(`Only ${availableCount} unused question${availableCount === 1 ? "" : "s"} are available. We'll use ${availableCount}.`);
       }
-      const items = freshItems.slice(0, finalCount);
+      let items;
+      if (isTestBank) {
+        const bucketMap = new Map();
+        freshItems.forEach((item) => {
+          const key = String(item.skill || item.lesson || item.subject || "general").trim().toLowerCase() || "general";
+          if (!bucketMap.has(key)) bucketMap.set(key, []);
+          bucketMap.get(key).push(item);
+        });
+        const bucketKeys = Array.from(bucketMap.keys()).sort();
+        const roundRobin = [];
+        let cursor = 0;
+        while (roundRobin.length < finalCount && bucketKeys.length > 0) {
+          const key = bucketKeys[cursor % bucketKeys.length];
+          const bucket = bucketMap.get(key);
+          if (!bucket || bucket.length === 0) {
+            bucketKeys.splice(cursor % bucketKeys.length, 1);
+            continue;
+          }
+          roundRobin.push(bucket.shift());
+          cursor += 1;
+        }
+        if (roundRobin.length < finalCount) {
+          const seen = new Set(roundRobin.map((item) => item?.id && String(item.id)));
+          for (const item of freshItems) {
+            const key = item?.id && String(item.id);
+            if (seen.has(key)) continue;
+            roundRobin.push(item);
+            if (roundRobin.length >= finalCount) break;
+          }
+        }
+        items = roundRobin;
+      } else {
+        items = freshItems.slice(0, finalCount);
+      }
       const referenceItems = items.map((item) => ({
         id: item.id,
         questionId: item.id,
@@ -1361,18 +1463,6 @@ export default function SATTraining({ onNavigate }) {
       setAutoGenerating(false);
     }
   }
-
-  const activeBank = useMemo(() => resolveBankConfig(autoAssign.bank), [autoAssign.bank]);
-  const activeSubject = activeBank.subjectLocked
-    ? activeBank.defaultSubject
-    : autoAssign.subject || activeBank.defaultSubject || SUBJECT_OPTIONS[0]?.value || "math";
-  const isTestBank = activeBank.id === "tests";
-  const showMathSelectors = activeBank.supportsUnitLesson && activeSubject === "math" && !isTestBank;
-  const showDifficultySelector = isTestBank && activeSubject === "math";
-  const activeLessons = MATH_LESSON_OPTIONS[autoAssign.unit] || [];
-  const subjectDisplayLabel =
-    SUBJECT_OPTIONS.find((opt) => opt.value === activeSubject)?.label?.EN || activeSubject;
-  const activeBankLabel = BANK_LABELS[activeBank.id] || "Question Bank";
 
   const ensureBankCatalog = useCallback(
     async (bankId) => {

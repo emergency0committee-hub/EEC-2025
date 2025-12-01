@@ -103,6 +103,7 @@ export default function AdminClassDetail({
   const [libraryPage, setLibraryPage] = useState(1);
   const getKind = (res) => String(res?.payload?.kindOverride || res?.kind || "").toLowerCase();
   const [previewUrl, setPreviewUrl] = useState("");
+  const [previewResourceQuestions, setPreviewResourceQuestions] = useState(null);
   const isPpt = (url) => /\.(pptx?|ppsx?)(\?|$)/i.test(String(url || ""));
   const buildPreviewUrl = (url) => {
     if (!url) return "";
@@ -110,6 +111,20 @@ export default function AdminClassDetail({
     return url;
   };
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const testingResources = resources.filter((r) => ["exam", "quiz", "test"].includes(getKind(r)));
+  const totalQuestionStats = questionStats.reduce(
+    (acc, row) => {
+      const total = Number(row.total) || 0;
+      const used = Number(row.used) || 0;
+      const remaining = Number(row.remaining) || 0;
+      return {
+        total: acc.total + total,
+        used: acc.used + used,
+        remaining: acc.remaining + remaining,
+      };
+    },
+    { total: 0, used: 0, remaining: 0 }
+  );
 
   const handleAddLesson = async (item) => {
     if (!item) return;
@@ -139,8 +154,8 @@ export default function AdminClassDetail({
             </Btn>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {["lessons", "classwork", "analytics"].map((id) => (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          {["lessons", "classwork", "testing", "analytics"].map((id) => (
             <button
               key={id}
               onClick={() => setClassTab(id)}
@@ -154,7 +169,13 @@ export default function AdminClassDetail({
                 fontWeight: 600,
               }}
             >
-              {id === "lessons" ? "Resources" : id === "classwork" ? "Assessments" : "Analysis"}
+              {id === "lessons"
+                ? "Resources"
+                : id === "classwork"
+                ? "Assessments"
+                : id === "testing"
+                ? "Testing"
+                : "Analysis"}
             </button>
           ))}
         </div>
@@ -523,6 +544,185 @@ export default function AdminClassDetail({
           </div>
         )}
 
+        {classTab === "testing" && (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Testing Toolkit</div>
+              <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0 }}>
+                Build timed quizzes or diagnostics and reuse saved tests from your resource library.
+              </p>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Subject</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {["math", "english"].map((value) => {
+                    const active = String(autoAssign.subject || "").toLowerCase() === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => handleAutoAssignChange("subject", value)}
+                        style={{
+                          border: "1px solid #d1d5db",
+                          borderRadius: 999,
+                          padding: "6px 14px",
+                          cursor: "pointer",
+                          background: active ? "#111827" : "#fff",
+                          color: active ? "#fff" : "#374151",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {value === "math" ? "Math" : "English"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                <Btn variant="primary" onClick={handleAutoGenerate} disabled={autoGenerating}>
+                  {autoGenerating ? "Building..." : "Generate Timed Set"}
+                </Btn>
+                <Btn variant="secondary" onClick={refreshQuestionStats}>
+                  Refresh Bank Stats
+                </Btn>
+                <Btn
+                  variant="secondary"
+                  onClick={() => {
+                    setLibraryOpen(true);
+                    loadResourceLibrary();
+                  }}
+                >
+                  Open Library
+                </Btn>
+              </div>
+              {!catalogLoaded && catalogBusy ? (
+                <div style={{ color: "#6b7280" }}>Loading question stats…</div>
+              ) : questionStats.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>Question availability will appear once the bank loads.</div>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  {[
+                    { label: "Total Questions", value: totalQuestionStats.total },
+                    { label: "Used in Class", value: totalQuestionStats.used },
+                    { label: "Remaining Pool", value: totalQuestionStats.remaining },
+                    { label: "Saved Tests", value: testingResources.length },
+                  ].map((stat) => (
+                    <div
+                      key={stat.label}
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 10,
+                        padding: 12,
+                        background: "#f9fafb",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{stat.label}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700 }}>{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Official Test Blueprint</div>
+              <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0 }}>
+                Every full SAT-style test must follow this structure:
+              </p>
+              <ul style={{ color: "#374151", lineHeight: 1.5, margin: "0 0 8px 18px", fontSize: 14 }}>
+                <li>4 total sections &mdash; two English and two Math.</li>
+                <li>Each English section: <strong>27 questions</strong>, <strong>32 minutes</strong>.</li>
+                <li>Each Math section: <strong>22 questions</strong>, <strong>35 minutes</strong>.</li>
+              </ul>
+              <p style={{ color: "#6b7280", fontSize: 13, margin: 0 }}>
+                Use the generator above to create each section separately, then schedule them together as one exam.
+              </p>
+            </div>
+
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Scheduled & Saved Tests</div>
+              {resLoading ? (
+                <div style={{ color: "#6b7280" }}>Loading…</div>
+              ) : testingResources.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>
+                  No testing resources yet. Use the generator above or add one from the library.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {testingResources.map((resource) => {
+                    const key = resource.id || resource.title || resource.url || Math.random().toString(36).slice(2);
+                    const meta = extractResourceMeta(resource) || {};
+                    const questions = decodeResourceQuestions(resource) || [];
+                    const durationSec =
+                      typeof meta.durationSec === "number"
+                        ? meta.durationSec
+                        : typeof meta.timeSec === "number"
+                        ? meta.timeSec
+                        : null;
+                    return (
+                      <div
+                        key={key}
+                        style={{
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 12,
+                          padding: 12,
+                          display: "grid",
+                          gap: 8,
+                          background: "#fff",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                          <div style={{ fontWeight: 700 }}>{resource.title || "Untitled Test"}</div>
+                          <span style={{ fontSize: 12, color: "#0ea5e9" }}>{String(getKind(resource)).toUpperCase()}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: "#4b5563" }}>
+                          <strong>{questions.length || meta.questionCount || 0}</strong> questions
+                          {durationSec ? (
+                            <>
+                              {" • "}
+                              <strong>{formatDuration(durationSec)}</strong> duration
+                            </>
+                          ) : null}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {resource.url && (
+                            <Btn variant="secondary" onClick={() => setPreviewUrl(buildPreviewUrl(resource.url))}>
+                              View
+                            </Btn>
+                          )}
+                          {questions.length > 0 && (
+                            <Btn
+                              variant="secondary"
+                              onClick={() =>
+                                setPreviewResourceQuestions({
+                                  title: resource.title || "Untitled Test",
+                                  questions,
+                                })
+                              }
+                            >
+                              Preview Questions
+                            </Btn>
+                          )}
+                          <Btn variant="secondary" onClick={() => addLibraryResourceToClass(resource)}>
+                            Reuse
+                          </Btn>
+                          <Btn variant="back" onClick={() => deleteResource(resource)}>
+                            Remove
+                          </Btn>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {classTab === "analytics" && (
           <>
             <AdaptiveInsightsCard
@@ -600,6 +800,164 @@ export default function AdminClassDetail({
           </>
         )}
           </Card>
+        {previewResourceQuestions && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.65)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              zIndex: 10000,
+            }}
+            onClick={() => setPreviewResourceQuestions(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#ffffff",
+                borderRadius: 12,
+                width: "min(960px, 95vw)",
+                maxHeight: "90vh",
+                display: "grid",
+                gridTemplateRows: "auto 1fr",
+                boxShadow: "0 15px 40px rgba(0,0,0,0.18)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 16px",
+                  borderBottom: "1px solid #e5e7eb",
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>
+                  {previewResourceQuestions.title} — Questions ({previewResourceQuestions.questions?.length || 0})
+                </div>
+                <Btn variant="back" onClick={() => setPreviewResourceQuestions(null)}>
+                  Close
+                </Btn>
+              </div>
+              <div
+                style={{
+                  padding: 16,
+                  overflowY: "auto",
+                  borderRadius: "0 0 12px 12px",
+                }}
+              >
+                {previewResourceQuestions.questions?.length ? (
+                  <div style={{ display: "grid", gap: 16 }}>
+                    {previewResourceQuestions.questions.map((q, idx) => {
+                      const hasChoices = Array.isArray(q.choices) && q.choices.length > 0;
+                      return (
+                        <div
+                          key={q.id || `${previewResourceQuestions.title}_${idx}`}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 12,
+                            background: "#fff",
+                            padding: 16,
+                            boxShadow: "0 8px 16px rgba(15,23,42,0.08)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              marginBottom: 10,
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>Question {idx + 1}</div>
+                            {hasChoices && (
+                              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                                Multiple Choice • select one answer
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              display: "grid",
+                              gap: 16,
+                              gridTemplateColumns: hasChoices ? "minmax(0, 2fr) minmax(0, 1fr)" : "1fr",
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: 12,
+                                border: "1px solid #e5e7eb",
+                                borderRadius: 10,
+                                background: "#f9fafb",
+                                color: "#1f2937",
+                                lineHeight: 1.6,
+                              }}
+                              dangerouslySetInnerHTML={{ __html: q.text || "" }}
+                            />
+                            {hasChoices && (
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gap: 8,
+                                }}
+                              >
+                                {q.choices.map((choice, choiceIdx) => {
+                                  const label = choice.label || choice.value || "";
+                                  const letter =
+                                    choice.value ||
+                                    choice.option ||
+                                    String.fromCharCode("A".charCodeAt(0) + choiceIdx);
+                                  return (
+                                    <div
+                                      key={`${q.id || idx}-${letter}`}
+                                      style={{
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: 10,
+                                        padding: "8px 12px",
+                                        display: "flex",
+                                        gap: 10,
+                                        alignItems: "flex-start",
+                                        background: "#fff",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: 28,
+                                          height: 28,
+                                          borderRadius: "50%",
+                                          border: "2px solid #94a3b8",
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          fontWeight: 700,
+                                          color: "#1f2937",
+                                        }}
+                                      >
+                                        {letter.toUpperCase()}
+                                      </div>
+                                      <div style={{ lineHeight: 1.4, color: "#374151" }}>{label || "Option"}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ color: "#6b7280" }}>No question details available for this test.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {libraryOpen && (
           <div
             role="dialog"

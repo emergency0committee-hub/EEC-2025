@@ -42,9 +42,9 @@ export const MATH_LESSON_OPTIONS = {
   ],
 };
 
-const DEFAULT_ASSIGNMENT_TABLE = import.meta.env.VITE_ASSIGNMENT_QUESTIONS_TABLE || "assignment_questions";
-const ENGLISH_TABLE = import.meta.env.VITE_ENGLISH_BANK_TABLE || "english_questions";
-const TEST_TABLE = import.meta.env.VITE_TEST_BANK_TABLE || "test_questions";
+const MATH_TABLE = import.meta.env.VITE_MATH_BANK_TABLE || "math_questions";
+const ENGLISH_TABLE = import.meta.env.VITE_ENGLISH_BANK_TABLE || "english_questions";
+const TEST_TABLE = import.meta.env.VITE_TEST_BANK_TABLE || "test_questions";
 const DIAGNOSTIC_TABLE = import.meta.env.VITE_DIAGNOSTIC_BANK_TABLE || "cg_sat_diagnostic_questions";
 const CAREER_TABLE = import.meta.env.VITE_CAREER_BANK_TABLE || "cg_career_questions";
 
@@ -52,7 +52,7 @@ export const BANKS = {
   math: {
     id: "math",
     labelKey: "tabMath",
-    table: DEFAULT_ASSIGNMENT_TABLE,
+    table: MATH_TABLE,
     supportsUnitLesson: true,
     subjectLocked: true,
     defaultSubject: "math",
