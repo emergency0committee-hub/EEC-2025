@@ -581,6 +581,32 @@ export default function Results({ resultId, participant, submission = null, onNa
 
       <CandidateDetailsCard rows={rows} />
 
+      <div
+        className="card section"
+        style={{
+          padding: 18,
+          borderRadius: 16,
+          border: "1px solid #dbeafe",
+          background: "#eff6ff",
+          color: "#1e3a8a",
+          marginTop: 12,
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Career Guidance Submission Rules</div>
+        <ul style={{ margin: 0, paddingLeft: 18, color: "#1e3a8a", lineHeight: 1.5 }}>
+          <li>
+            A submission is considered valid only if the student answers at least <strong>80% of the questions</strong>.
+          </li>
+          <li>
+            The total time spent must be <strong>30 minutes or more</strong>. Finishing earlier marks the result as incomplete.
+          </li>
+          <li>
+            Any attempt that fails either rule is automatically labeled “Marked Incomplete” and should be retaken under supervised
+            conditions.
+          </li>
+        </ul>
+      </div>
+
       {isIncomplete && (
         <div
           className="card"

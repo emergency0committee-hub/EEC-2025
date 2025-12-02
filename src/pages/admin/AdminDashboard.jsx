@@ -9,6 +9,103 @@ import { supabase } from "../../lib/supabase.js";
 import Results from "../Results.jsx";
 import { renderSubmissionToPdfA3 } from "../../lib/exportResults.jsx";
 
+const PROFILE_FIELDS =
+  "id,email,name,full_name,username,school,class_name,phone,role";
+const PROFILE_CHUNK_SIZE = 99;
+
+const normalizeEmail = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const deriveRowEmail = (row) => {
+  if (!row) return "";
+  const candidates = [
+    row.user_email,
+    row.participant?.email,
+    row.participant?.user_email,
+    row.email,
+    row.profile?.email,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return "";
+};
+
+const chunkArray = (arr, size) => {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const hydrateRowsWithProfiles = async (rows) => {
+  if (!Array.isArray(rows) || !rows.length) {
+    return rows || [];
+  }
+  const requestedEmails = new Map();
+  rows.forEach((row) => {
+    const raw = deriveRowEmail(row);
+    const normalized = normalizeEmail(raw);
+    if (normalized && !requestedEmails.has(normalized)) {
+      requestedEmails.set(normalized, raw);
+    }
+  });
+  if (!requestedEmails.size) {
+    return rows;
+  }
+  const emailList = Array.from(requestedEmails.values());
+  const profileMap = new Map();
+  for (const chunk of chunkArray(emailList, PROFILE_CHUNK_SIZE)) {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(PROFILE_FIELDS)
+        .in("email", chunk);
+      if (error) {
+        console.error("Failed to fetch profile chunk", error);
+        continue;
+      }
+      (data || []).forEach((profile) => {
+        const key = normalizeEmail(profile?.email);
+        if (key && !profileMap.has(key)) {
+          profileMap.set(key, profile);
+        }
+      });
+    } catch (err) {
+      console.error("Profile chunk error", err);
+    }
+  }
+  if (!profileMap.size) {
+    return rows;
+  }
+  return rows.map((row) => {
+    const normalized = normalizeEmail(deriveRowEmail(row));
+    const profile = normalized ? profileMap.get(normalized) : null;
+    if (!profile) return row;
+    const participant = {
+      ...(row.participant || {}),
+      email: profile.email || row.participant?.email || row.user_email,
+      name:
+        profile.name ||
+        profile.full_name ||
+        row.participant?.name ||
+        profile.username ||
+        profile.email,
+      school: row.participant?.school || profile.school || row.school,
+      class_name: row.participant?.class_name || profile.class_name,
+      phone: row.participant?.phone || profile.phone,
+    };
+    return {
+      ...row,
+      participant,
+      profile_match: profile,
+    };
+  });
+};
+
 export default function AdminDashboard({ onNavigate }) {
   AdminDashboard.propTypes = {
     onNavigate: PropTypes.func.isRequired,
@@ -403,18 +500,25 @@ export default function AdminDashboard({ onNavigate }) {
         }
 
         // Inject a non-deletable demo submission for preview
+        const hydratedRows = await hydrateRowsWithProfiles(rows);
         const demoTs = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+        const demoProfile = {
+          email: "demo@example.com",
+          name: "Demo Student",
+          school: "Preview Academy",
+          class_name: "Grade 11",
+          phone: "+961 70 123 456",
+        };
         const demo = {
           id: "demo-career",
           ts: demoTs,
           riasec_code: "RIA",
           participant: {
-            name: "Demo Student",
-            email: "demo@example.com",
-            school: "Preview Academy",
+            ...demoProfile,
             started_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
             finished_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
           },
+          profile_match: demoProfile,
           radar_data: [
             { code: "R", score: 68 }, { code: "I", score: 72 }, { code: "A", score: 55 },
             { code: "S", score: 61 }, { code: "E", score: 49 }, { code: "C", score: 58 },
@@ -428,7 +532,7 @@ export default function AdminDashboard({ onNavigate }) {
           pillar_counts: { discCount: {}, bloomCount: {}, sdgCount: {} },
           _demo: true,
         };
-        const finalRows = [demo, ...(rows || [])];
+        const finalRows = [demo, ...(hydratedRows || [])];
         setSubmissions(finalRows);
       } catch (err) {
         console.error("Failed to fetch submissions:", err);

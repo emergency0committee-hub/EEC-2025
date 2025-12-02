@@ -127,19 +127,42 @@ export default function AdminTable({
         </thead>
         <tbody>
           {submissions.map((sub) => {
-            const p = sub.participant || sub.profile || {};
-            const name = p.name || "-";
-            const school = p.school || "-";
-            const finished = p.finished_at || sub.ts || sub.created_at || null;
+            const profileSource =
+              sub.profile_match ||
+              sub.profile ||
+              {};
+            const participantFallback = sub.participant || {};
+            const name =
+              profileSource.name ||
+              profileSource.full_name ||
+              profileSource.username ||
+              participantFallback.name ||
+              "-";
+            const school =
+              profileSource.school ||
+              participantFallback.school ||
+              "-";
+            const finished =
+              participantFallback.finished_at ||
+              sub.ts ||
+              sub.created_at ||
+              null;
             const d = finished ? new Date(finished) : null;
             const dateStr = d
               ? d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })
               : "-";
             const timeStr = d ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "-";
-            const duration = fmtDuration(p.started_at, p.finished_at);
+            const duration = fmtDuration(
+              participantFallback.started_at,
+              participantFallback.finished_at
+            );
             let answered = "-";
-            if (Number.isFinite(p.answered_count)) answered = p.answered_count;
-            else if (Number.isFinite(p.answered)) answered = p.answered;
+            if (Number.isFinite(profileSource.answered_count))
+              answered = profileSource.answered_count;
+            else if (Number.isFinite(participantFallback.answered_count))
+              answered = participantFallback.answered_count;
+            else if (Number.isFinite(participantFallback.answered))
+              answered = participantFallback.answered;
             else if (Number.isFinite(sub.answered_count)) answered = sub.answered_count;
             else if (Number.isFinite(sub.answer_count)) answered = sub.answer_count;
             else if (Array.isArray(sub.answers)) answered = sub.answers.length;
