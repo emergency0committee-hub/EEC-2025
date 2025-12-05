@@ -6,11 +6,16 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1"
     />
+    <!-- Prevent stale index.html from being cached -->
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>EEC</title>
   </head>
   <body style="margin:0;background:#f8fafc;">
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <!-- Cache buster: bump the version string to force reloads when deploying -->
+    <script type="module" src="/src/main.jsx?v=20250126"></script>
   </body>
 </html>
