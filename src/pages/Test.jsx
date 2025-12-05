@@ -5,7 +5,6 @@ import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
-import TimerHeader from "../components/TimerHeader.jsx";
 import useCountdown from "../hooks/useCountdown.js";
 import { LANGS, STR } from "../i18n/strings.js";
 import PaletteOverlay from "./test/PaletteOverlay.jsx";
@@ -254,11 +253,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     };
   }, [fetchCareerCode]);
 
-  const [timerMin, setTimerMin] = useState(() => {
-    const saved = Number(localStorage.getItem("cg_timer_min") || 60);
-    return Number.isFinite(saved) && saved > 0 ? saved : 60;
-  });
-  useEffect(() => { localStorage.setItem("cg_timer_min", String(timerMin)); }, [timerMin]);
+  const timerMin = 60; // Fixed 60 minutes for auto-submit
   useEffect(() => {
     if (!authUser) {
       setAccountProfile(null);
@@ -318,18 +313,6 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     setPage(R_START);
   }, [isPreview, lang, examLang, R_START]);
 
-  useEffect(() => {
-    const handleStorage = (event) => {
-      if (event.key === "cg_timer_min") {
-        const next = Number(event.newValue);
-        if (Number.isFinite(next) && next > 0) {
-          setTimerMin(next);
-        }
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
-  }, []);
   const cd = useCountdown(timerMin * 60);
   const hasEndedRef = useRef(false);
   const [startTs, setStartTs] = useState(null);
@@ -908,15 +891,6 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   }
 
   /* ---------- Pages ---------- */
-  const Timer = (
-    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      {!examLocked && (
-        <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-      )}
-      <TimerHeader label={`Time ${cd.fmt(cd.remaining)}`} />
-    </div>
-  );
-
   // Localized getters for question content
   const pickLocalized = (obj, baseKey, activeLang) => {
     if (!obj) return "";
@@ -1044,7 +1018,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     const isLast = page === LAST;
     return (
       <PageWrap>
-        <HeaderBar title="Career Guidance Test" right={Timer} lang={lang} />
+        <HeaderBar title="Career Guidance Test" right={null} lang={lang} />
         <Card>
           <ProgressBar value={Math.round((indexFromPage(page)/totalQuestions)*100)} />
           <div style={{ marginTop: 18 }}>
