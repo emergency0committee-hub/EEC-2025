@@ -41,8 +41,13 @@ import {
 } from "../questionBank.js";
 
 const SCHOOL_OPTIONS = [
+  { value: "Al - Jinan International School", label: "Al - Jinan International School" },
+  { value: "Canada Educational Center", label: "Canada Educational Center" },
+  { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
   { value: "EEC", label: "EEC" },
   { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
+  { value: "Saints Coeurs - Andket", label: "Saints Coeurs - Andket" },
+  { value: "Sir El Dinniyeh Secondary Public School", label: "Sir El Dinniyeh Secondary Public School" },
 ];
 
 const GRADE_OPTIONS = [

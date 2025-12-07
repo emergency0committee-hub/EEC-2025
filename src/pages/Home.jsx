@@ -129,7 +129,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   const handleCareerClick = async (event) => {
     if (isSchoolAccount) {
       event?.preventDefault?.();
-      return onNavigate("career-dashboard", null, event);
+      return onNavigate("career-dashboard", { school: currentUser?.school || "" }, event);
     }
     // If no user info, just go to test
     if (!currentUser?.email) {

@@ -13,8 +13,8 @@ const COPY = {
   EN: {
     title: "Manage Users",
     subtitle: "Search for a user, adjust their role, or reset their password.",
-    searchLabel: "Select User",
-    searchPlaceholder: "Type name, email, or username",
+    searchLabel: "Select School",
+    searchPlaceholder: "Choose a school",
     roleLabel: "Role",
     roleHint: "Users with the Admin role can access the question bank.",
     aiAccessLabel: "AI Educator Access",
@@ -37,8 +37,8 @@ const COPY = {
   AR: {
     title: "????? ??????????",
     subtitle: "???? ?? ????????? ???? ???? ?? ??? ????? ???? ??????.",
-    searchLabel: "?????? ????????",
-    searchPlaceholder: "???? ????? ?? ?????? ?? ??? ????????",
+    searchLabel: "?????? ??????",
+    searchPlaceholder: "???? ???????",
     roleLabel: "?????",
     roleHint: "?????????? ???? Admin ?????? ?????? ??? ??? ???????.",
     aiAccessLabel: "?????? AI Educator",
@@ -65,8 +65,8 @@ const COPY = {
     aiAccessHint: "Autorisez cet enseignant ? utiliser l'espace AI Educator.",
     aiAccessButton: "Enregistrer l'acc?s AI",
     aiAccessSaved: "Acc?s AI mis ? jour.",
-    searchLabel: "Sélectionner un utilisateur",
-    searchPlaceholder: "Tapez nom, e-mail ou identifiant",
+    searchLabel: "Sélectionner une école",
+    searchPlaceholder: "Choisissez une école",
     roleLabel: "Rôle",
     roleHint: "Les utilisateurs avec le rôle Admin accèdent à la banque de questions.",
     passwordLabel: "Nouveau mot de passe",
@@ -115,7 +115,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const [usersLoading, setUsersLoading] = useState(true);
   const [userError, setUserError] = useState("");
   const [users, setUsers] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [schoolFilter, setSchoolFilter] = useState("");
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [roleDraft, setRoleDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
@@ -153,16 +153,12 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
         setSelectedUserId(focusUser ? focusUser.id : null);
         setRoleDraft(focusUser?.role || "");
         setPasswordDraft("");
-        if (focusUser) {
-          setSearchTerm(focus.label || formatUserLabel(focusUser));
-        } else {
-          setSearchTerm("");
-        }
+        setSchoolFilter("");
       } else {
         setSelectedUserId(null);
         setRoleDraft("");
         setPasswordDraft("");
-        setSearchTerm("");
+        setSchoolFilter("");
       }
     } catch (err) {
       console.error("manage-users load", err);
@@ -190,19 +186,13 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const PAGE_SIZE = 5;
 
   const visibleUsers = useMemo(() => {
-    if (!searchTerm) return filteredUsers;
-    const lower = searchTerm.toLowerCase();
-    return filteredUsers.filter((user) => {
-      const candidates = [
-        formatUserLabel(user).toLowerCase(),
-        (user.email || "").toLowerCase(),
-        (user.name || "").toLowerCase(),
-        (user.username || "").toLowerCase(),
-        (user.school || "").toLowerCase(),
-      ];
-      return candidates.some((field) => field.includes(lower));
-    });
-  }, [filteredUsers, searchTerm]);
+    let list = filteredUsers;
+    if (schoolFilter) {
+      const lower = schoolFilter.toLowerCase();
+      list = list.filter((user) => (user.school || "").toLowerCase() === lower);
+    }
+    return list;
+  }, [filteredUsers, schoolFilter]);
 
   const pagedUsers = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -212,7 +202,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const totalPages = Math.max(1, Math.ceil(visibleUsers.length / PAGE_SIZE));
 
   useEffect(() => {
-    setSearchTerm("");
+    setSchoolFilter("");
     setSelectedUserId(null);
     setPage(1);
   }, [categoryFilter]);
@@ -429,24 +419,31 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
           </label>
           <label style={{ display: "grid", gap: 6, minWidth: 240 }}>
             <span style={{ fontWeight: 600 }}>{copy.searchLabel}</span>
-            <input
-              type="text"
-              value={searchTerm}
+            <select
+              value={schoolFilter}
               disabled={!categoryFilter}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={copy.searchPlaceholder}
+              onChange={(e) => {
+                setSchoolFilter(e.target.value);
+                setSelectedUserId(null);
+                setPage(1);
+              }}
               style={{
                 padding: "10px 12px",
                 borderRadius: 8,
                 border: "1px solid #d1d5db",
                 fontSize: 14,
               }}
-            />
+            >
+              <option value="">{copy.searchPlaceholder}</option>
+              {SCHOOL_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </label>
           <Btn
             variant="secondary"
             onClick={() => {
-              setSearchTerm("");
+              setSchoolFilter("");
               setSelectedUserId(null);
             }}
           >
@@ -716,9 +713,11 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
 
 const SCHOOL_OPTIONS = [
   { value: "", label: "Select school" },
-  { value: "EEC", label: "EEC" },
-  { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
-  { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
   { value: "Al - Jinan International School", label: "Al - Jinan International School" },
   { value: "Canada Educational Center", label: "Canada Educational Center" },
+  { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
+  { value: "EEC", label: "EEC" },
+  { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
+  { value: "Saints Coeurs - Andket", label: "Saints Coeurs - Andket" },
+  { value: "Sir El Dinniyeh Secondary Public School", label: "Sir El Dinniyeh Secondary Public School" },
 ];
