@@ -18,12 +18,27 @@ export default function SATDashboard({ onNavigate }) {
   useEffect(() => {
     (async () => {
       try {
-        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "cg_sat_results";
-        let resp = await supabase.from(table).select("*").order("ts", { ascending: false });
+        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "diagnostic_sat_results";
+        // Only pull summary rows (module_key = 'summary') for listing
+        let resp = await supabase
+          .from(table)
+          .select("*")
+          .eq("module_key", "summary")
+          .order("created_at", { ascending: false });
         if (resp.error) {
-          try { resp = await supabase.from(table).select("*").order("id", { ascending: false }); } catch {}
+          try { resp = await supabase.from(table).select("*").eq("module_key", "summary").order("id", { ascending: false }); } catch {}
         }
         let rows = (resp.error ? [] : (resp.data || []));
+        rows = rows.map((r) => {
+          let parsed = {};
+          try { parsed = r.question_text ? JSON.parse(r.question_text) : {}; } catch {}
+          return {
+            ...r,
+            ts: r.created_at || r.ts || null,
+            pillar_agg: { summary: parsed.summary || null, skills: parsed.skills || null, difficulty: parsed.difficulty || null },
+            pillar_counts: { modules: parsed.modules || null, elapsedSec: parsed.elapsedSec || null },
+          };
+        });
         // Inject non-deletable demo SAT submission
         const demo = {
           id: "demo-sat",
@@ -89,7 +104,7 @@ export default function SATDashboard({ onNavigate }) {
         alert("This preview submission cannot be deleted.");
         return;
       }
-      const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "cg_sat_results";
+        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "diagnostic_sat_results";
       const { error } = await supabase.from(table).delete().eq("id", submission.id);
       if (error) throw error;
       setRows((r) => r.filter((x) => x.id !== submission.id));

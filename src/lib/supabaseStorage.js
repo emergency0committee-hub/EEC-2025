@@ -71,27 +71,42 @@ export async function saveSatResult({ summary, skills = null, difficulty = null,
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("Supabase is not configured");
-  const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "cg_sat_results";
+  // Use the per-question answers table to also hold a single summary row
+  const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "diagnostic_sat_results";
   const ts = new Date().toISOString();
   // Attach user email if available
   let userEmail = null;
   try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
-  const row = {
-    ts,
+  const submissionId = crypto.randomUUID ? crypto.randomUUID() : `sat_${Math.random().toString(36).slice(2, 10)}`;
+  const payload = { summary, skills, difficulty, modules, elapsedSec, answers };
+  const row = cleanse({
+    id: submissionId,
+    submission_id: submissionId,
     user_email: userEmail,
-    participant: null,
-    // store diagnostic payload
-    answers: answers || null,
-    radar_data: null,
-    area_percents: null,
-    pillar_agg: { summary, skills, difficulty },
-    pillar_counts: { modules, elapsedSec },
-    riasec_code: null,
-    top_codes: null,
-  };
-  const { error } = await supabase.from(table).insert([row]);
+    module_key: "summary",
+    question_id: "summary",
+    question_text: JSON.stringify(payload),
+    answer_type: "summary",
+    time_sec: Number.isFinite(elapsedSec) ? elapsedSec : null,
+    created_at: ts,
+  });
+  const { data, error } = await supabase.from(table).insert([row]).select().single();
   if (error) throw error;
-  return { ok: true, ts };
+  return data || { id: submissionId, submission_id: submissionId, user_email: userEmail, created_at: ts };
+}
+
+// Save per-question diagnostic SAT answers into a dedicated table
+export async function saveSatAnswerRows(rows = []) {
+  if (!Array.isArray(rows) || rows.length === 0) return { ok: true };
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) throw new Error("Supabase is not configured");
+  // Force per-question rows into the diagnostic answers table to avoid schema mismatches
+  const table = "diagnostic_sat_results";
+  const payload = rows.map((r) => cleanse(r));
+  const { error } = await supabase.from(table).insert(payload);
+  if (error) throw error;
+  return { ok: true };
 }
 
 export async function beginSatTrainingSession({

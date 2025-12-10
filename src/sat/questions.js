@@ -79,6 +79,9 @@ export function normalizeDifficulty(value) {
 const DEFAULT_RW_MODULES = 2;
 const DEFAULT_RW_PER_MODULE = 28;
 const DEFAULT_RW_TOTAL = DEFAULT_RW_MODULES * DEFAULT_RW_PER_MODULE;
+const DEFAULT_MATH_MODULES = 2;
+const DEFAULT_MATH_PER_MODULE = 22;
+const DEFAULT_MATH_TOTAL = DEFAULT_MATH_MODULES * DEFAULT_MATH_PER_MODULE;
 
 const mapEnglishRow = (row, idx, prefix = "rw_db") => {
   const qtext = String(row.question || row.prompt || "").trim();
@@ -87,22 +90,25 @@ const mapEnglishRow = (row, idx, prefix = "rw_db") => {
   const skillInfo = normalizeEnglishSkill(rawSkill);
   const difficultyRaw = row.difficulty || row.level || "";
   const difficultyKey = normalizeDifficulty(difficultyRaw);
-  const choices = [
-    { value: "A", label: row.answer_a || row.answerA || "" },
-    { value: "B", label: row.answer_b || row.answerB || "" },
-    { value: "C", label: row.answer_c || row.answerC || "" },
-    { value: "D", label: row.answer_d || row.answerD || "" },
-  ].filter((ch) => String(ch.label || "").trim().length > 0);
-  const correct = String(row.correct || row.correct_answer || "")
-    .trim()
-    .replace(/[^A-D]/gi, "")
-    .toUpperCase();
+  const qTypeRaw = String(row.question_type || row.type || "").toLowerCase();
+  const isFill = qTypeRaw === "fill";
+  const choices = isFill
+    ? []
+    : [
+        { value: "A", label: row.answer_a || row.answerA || "" },
+        { value: "B", label: row.answer_b || row.answerB || "" },
+        { value: "C", label: row.answer_c || row.answerC || "" },
+        { value: "D", label: row.answer_d || row.answerD || "" },
+      ].filter((ch) => String(ch.label || "").trim().length > 0);
+  const correctRaw = String(row.correct || row.correct_answer || "").trim();
+  const correct = isFill ? correctRaw : correctRaw.replace(/[^A-D]/gi, "").toUpperCase();
   return {
     id: row.id || `${prefix}_${idx}`,
     text: qtext,
     passage: row.passage || null,
     choices,
     correct: correct || null,
+    answerType: isFill ? "text" : "choice",
     skill: rawSkill || skillInfo.label || null,
     skillKey: skillInfo.key || null,
     difficulty: difficultyRaw || null,
@@ -148,12 +154,11 @@ const isMissingTableError = (error) => {
   return /does not exist/i.test(message) || /schema cache/i.test(message) || /not found/i.test(message);
 };
 
-async function loadRWFromSupabase() {
-  const table = import.meta.env.VITE_SAT_RW_TABLE || "cg_sat_questions";
+async function loadRWFromSupabase(subject = "ENGLISH", targetCount = DEFAULT_RW_TOTAL) {
+  const table = import.meta.env.VITE_SAT_RW_TABLE || "cg_sat_diagnostic_questions";
   const limit = Number(import.meta.env.VITE_SAT_RW_LIMIT || 500);
-  const targetCount = Number(import.meta.env.VITE_SAT_RW_TARGET || DEFAULT_RW_TOTAL);
   try {
-    const { data, error } = await supabase.from(table).select("*").limit(limit);
+    const { data, error } = await supabase.from(table).select("*").eq("subject", subject).limit(limit);
     if (error) {
       if (isMissingTableError(error) && shouldWarnMissing(table)) {
         console.warn(`SAT questions: "${table}" not available`, error.message || error);
@@ -163,12 +168,14 @@ async function loadRWFromSupabase() {
     }
     if (!data || !data.length) return null;
     const mapped = data
-      .map((row, idx) => mapEnglishRow(row, idx, "rw_supabase"))
+      .map((row, idx) => mapEnglishRow(row, idx, subject === "MATH" ? "math_supabase" : "rw_supabase"))
       .filter(Boolean);
     if (!mapped.length) return null;
     const randomized = shuffle(mapped);
     const selected = randomized.slice(0, Math.min(randomized.length, targetCount));
-    const modules = splitIntoModules(selected, DEFAULT_RW_MODULES, DEFAULT_RW_PER_MODULE);
+    const moduleCount = subject === "MATH" ? DEFAULT_MATH_MODULES : DEFAULT_RW_MODULES;
+    const perModule = subject === "MATH" ? DEFAULT_MATH_PER_MODULE : DEFAULT_RW_PER_MODULE;
+    const modules = splitIntoModules(selected, moduleCount, perModule);
     return modules;
   } catch (err) {
     if (isMissingTableError(err) && shouldWarnMissing(table)) {
@@ -232,7 +239,7 @@ async function loadRWFromCSV() {
 // Load RW Modules from Supabase first, CSV fallback
 export async function loadRWModules() {
   try {
-    const supabaseModules = await loadRWFromSupabase();
+    const supabaseModules = await loadRWFromSupabase("ENGLISH", DEFAULT_RW_TOTAL);
     if (
       supabaseModules &&
       supabaseModules.length &&
@@ -285,3 +292,19 @@ export const MATH_MODULES = [
     ], correct: "C" },
   ],
 ];
+
+export async function loadMathModules() {
+  try {
+    const supabaseModules = await loadRWFromSupabase("MATH", DEFAULT_MATH_TOTAL);
+    if (
+      supabaseModules &&
+      supabaseModules.length &&
+      supabaseModules.some((mod) => Array.isArray(mod) && mod.length > 0)
+    ) {
+      return supabaseModules;
+    }
+  } catch (err) {
+    if (!isMissingTableError(err)) throw err;
+  }
+  return Array.from({ length: DEFAULT_MATH_MODULES }, (_, i) => MATH_MODULES[i] || []);
+}

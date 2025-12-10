@@ -8,11 +8,11 @@ import PaletteOverlay from "../../test/PaletteOverlay.jsx";
 import useCountdown from "../../../hooks/useCountdown.js";
 import "katex/dist/katex.min.css";
 
-import { supabase } from "../../../lib/supabase.js";
-import { saveSatResult, saveSatTraining } from "../../../lib/supabaseStorage.js";
-import { loadRWModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../../sat/questions.js";
+import { saveSatResult, saveSatTraining, saveSatAnswerRows } from "../../../lib/supabaseStorage.js";
+import { loadRWModules, loadMathModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../../sat/questions.js";
 import { renderMathText } from "../../../lib/mathText.jsx";
 import { fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
+import { supabase } from "../../../lib/supabase.js";
 import { BANKS, mapBankQuestionToResource } from "../../../lib/questionBanks.js";
 
 const TRAINING_KIND_WHITELIST = ["classwork", "homework", "quiz", "lecture", "test"];
@@ -28,7 +28,13 @@ const compareAnswer = (expected, actual) => {
   if (expected == null || expected === "") return null;
   if (actual == null || actual === "") return false;
   const norm = (val) => String(val).trim().toLowerCase();
-  return norm(expected) === norm(actual);
+  const expectedList = String(expected)
+    .split(/[\n\r,;|]+/)
+    .map((e) => norm(e))
+    .filter(Boolean);
+  if (expectedList.length === 0) return null;
+  const actualNorm = norm(actual);
+  return expectedList.includes(actualNorm);
 };
 
 export default function SATTestInterface({ onNavigate, practice = null, preview = false, mode = "exam" }) {
@@ -54,7 +60,61 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   }, []);
   // Build modules [RW1, RW2, M1, M2]
   const [rwMods, setRwMods] = useState([[], []]);
+  const [mathMods, setMathMods] = useState([[], []]);
+  const [mathPool, setMathPool] = useState([]);
+  const [mathSectionQuestions, setMathSectionQuestions] = useState([[], []]); // [section1, section2]
+
   useEffect(() => { (async () => { const rw = await loadRWModules(); setRwMods(rw); })(); }, []);
+  useEffect(() => { (async () => { const math = await loadMathModules(); setMathMods(math); })(); }, []);
+  useEffect(() => {
+    // Load full diagnostic math pool (we need buckets by difficulty)
+    (async () => {
+      try {
+        const table = import.meta.env.VITE_DIAGNOSTIC_BANK_TABLE || "cg_sat_diagnostic_questions";
+        const { data, error } = await supabase
+          .from(table)
+          .select("*")
+          .eq("subject", "MATH")
+          .limit(500);
+        if (error) {
+          console.warn("Load diagnostic math pool failed", error.message || error);
+          return;
+        }
+        const mapped = (data || []).map((row, idx) => {
+          const qtext = String(row.question || "").trim();
+          if (!qtext) return null;
+          const qTypeRaw = String(row.question_type || row.type || "").toLowerCase();
+          const isFill = qTypeRaw === "fill";
+          const choices = isFill
+            ? []
+            : [
+                { value: "A", label: row.answer_a || row.answerA || "" },
+                { value: "B", label: row.answer_b || row.answerB || "" },
+                { value: "C", label: row.answer_c || row.answerC || "" },
+                { value: "D", label: row.answer_d || row.answerD || "" },
+              ].filter((ch) => String(ch.label || "").trim().length > 0);
+          const correctRaw = String(row.correct || row.correct_answer || "").trim();
+          const skillInfo = normalizeMathSkill(row.skill || row.lesson || row.unit || "");
+          return {
+            id: row.id || `math_diag_${idx}`,
+            text: qtext,
+            passage: row.passage || null,
+            choices,
+            correct: correctRaw || null,
+            answerType: isFill ? "text" : "choice",
+            skill: row.skill || "",
+            skillKey: skillInfo?.lessonKey || null,
+            unitKey: skillInfo?.unitKey || null,
+            difficulty: row.difficulty || row.hardness || "",
+            difficultyKey: normalizeDifficulty(row.difficulty || row.hardness || ""),
+          };
+        }).filter(Boolean);
+        setMathPool(mapped);
+      } catch (err) {
+        console.warn("Failed to load diagnostic math pool", err);
+      }
+    })();
+  }, []);
   const [loadedCustom, setLoadedCustom] = useState(null); // { questions, durationSec, title, meta, kind }
   const reviewOnly = Boolean(practice?.reviewOnly);
   const practiceDeadlineIso =
@@ -106,6 +166,8 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     if (!Array.isArray(items)) return [];
     return items.map((item, idx) => {
       const q = item || {};
+      const rawType = String(q.question_type || q.type || q.answerType || "").toLowerCase();
+      const isFill = rawType.startsWith("f") || rawType === "text";
       const hasChoices = Array.isArray(q.choices) && q.choices.some((ch) => ch && (ch.label || ch.text || ch.value));
       const choices = hasChoices
         ? q.choices
@@ -119,7 +181,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         ...q,
         id: q.id || `q_${idx + 1}`,
         choices,
-        answerType: q.answerType || (hasChoices ? "choice" : "numeric"),
+        answerType: q.answerType || (isFill ? "text" : (hasChoices ? "choice" : "numeric")),
       };
     });
   };
@@ -236,6 +298,38 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     })();
   }, [practice, loadedCustom]);
 
+  const sampleQuestions = useCallback((pool = [], count = 22, excludeIds = new Set(), fallback = []) => {
+    const filtered = pool.filter((q) => !excludeIds.has(q.id));
+    const merged = filtered.length >= count ? filtered : filtered.concat(fallback.filter((q) => !excludeIds.has(q.id)));
+    const arr = merged.slice();
+    for (let i = arr.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, Math.min(count, arr.length));
+  }, []);
+
+  const mathBuckets = useMemo(() => {
+    const easy = [];
+    const medium = [];
+    const hard = [];
+    mathPool.forEach((q) => {
+      const diff = normalizeDifficulty(q.difficulty || q.difficultyKey || "");
+      if (diff === "hard") hard.push(q);
+      else if (diff === "medium") medium.push(q);
+      else easy.push(q);
+    });
+    return { easy, medium, hard };
+  }, [mathPool]);
+
+  useEffect(() => {
+    if (!mathBuckets.medium.length) return;
+    const first = sampleQuestions(mathBuckets.medium, 22);
+    const exclude = new Set(first.map((q) => q.id));
+    const second = sampleQuestions(mathBuckets.easy, 22, exclude, mathBuckets.medium);
+    setMathSectionQuestions([first, second]);
+  }, [mathBuckets, sampleQuestions]);
+
   const modules = useMemo(() => {
     if (practice) {
       // Custom quiz (from Classwork/Homework/Quiz CSV) or loaded by id
@@ -261,7 +355,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       }
       // Simple practice: one module per selection
       if (practice.section === 'MATH') {
-        const m = MATH_MODULES[0] || [];
+        const m = mathMods[0] && mathMods[0].length ? mathMods[0] : (MATH_MODULES[0] || []);
         const meta = mergePracticeMeta(practice.kind || 'classwork', practice.meta, 15 * 60);
         return [{ key: 'pm', title: 'Math Practice', durationSec: meta.durationSec, questions: m, meta, kind: practice.kind || 'classwork' }];
       }
@@ -271,10 +365,24 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     return [
       { key: "rw1", title: "Reading & Writing - Module 1", durationSec: 35 * 60, questions: rwMods[0] || [] },
       { key: "rw2", title: "Reading & Writing - Module 2", durationSec: 35 * 60, questions: rwMods[1] || [] },
-      { key: "m1",  title: "Math - Module 1",              durationSec: 35 * 60, questions: MATH_MODULES[0] || [] },
-      { key: "m2",  title: "Math - Module 2",              durationSec: 35 * 60, questions: MATH_MODULES[1] || [] },
+      {
+        key: "m1",
+        title: "Math - Module 1",
+        durationSec: 35 * 60,
+        questions:
+          (mathSectionQuestions[0] && mathSectionQuestions[0].length ? mathSectionQuestions[0] : null) ||
+          (mathMods[0] && mathMods[0].length ? mathMods[0] : (MATH_MODULES[0] || [])),
+      },
+      {
+        key: "m2",
+        title: "Math - Module 2",
+        durationSec: 35 * 60,
+        questions:
+          (mathSectionQuestions[1] && mathSectionQuestions[1].length ? mathSectionQuestions[1] : null) ||
+          (mathMods[1] && mathMods[1].length ? mathMods[1] : (MATH_MODULES[1] || [])),
+      },
     ];
-  }, [rwMods, practice, loadedCustom]);
+  }, [rwMods, practice, loadedCustom, mathSectionQuestions, mathMods]);
 
   const [modIdx, setModIdx] = useState(0);
   const mod = modules[modIdx];
@@ -283,6 +391,8 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   const resumeEnabled = Boolean(practice?.meta?.resumeMode === "resume" && practice?.resourceId);
   const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
   const [answers, setAnswers] = useState({}); // { modKey: { qid: value } }
+  const updateAnswerRef = useRef(null);
+  const handleNextModuleRef = useRef(null);
   const [pendingReviewAnswers, setPendingReviewAnswers] = useState(null);
   const [resumeLoaded, setResumeLoaded] = useState(!resumeEnabled);
   const [reviewAnswersLoaded, setReviewAnswersLoaded] = useState(!reviewOnly);
@@ -542,6 +652,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       return { ...s, [mod.key]: next };
     });
   };
+  updateAnswerRef.current = updateAnswer;
   const toggleFlag = (qid) => {
     if (finalTimeout || reviewOnly) return;
     setFlags((s) => ({ ...s, [mod.key]: { ...(s[mod.key] || {}), [qid]: !((s[mod.key] || {})[qid]) } }));
@@ -550,6 +661,24 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   const handleNextModule = (finishReason = "submit") => {
     if (modIdx + 1 < totalMods) {
       captureCurrentQuestionTime();
+      if (mod?.key === "m1" && mathBuckets) {
+        const a = answers[mod.key] || {};
+        let correctCount = 0;
+        (mod.questions || []).forEach((q) => {
+          if (isAnswerCorrect(q, a[q.id])) correctCount += 1;
+        });
+        const targetBucket = correctCount >= 17 ? mathBuckets.hard : mathBuckets.easy;
+        const exclude = new Set((mathSectionQuestions[0] || []).map((q) => q.id));
+        const fallback =
+          correctCount >= 17
+            ? [...mathBuckets.medium, ...mathBuckets.easy]
+            : [...mathBuckets.medium];
+        const nextQs = sampleQuestions(targetBucket, 22, exclude, fallback);
+        setMathSectionQuestions(([first]) => [
+          first && first.length ? first : (mod.questions || []),
+          nextQs,
+        ]);
+      }
       setSectionActive(false);
       setModIdx(modIdx + 1);
     } else {
@@ -559,6 +688,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       prepareSubmit(finishReason);
     }
   };
+  handleNextModuleRef.current = handleNextModule;
 
   const isAnswerCorrect = (question, value) => {
     if (!question) return false;
@@ -635,6 +765,81 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     catch {}
   };
 
+  const MATH_SKILL_MAP = {
+    // Algebra
+    "linear equations and inequalities": { unitKey: "algebra", lessonKey: "linear_equations" },
+    "linear equations": { unitKey: "algebra", lessonKey: "linear_equations" },
+    "linear functions": { unitKey: "algebra", lessonKey: "linear_functions" },
+    "systems of linear equations": { unitKey: "algebra", lessonKey: "systems" },
+    "systems": { unitKey: "algebra", lessonKey: "systems" },
+    // PSDA
+    "ratios, proportions, and percentages": { unitKey: "psda", lessonKey: "ratios" },
+    "ratios": { unitKey: "psda", lessonKey: "ratios" },
+    "rates": { unitKey: "psda", lessonKey: "rates" },
+    "probability": { unitKey: "psda", lessonKey: "probability" },
+    "data interpretation": { unitKey: "psda", lessonKey: "data_interpretation" },
+    "statistics": { unitKey: "psda", lessonKey: "statistics" },
+    // Advanced Math
+    "rational expressions and equations": { unitKey: "adv_math", lessonKey: "rational_expressions" },
+    "quadratic functions": { unitKey: "adv_math", lessonKey: "quadratic_functions" },
+    "exponential functions": { unitKey: "adv_math", lessonKey: "exponential_functions" },
+    "exponent rules": { unitKey: "adv_math", lessonKey: "exponent_rules" },
+    "polynomial expressions": { unitKey: "adv_math", lessonKey: "polynomial_expressions" },
+    // Geometry & Trig
+    "angle relationships": { unitKey: "geo_trig", lessonKey: "angle_relationships" },
+    "coordinate geometry": { unitKey: "geo_trig", lessonKey: "coordinate_geometry" },
+    "area and perimeter": { unitKey: "geo_trig", lessonKey: "area_perimeter" },
+    "right triangle trigonometry": { unitKey: "geo_trig", lessonKey: "right_triangle_trig" },
+    "volume and surface area": { unitKey: "geo_trig", lessonKey: "volume_surface_area" },
+  };
+
+  const normalizeMathSkill = (value) => {
+    const raw = (value || "").toString().trim();
+    if (!raw) return null;
+    const key = raw.toLowerCase().replace(/[^a-z0-9&]+/g, " ").trim();
+    return MATH_SKILL_MAP[key] || null;
+  };
+
+  const buildAnswerRows = (submissionId, savedEmail = null) => {
+    if (!submissionId) return [];
+    const userEmail = savedEmail || authUser?.email || null;
+    const rows = [];
+    modules.forEach((m) => {
+      const section = m.key.startsWith("rw") ? "ENGLISH" : "MATH";
+      const a = answers[m.key] || {};
+      (m.questions || []).forEach((q) => {
+        if (!q) return;
+        const selected = a[q.id] ?? null;
+        const correct = q.correct ?? q.correct_answer ?? null;
+        const answerType = q.answerType || ((Array.isArray(q.choices) && q.choices.length) ? "choice" : "text");
+        const timeSec = timesRef.current?.[q.id] ?? null;
+        const mathSkillInfo =
+          q.skillKey && q.unitKey
+            ? { unitKey: q.unitKey, lessonKey: q.skillKey }
+            : normalizeMathSkill(q.skill || q.lesson || q.unit || "");
+        const englishSkill = normalizeEnglishSkill(q.skill || "").key || q.skill || null;
+        rows.push({
+          submission_id: submissionId,
+          user_email: userEmail,
+          module_key: m.key,
+          question_id: q.id,
+          question_text: q.text || q.question || q.prompt || "",
+          subject: section,
+          skill: section === "MATH" ? (mathSkillInfo?.lessonKey || q.skill || null) : englishSkill,
+          unit: section === "MATH" ? (mathSkillInfo?.unitKey || null) : null,
+          lesson: section === "MATH" ? (mathSkillInfo?.lessonKey || null) : null,
+          difficulty: q.difficultyKey || normalizeDifficulty(q.difficulty || ""),
+          answer_type: answerType,
+          selected: selected == null ? null : String(selected),
+          correct_answer: correct == null ? null : String(correct),
+          is_correct: isAnswerCorrect(q, selected),
+          time_sec: Number.isFinite(timeSec) ? timeSec : null,
+        });
+      });
+    });
+    return rows;
+  };
+
   const prepareSubmit = (reason = "submit") => {
     if (summaryModal.open) return;
     const finishedAt = Date.now();
@@ -642,10 +847,50 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     const elapsedSec = Math.round((finishedAt - startedAtRef.current) / 1000);
     captureCurrentQuestionTime();
     const summary = scoreSummary();
-    const skillPercents = aggregatePercentsBy((q, section) => {
+    // Reading/Writing skills (flat map)
+    const rwSkillPercents = aggregatePercentsBy((q, section) => {
       if (section !== "rw") return null;
       return q.skillKey || normalizeEnglishSkill(q.skill || "").key;
+    }).rw || {};
+
+    // Math skills (nested unit/lesson map)
+    const mathLessonCounts = {};
+    modules.forEach((m) => {
+      const section = m.key.startsWith("rw") ? "rw" : "math";
+      if (section !== "math") return;
+      const a = answers[m.key] || {};
+      (m.questions || []).forEach((q) => {
+        const skillInfo = q.skillKey && q.unitKey
+          ? { unitKey: q.unitKey, lessonKey: q.skillKey }
+          : normalizeMathSkill(q.skill || q.lesson || q.unit || "");
+        if (!skillInfo) return;
+        const { unitKey, lessonKey } = skillInfo;
+        if (!unitKey || !lessonKey) return;
+        const bucket = mathLessonCounts[lessonKey] || { correct: 0, total: 0, unitKey, lessonKey };
+        bucket.total += 1;
+        if (isAnswerCorrect(q, a[q.id])) bucket.correct += 1;
+        mathLessonCounts[lessonKey] = bucket;
+      });
     });
+    const mathSkillPercents = {};
+    Object.entries(mathLessonCounts).forEach(([lessonKey, data]) => {
+      const pct = data.total ? Math.round((data.correct / data.total) * 100) : 0;
+      const unitKey = data.unitKey;
+      if (!mathSkillPercents[unitKey]) {
+        mathSkillPercents[unitKey] = { pct: 0, lessons: {}, _counts: { correct: 0, total: 0 } };
+      }
+      mathSkillPercents[unitKey].lessons[lessonKey] = pct;
+      mathSkillPercents[unitKey]._counts.correct += data.correct;
+      mathSkillPercents[unitKey]._counts.total += data.total;
+    });
+    Object.entries(mathSkillPercents).forEach(([unitKey, info]) => {
+      const { correct, total } = info._counts;
+      info.pct = total ? Math.round((correct / total) * 100) : 0;
+      delete info._counts;
+    });
+
+    const skillPercents = { rw: rwSkillPercents, math: mathSkillPercents };
+
     const difficultyPercents = aggregatePercentsBy((q, section) => {
       if (section !== "rw") return null;
       return q.difficultyKey || normalizeDifficulty(q.difficulty || "");
@@ -766,7 +1011,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
           onNavigate('sat-results', { submission: previewSubmission });
           return;
         }
-        await saveSatResult({
+        const saved = await saveSatResult({
           summary,
           skills: skillPercents,
           difficulty: difficultyPercents,
@@ -833,6 +1078,8 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     ? { display: "flex", flexWrap: "wrap", gap: 8 }
     : { display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" };
   const questionPadding = isNarrow ? 12 : 16;
+
+  // Keyboard shortcuts removed per request (mouse/tap only)
 
   if (!sectionActive) {
     return (

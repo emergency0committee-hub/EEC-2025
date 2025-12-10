@@ -5,7 +5,7 @@ import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
-import { LANGS, STR } from "../i18n/strings.js";
+import { LANGS_EN as LANGS, STR } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
 
 const HOME_CARDS = {

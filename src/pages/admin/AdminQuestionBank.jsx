@@ -37,6 +37,27 @@ const FILTERS_PAGE_SIZE = 5;
 const RESOURCE_BUCKET = import.meta.env.VITE_CLASS_RESOURCE_BUCKET || "assignment-media";
 const RESOURCE_LIBRARY_TABLE = import.meta.env.VITE_RESOURCE_LIBRARY_TABLE || "cg_resource_library";
 
+const SKILL_OPTIONS = [
+  "Linear Equations and Inequalities",
+  "Linear Functions",
+  "Systems of Linear Equations",
+  "Ratios, Proportions, and Percentages",
+  "Rates",
+  "Probability",
+  "Data Interpretation",
+  "Statistics",
+  "Rational Expressions and Equations",
+  "Quadratic Functions",
+  "Exponential Functions",
+  "Exponent Rules",
+  "Polynomial Expressions",
+  "Angle Relationships",
+  "Coordinate Geometry",
+  "Area and Perimeter",
+  "Right Triangle Trigonometry",
+  "Volume and Surface Area",
+];
+
 const detectLibraryKind = (name = "") => {
   const lower = name.toLowerCase();
   if (/\.(pdf)$/.test(lower)) return "pdf";
@@ -428,6 +449,25 @@ const QUESTION_TYPES = [
   { value: "fill", labelKey: "fillLabel" },
 ];
 
+const normalizeQType = (row) => {
+  const raw = ((row?.question_type || row?.questionType || "") + "").trim().toLowerCase();
+  if (raw.startsWith("f")) return "fill";
+
+  // Fallback inference for legacy rows without question_type
+  const hasChoices =
+    !!String(row?.answer_b || "").trim() ||
+    !!String(row?.answer_c || "").trim() ||
+    !!String(row?.answer_d || "").trim();
+
+  const correctRaw = String(row?.correct || row?.correct_answer || "").trim().toUpperCase();
+  const correctLooksLikeChoice = ["A", "B", "C", "D"].includes(correctRaw);
+
+  if (!hasChoices || (correctRaw && !correctLooksLikeChoice)) {
+    return "fill";
+  }
+  return "mcq";
+};
+
 export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) {
   AdminQuestionBank.propTypes = {
     onNavigate: PropTypes.func.isRequired,
@@ -725,7 +765,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
 
   const filteredQuestions = useMemo(() => {
     return questions.filter((q) => {
-      const matchType = !filters.type || filters.type === "all" ? true : q.question_type === filters.type;
+      const matchType = !filters.type || filters.type === "all" ? true : normalizeQType(q) === filters.type;
       return matchType;
     });
   }, [questions, filters]);
@@ -1079,7 +1119,7 @@ const validate = () => {
   };
 
   const buildFormFromRow = (row, targetBank = bank) => {
-    const type = row.question_type === "fill" ? "fill" : "mcq";
+    const type = normalizeQType(row);
     const rowSubjectRaw = row.subject || targetBank.defaultSubject || SUBJECT_OPTIONS[0].value;
     const normalizedRowSubject = normalizeSubjectValue(rowSubjectRaw);
     const subjectValue = targetBank.subjectLocked ? targetBank.defaultSubject : normalizedRowSubject;
@@ -1105,7 +1145,7 @@ const validate = () => {
       subject: subjectValue,
       unit: includeUnitLesson ? row.unit || "" : "",
       lesson: includeUnitLesson ? row.lesson || "" : "",
-      hardness: row.hardness || "",
+      hardness: normalizeHardnessValue(getRowHardness(row, targetBank)),
       skill: row.skill || "",
       imageUrl: row.image_url || "",
     };
@@ -1173,7 +1213,8 @@ const validate = () => {
       payload.image_url = form.imageUrl.trim() || null;
     }
     if (supportsHardness) {
-      payload.hardness = form.hardness || null;
+      const hardnessColumn = bank.hardnessColumn || "hardness";
+      payload[hardnessColumn] = form.hardness || null;
     }
     if (supportsSkill) {
       payload.skill = form.skill.trim() || null;
@@ -1479,7 +1520,7 @@ const validate = () => {
             <div style={{ color: "#111827" }}>
               <MathText value={currentImportRow.question} block />
             </div>
-            {currentImportRow.question_type === "mcq" ? (
+            {normalizeQType(currentImportRow) === "mcq" ? (
               <ol style={{ listStyle: "upper-alpha", paddingLeft: 20, margin: 0, display: "grid", gap: 6 }}>
                 {[currentImportRow.answer_a, currentImportRow.answer_b, currentImportRow.answer_c, currentImportRow.answer_d].map((answer, idx) => (
                   <li key={idx} style={{ background: "#e0f2fe", borderRadius: 6, padding: "6px 10px" }}>
@@ -1505,7 +1546,7 @@ const validate = () => {
               <span><strong>{copy.tableSubject}:</strong> {subjectLabel(currentImportRow.subject, lang)}</span>
               <span><strong>{copy.tableUnit}:</strong> {unitLabel(currentImportRow.subject, currentImportRow.unit, lang)}</span>
               <span><strong>{copy.tableLesson}:</strong> {lessonLabel(currentImportRow.subject, currentImportRow.unit, currentImportRow.lesson, lang)}</span>
-              <span><strong>{copy.tableHardness}:</strong> {hardnessLabel(currentImportRow.hardness, lang)}</span>
+                <span><strong>{copy.tableHardness}:</strong> {hardnessLabel(getRowHardness(currentImportRow, bank), lang)}</span>
               {currentImportRow.skill && (
                 <span><strong>{copy.tableSkill}:</strong> {currentImportRow.skill}</span>
               )}
@@ -1577,8 +1618,8 @@ const validate = () => {
                         <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "—"}</td>
                       </>
                     )}
-                    <td style={tdStyle}>{row.question_type === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
-                    <td style={tdStyle}>{hardnessLabel(row.hardness, lang)}</td>
+                    <td style={tdStyle}>{normalizeQType(row) === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
+                    <td style={tdStyle}>{hardnessLabel(getRowHardness(row, bank), lang)}</td>
                     <td style={tdStyle}>{row.skill || "—"}</td>
                     <td style={tdStyle}>
                       {row.image_url ? (() => {
@@ -1823,7 +1864,30 @@ const validate = () => {
                 })()}
 
                 <div style={{ display: "grid", gap: 8 }}>
-                  {previewRow.question_type === "mcq" ? (
+                  {normalizeQType(previewRow) === "fill" ? (
+                    <div
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: 10,
+                        border: "1px solid #e5e7eb",
+                        background: "#fff",
+                      }}
+                    >
+                      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>{copy.fillAnswerLabel}</div>
+                      <div style={{ display: "grid", gap: 6 }}>
+                        {String(previewRow.correct_answer || previewRow.correct || previewRow.answer_a || "—")
+                          .split(/[\n\r,;|]+/)
+                          .map((ans, idx) => {
+                            const val = ans.trim();
+                            return (
+                              <div key={idx} style={{ fontWeight: 600, color: "#111827" }}>
+                                {renderMathText(val || "—")}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ) : (
                     [previewRow.answer_a, previewRow.answer_b, previewRow.answer_c, previewRow.answer_d].map((answer, index) => {
                       const letter = String.fromCharCode(65 + index);
                       return (
@@ -1859,16 +1923,6 @@ const validate = () => {
                         </div>
                       );
                     })
-                  ) : (
-                    <div>
-                      <input
-                        type="text"
-                        placeholder={copy.fillLabel}
-                        readOnly
-                        style={{ ...inputStyle, cursor: "not-allowed", background: "#f3f4f6" }}
-                        value=""
-                      />
-                    </div>
                   )}
                 </div>
               </div>
@@ -1884,7 +1938,7 @@ const validate = () => {
                   <strong>{copy.tableLesson}:</strong> {lessonLabel(previewRow.subject, previewRow.unit, previewRow.lesson, lang)}
                 </span>
                 <span>
-                  <strong>{copy.tableHardness}:</strong> {hardnessLabel(previewRow.hardness, lang)}
+                  <strong>{copy.tableHardness}:</strong> {hardnessLabel(getRowHardness(previewRow, bank), lang)}
                 </span>
                 {previewRow.skill && (
                   <span>
@@ -2174,7 +2228,9 @@ function GridInputs({ copy, form, handleChange, lang, bank }) {
     bank: PropTypes.object.isRequired,
   };
 
-  const showMathSelectors = bank.supportsUnitLesson && form.subject === "math";
+  const subjectValueLower = (bank.subjectLocked ? bank.defaultSubject : form.subject || "").toLowerCase();
+  const showMathSelectors = bank.supportsUnitLesson && subjectValueLower === "math";
+  const showMathSkills = subjectValueLower === "math";
 
   return (
     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
@@ -2232,11 +2288,25 @@ function GridInputs({ copy, form, handleChange, lang, bank }) {
           ))}
         </select>
       </label>
-      <LabeledInput
-        label={`${copy.skill} (${copy.optional})`}
-        value={form.skill}
-        onChange={(e) => handleChange("skill", e.target.value)}
-      />
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>
+          {copy.skill} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({copy.optional})</span>
+        </span>
+        <input
+          type="text"
+          list={showMathSkills ? "skill-options" : undefined}
+          value={form.skill}
+          onChange={(e) => handleChange("skill", e.target.value)}
+          style={inputStyle}
+        />
+        {showMathSkills && (
+          <datalist id="skill-options">
+            {SKILL_OPTIONS.map((opt) => (
+              <option key={opt} value={opt} />
+            ))}
+          </datalist>
+        )}
+      </label>
     </div>
   );
 }
@@ -3119,9 +3189,22 @@ function lessonLabel(subject, unit, value, lang) {
 
 function hardnessLabel(value, lang) {
   const option = HARDNESS_OPTIONS.find((opt) => opt.value === value);
-  if (!option) return value || "—";
+  if (!option) return value || "-";
   return option.label[lang] || option.label.EN;
 }
+
+const getRowHardness = (row, bank) => {
+  const col = bank?.hardnessColumn || "hardness";
+  if (row && row[col] !== undefined) return row[col];
+  return row?.hardness;
+};
+
+const normalizeHardnessValue = (raw) => {
+  if (raw == null) return "";
+  const val = String(raw).trim().toLowerCase();
+  const match = HARDNESS_OPTIONS.find((opt) => opt.value === val);
+  return match ? match.value : "";
+};
 
 function parseCSV(text) {
   if (!text) return [];
