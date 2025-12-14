@@ -46,10 +46,43 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   };
 
   const previewMode = Boolean(preview || practice?.preview);
+  const [tabExited, setTabExited] = useState(false);
+
+  // Disable text selection/copy during the SAT test
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const prevUserSelect = document.body.style.userSelect;
+    const prevWebkit = document.body.style.webkitUserSelect;
+    const prevMoz = document.body.style.MozUserSelect;
+    const prevMs = document.body.style.msUserSelect;
+    document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    document.body.style.MozUserSelect = "none";
+    document.body.style.msUserSelect = "none";
+    return () => {
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.webkitUserSelect = prevWebkit;
+      document.body.style.MozUserSelect = prevMoz;
+      document.body.style.msUserSelect = prevMs;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const onVis = () => { if (document.hidden) setTabExited(true); };
+    const onBlur = () => setTabExited(true);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
 
   // Require auth
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -58,6 +91,28 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     })();
     return () => { alive = false; };
   }, []);
+  useEffect(() => {
+    if (!authUser?.email) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("email,name,full_name,username,school,school_name,organization,org,company,class_name,phone")
+          .eq("email", authUser.email)
+          .maybeSingle();
+        if (!cancelled && !error && data) {
+          setProfile(data);
+        }
+        if (!cancelled && error) {
+          console.warn("profile fetch failed", error);
+        }
+      } catch (err) {
+        if (!cancelled) console.warn("profile fetch failed", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [authUser]);
   // Build modules [RW1, RW2, M1, M2]
   const [rwMods, setRwMods] = useState([[], []]);
   const [mathMods, setMathMods] = useState([[], []]);
@@ -1011,6 +1066,17 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
           onNavigate('sat-results', { submission: previewSubmission });
           return;
         }
+        const startedAtIso = new Date(startedAtRef.current).toISOString();
+        const finishedAtIso = new Date(Date.now()).toISOString();
+        const participantPayload = {
+          name: profile?.name || profile?.full_name || profile?.username || null,
+          email: authUser?.email || profile?.email || null,
+          phone: profile?.phone || null,
+          school: profile?.school || profile?.school_name || profile?.organization || profile?.org || profile?.company || null,
+          class_name: profile?.class_name || null,
+          started_at: startedAtIso,
+          finished_at: finishedAtIso,
+        };
         const saved = await saveSatResult({
           summary,
           skills: skillPercents,
@@ -1018,6 +1084,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
           answers,
           modules: moduleMeta,
           elapsedSec,
+          participant: participantPayload,
         });
         pendingResultRef.current = null;
         setSummaryModal({ open: false, stats: null, reason: null });
@@ -1098,8 +1165,19 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     );
   }
 
+  if (!previewMode && tabExited) {
+    return (
+      <PageWrap>
+        <Card>
+          <div style={{ color: "#111827", fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Session locked</div>
+          <p style={{ color: "#6b7280", margin: 0 }}>The test was paused because the tab was switched. Please refresh to restart.</p>
+        </Card>
+      </PageWrap>
+    );
+  }
+
   return (
-    <PageWrap>
+    <PageWrap style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
       {previewBanner}
       {isMathSection && showCalculator && (
         <div

@@ -3,18 +3,22 @@ import PropTypes from "prop-types";
 
 const KEYFRAME_ID = "__hb_slide_keyframes__";
 
-export function PageWrap({ children }) {
+export function PageWrap({ children, style = {}, className = "" }) {
   PageWrap.propTypes = {
     children: PropTypes.node.isRequired,
+    style: PropTypes.object,
+    className: PropTypes.string,
   };
   return (
     <div
+      className={className}
       style={{
         position: "relative",
         minHeight: "100vh",
         display: "flex",
         justifyContent: "center",
         padding: "40px 0",
+        ...style,
       }}
     >
       <div

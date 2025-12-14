@@ -42,6 +42,7 @@ import {
 
 const SCHOOL_OPTIONS = [
   { value: "Al - Jinan International School", label: "Al - Jinan International School" },
+  { value: "Azm school", label: "Azm school" },
   { value: "Canada Educational Center", label: "Canada Educational Center" },
   { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
   { value: "EEC", label: "EEC" },
@@ -152,6 +153,38 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   const LAST = R_START + Math.max(0, lenR - 1);
   const totalQuestions = lenR;
   const isPreview = Boolean(preview);
+  const [tabExited, setTabExited] = useState(false);
+
+  // Disable text selection/copy while in the test
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const prevUserSelect = document.body.style.userSelect;
+    const prevWebkit = document.body.style.webkitUserSelect;
+    const prevMoz = document.body.style.MozUserSelect;
+    const prevMs = document.body.style.msUserSelect;
+    document.body.style.userSelect = "none";
+    document.body.style.webkitUserSelect = "none";
+    document.body.style.MozUserSelect = "none";
+    document.body.style.msUserSelect = "none";
+    return () => {
+      document.body.style.userSelect = prevUserSelect;
+      document.body.style.webkitUserSelect = prevWebkit;
+      document.body.style.MozUserSelect = prevMoz;
+      document.body.style.msUserSelect = prevMs;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const onVis = () => { if (document.hidden) setTabExited(true); };
+    const onBlur = () => setTabExited(true);
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
 
   const indexFromPage = (p) => (p >= R_START && p <= LAST ? p - R_START + 1 : 0);
   const pageFromIndex = (idx) => R_START + (idx - 1);
@@ -738,9 +771,19 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [page, R_START, LAST, shuffledRIASEC, next, prev, endTest]);
 
-  if (authLoading) {
+  if (!isPreview && tabExited) {
     return (
       <PageWrap>
+        <Card>
+          <p style={{ color: "#6b7280", margin: 0 }}>Session paused because the tab was switched. Please refresh to restart.</p>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  if (authLoading) {
+  return (
+    <PageWrap style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
         <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={lang} />
         <Card>
           <p style={{ color: "#6b7280" }}>

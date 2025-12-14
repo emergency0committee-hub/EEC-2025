@@ -714,6 +714,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
 const SCHOOL_OPTIONS = [
   { value: "", label: "Select school" },
   { value: "Al - Jinan International School", label: "Al - Jinan International School" },
+  { value: "Azm school", label: "Azm school" },
   { value: "Canada Educational Center", label: "Canada Educational Center" },
   { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
   { value: "EEC", label: "EEC" },

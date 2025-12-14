@@ -67,32 +67,30 @@ export async function saveTestSubmission({
 }
 
 // Save SAT diagnostic result
-export async function saveSatResult({ summary, skills = null, difficulty = null, answers, modules, elapsedSec }) {
+export async function saveSatResult({ summary, skills = null, difficulty = null, answers, modules, elapsedSec, participant = null }) {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("Supabase is not configured");
-  // Use the per-question answers table to also hold a single summary row
-  const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "diagnostic_sat_results";
+  const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "sat_diagnostic_submissions";
   const ts = new Date().toISOString();
   // Attach user email if available
   let userEmail = null;
   try { const { data: { user } } = await supabase.auth.getUser(); userEmail = user?.email || null; } catch {}
-  const submissionId = crypto.randomUUID ? crypto.randomUUID() : `sat_${Math.random().toString(36).slice(2, 10)}`;
-  const payload = { summary, skills, difficulty, modules, elapsedSec, answers };
   const row = cleanse({
-    id: submissionId,
-    submission_id: submissionId,
+    ts,
     user_email: userEmail,
-    module_key: "summary",
-    question_id: "summary",
-    question_text: JSON.stringify(payload),
-    answer_type: "summary",
-    time_sec: Number.isFinite(elapsedSec) ? elapsedSec : null,
-    created_at: ts,
+    participant: participant || null,
+    answers: answers || null,
+    radar_data: null,
+    area_percents: null,
+    pillar_agg: { summary, skills, difficulty },
+    pillar_counts: { modules, elapsedSec },
+    riasec_code: null,
+    top_codes: null,
   });
   const { data, error } = await supabase.from(table).insert([row]).select().single();
   if (error) throw error;
-  return data || { id: submissionId, submission_id: submissionId, user_email: userEmail, created_at: ts };
+  return data || { ...row, id: row.id || null };
 }
 
 // Save per-question diagnostic SAT answers into a dedicated table

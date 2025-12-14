@@ -56,7 +56,7 @@ export default function AdminLiveMonitor({ onNavigate }) {
   const loadSessions = async () => {
     setLoading(true);
     setError("");
-    const candidates = Array.from(new Set(["cg_results", "cg_submissions", "cg_sat_results"].filter(Boolean)));
+    const candidates = Array.from(new Set(["cg_results", "cg_submissions", "sat_diagnostic_submissions"].filter(Boolean)));
     const next = [];
     let lastErr = null;
     for (const table of candidates) {

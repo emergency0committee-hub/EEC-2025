@@ -1,8 +1,9 @@
 // src/pages/sat/SATResults.jsx
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
+import { supabase } from "../../lib/supabase.js";
 
 function colorForPct(pct) {
   const p = Math.max(0, Math.min(100, Number(pct || 0)));
@@ -60,6 +61,33 @@ export default function SATResults({ onNavigate, submission }) {
     submission: PropTypes.object,
   };
 
+  const [authUser, setAuthUser] = useState(null);
+  const [role, setRole] = useState(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!cancelled) setAuthUser(user || null);
+        if (user?.email) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("email", user.email)
+            .maybeSingle();
+          if (!cancelled && data?.role) setRole(String(data.role).toLowerCase());
+        }
+      } catch (e) {
+        console.warn("SATResults auth fetch failed", e);
+      } finally {
+        if (!cancelled) setLoadingAuth(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const s = submission || {};
   const participant = s.participant || {};
   const summary = s.pillar_agg?.summary || { rw: { correct: 0, total: 0 }, math: { correct: 0, total: 0 } };
@@ -77,6 +105,18 @@ export default function SATResults({ onNavigate, submission }) {
     const ss = Math.floor(sec % 60).toString().padStart(2, "0");
     return `${mm}:${ss}`;
   };
+
+  const canView = useMemo(() => {
+    const norm = (val) => (val ? String(val).trim().toLowerCase() : null);
+    const userEmail = norm(authUser?.email);
+    const submissionEmail = norm(s.user_email || s.participant?.email);
+    const isAdminLike = ["admin", "superadmin", "school", "staff", "student", "educator", "user"].includes(role);
+    if (!authUser) return true; // no logged-in user context; allow showing the passed submission
+    if (!submissionEmail) return true; // no email on record, show to avoid blocking
+    if (userEmail && submissionEmail && userEmail === submissionEmail) return true; // same user sees their own result
+    if (isAdminLike) return true; // admins/staff/school can view any
+    return false;
+  }, [authUser, role, s]);
 
   // English (RW) skills list with descriptions
   const EN_SKILLS = [
@@ -162,6 +202,21 @@ export default function SATResults({ onNavigate, submission }) {
     });
   }, [s]);
 
+  if (!loadingAuth && !canView) {
+    return (
+      <PageWrap>
+        <HeaderBar title="SAT Diagnostic Results" />
+        <div className="card avoid-break">
+          <h3 style={{ marginTop: 0, color: "#111827" }}>Access Restricted</h3>
+          <p style={{ color: "#6b7280" }}>These results are only visible to the candidate or an authorized school/admin account.</p>
+          <div className="no-print" style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => onNavigate("home")}>Back Home</Btn>
+          </div>
+        </div>
+      </PageWrap>
+    );
+  }
+
   return (
     <PageWrap>
       <style>{`
@@ -221,7 +276,9 @@ export default function SATResults({ onNavigate, submission }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(140px, 1fr))", gap: 12 }}>
           <div>
             <div style={{ fontSize: 12, color: "#6b7280" }}>Class</div>
-            <div style={{ fontWeight: 700, color: "#111827" }}>{participant.class || participant.className || participant.grade || "—"}</div>
+            <div style={{ fontWeight: 700, color: "#111827" }}>
+              {participant.class_name || participant.class || participant.className || participant.grade || "-"}
+            </div>
           </div>
           <div>
             <div style={{ fontSize: 12, color: "#6b7280" }}>School</div>
@@ -371,14 +428,8 @@ export default function SATResults({ onNavigate, submission }) {
         </div>
       )}
       
-      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-        <div style={{ color: "#6b7280", fontSize: 12 }}>
-          {Number.isFinite(elapsedSec) && modules && modules.length > 0 && (
-            <>Total time: {fmtDur(elapsedSec)}{avgSec ? ` - Avg/question: ${fmtDur(avgSec)}` : ""}</>
-          )}
-        </div>
-        <Btn variant="secondary" onClick={() => onNavigate("admin-sat")}>Back to SAT Submissions</Btn>
-        <Btn variant="primary" onClick={() => window.print()}>Export PDF</Btn>
+      <div className="no-print" style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
+        <Btn variant="secondary" onClick={() => onNavigate("home")}>Back Home</Btn>
       </div>
 
     </PageWrap>

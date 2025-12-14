@@ -157,6 +157,34 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
     }
   };
 
+  const handleSatDiagClick = async (event) => {
+    // If not logged in, go straight to SAT diagnostic start
+    if (!currentUser?.email) {
+      return onNavigate("sat", null, event);
+    }
+    event?.preventDefault?.();
+    setCheckingResult(true);
+    try {
+      const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "sat_diagnostic_submissions";
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq("user_email", currentUser.email)
+        .order("ts", { ascending: false })
+        .limit(1)
+        .single();
+      if (error || !data) {
+        return onNavigate("sat", null, event);
+      }
+      onNavigate("sat-results", { submission: data });
+    } catch (e) {
+      console.warn("Failed to check existing SAT result", e);
+      onNavigate("sat", null, event);
+    } finally {
+      setCheckingResult(false);
+    }
+  };
+
   return (
     <PageWrap>
       <HeaderBar
@@ -221,9 +249,11 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             title: home.satDiagnostic.title,
             desc: home.satDiagnostic.desc,
             cta: home.satDiagnostic.cta,
-            onClick: navTo("sat"),
+            onClick: handleSatDiagClick,
             variant: "primary",
-            extra: null,
+            extra: checkingResult ? (
+              <small style={{ color: "#9ca3af", fontSize: 12 }}>Checking for existing result...</small>
+            ) : null,
           },
           {
             key: "satTraining",

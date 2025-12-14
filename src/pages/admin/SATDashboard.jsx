@@ -18,27 +18,19 @@ export default function SATDashboard({ onNavigate }) {
   useEffect(() => {
     (async () => {
       try {
-        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "diagnostic_sat_results";
-        // Only pull summary rows (module_key = 'summary') for listing
+        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "sat_diagnostic_submissions";
         let resp = await supabase
           .from(table)
           .select("*")
-          .eq("module_key", "summary")
-          .order("created_at", { ascending: false });
+          .order("ts", { ascending: false });
         if (resp.error) {
-          try { resp = await supabase.from(table).select("*").eq("module_key", "summary").order("id", { ascending: false }); } catch {}
+          try { resp = await supabase.from(table).select("*").order("id", { ascending: false }); } catch {}
         }
         let rows = (resp.error ? [] : (resp.data || []));
-        rows = rows.map((r) => {
-          let parsed = {};
-          try { parsed = r.question_text ? JSON.parse(r.question_text) : {}; } catch {}
-          return {
-            ...r,
-            ts: r.created_at || r.ts || null,
-            pillar_agg: { summary: parsed.summary || null, skills: parsed.skills || null, difficulty: parsed.difficulty || null },
-            pillar_counts: { modules: parsed.modules || null, elapsedSec: parsed.elapsedSec || null },
-          };
-        });
+        rows = rows.map((r) => ({
+          ...r,
+          ts: r.ts || r.created_at || null,
+        }));
         // Inject non-deletable demo SAT submission
         const demo = {
           id: "demo-sat",
@@ -104,7 +96,7 @@ export default function SATDashboard({ onNavigate }) {
         alert("This preview submission cannot be deleted.");
         return;
       }
-        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "diagnostic_sat_results";
+        const table = import.meta.env.VITE_SAT_RESULTS_TABLE || "sat_diagnostic_submissions";
       const { error } = await supabase.from(table).delete().eq("id", submission.id);
       if (error) throw error;
       setRows((r) => r.filter((x) => x.id !== submission.id));
