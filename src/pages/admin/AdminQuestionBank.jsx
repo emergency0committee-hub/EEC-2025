@@ -65,6 +65,15 @@ const detectLibraryKind = (name = "") => {
   return "file";
 };
 
+const isSafeExternalUrl = (value = "") => {
+  try {
+    const url = new URL(String(value || "").trim());
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
 const promptHasContent = (html = "") => {
   if (!html) return false;
   const stripped = String(html)
@@ -74,6 +83,47 @@ const promptHasContent = (html = "") => {
     .trim();
   if (stripped.length > 0) return true;
   return /<(img|table|video|audio|canvas|svg|iframe)/i.test(html);
+};
+
+const createBankForm = (bank) => {
+  const base = createDefaultForm(bank);
+  const careerDefaults = {
+    code: "",
+    area: "",
+    areaEn: "",
+    areaFr: "",
+    areaAr: "",
+    textEn: "",
+    textFr: "",
+    textAr: "",
+    disc: "",
+    bloom: "",
+    unGoal: "",
+    sortIndex: "",
+    areaSort: "",
+  };
+  if (bank?.id === "career") {
+    return {
+      ...base,
+      ...careerDefaults,
+      questionType: base.questionType || "fill",
+    };
+  }
+  return { ...base, ...careerDefaults };
+};
+
+const getCareerTextForLang = (row, lang) => {
+  if (!row) return "";
+  if (lang === "AR") return row.text_ar || row.text_en || row.text_fr || "";
+  if (lang === "FR") return row.text_fr || row.text_en || row.text_ar || "";
+  return row.text_en || row.text_fr || row.text_ar || "";
+};
+
+const getCareerAreaForLang = (row, lang) => {
+  if (!row) return "";
+  if (lang === "AR") return row.area_ar || row.area || row.area_en || row.area_fr || "";
+  if (lang === "FR") return row.area_fr || row.area || row.area_en || row.area_ar || "";
+  return row.area_en || row.area || row.area_fr || row.area_ar || "";
 };
 
 const BANK_TAB_META = {
@@ -449,6 +499,124 @@ const QUESTION_TYPES = [
   { value: "fill", labelKey: "fillLabel" },
 ];
 
+const DISC_OPTIONS = ["D", "I", "S", "C"];
+const BLOOM_OPTIONS = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"];
+const UN_GOAL_OPTIONS = [
+  "SDG 3: Good Health & Well-Being",
+  "SDG 4: Quality Education",
+  "SDG 6: Clean Water & Sanitation",
+  "SDG 8: Decent Work & Economic Growth",
+  "SDG 9: Industry, Innovation & Infrastructure",
+  "SDG 11: Sustainable Cities & Communities",
+  "SDG 13: Climate Action",
+  "SDG 15: Life on Land",
+];
+const CAREER_AREA_TRANSLATIONS = {
+  Athletics: { en: "Athletics", ar: "الرياضة", fr: "Athlétisme" },
+  "Computer Hardware & Electronics": {
+    en: "Computer Hardware & Electronics",
+    ar: "أجهزة الكمبيوتر والإلكترونيات",
+    fr: "Matériel informatique et électronique",
+  },
+  "Counseling & Helping": { en: "Counseling & Helping", ar: "الإرشاد والمساعدة", fr: "Conseil et aide" },
+  "Culinary Arts": { en: "Culinary Arts", ar: "فنون الطهي", fr: "Arts culinaires" },
+  Entrepreneurship: { en: "Entrepreneurship", ar: "ريادة الأعمال", fr: "Entrepreneuriat" },
+  "Finance & Investing": { en: "Finance & Investing", ar: "التمويل والاستثمار", fr: "Finance et investissement" },
+  "Healthcare Services": { en: "Healthcare Services", ar: "الخدمات الصحية", fr: "Services de santé" },
+  "Human Resources & Training": {
+    en: "Human Resources & Training",
+    ar: "الموارد البشرية والتدريب",
+    fr: "Ressources humaines et formation",
+  },
+  Law: { en: "Law", ar: "القانون", fr: "Droit" },
+  Management: { en: "Management", ar: "الإدارة", fr: "Gestion" },
+  "Marketing & Advertising": {
+    en: "Marketing & Advertising",
+    ar: "التسويق والإعلان",
+    fr: "Marketing et publicité",
+  },
+  Mathematics: { en: "Mathematics", ar: "الرياضيات", fr: "Mathématiques" },
+  "Mechanics & Construction": {
+    en: "Mechanics & Construction",
+    ar: "الميكانيكا والبناء",
+    fr: "Mécanique et construction",
+  },
+  "Medical Science": { en: "Medical Science", ar: "العلوم الطبية", fr: "Sciences médicales" },
+  Military: { en: "Military", ar: "الجيش", fr: "Militaire" },
+  "Nature & Agriculture": {
+    en: "Nature & Agriculture",
+    ar: "الطبيعة والزراعة",
+    fr: "Nature et agriculture",
+  },
+  "Office Management": { en: "Office Management", ar: "إدارة المكاتب", fr: "Gestion de bureau" },
+  "Performing Arts": { en: "Performing Arts", ar: "فنون الأداء", fr: "Arts du spectacle" },
+  "Politics & Public Speaking": {
+    en: "Politics & Public Speaking",
+    ar: "السياسة والخطابة",
+    fr: "Politique et prise de parole",
+  },
+  "Programming & Information Systems": {
+    en: "Programming & Information Systems",
+    ar: "البرمجة ونظم المعلومات",
+    fr: "Programmation et systèmes d'information",
+  },
+  "Protective Services": { en: "Protective Services", ar: "الخدمات الأمنية", fr: "Services de protection" },
+  "Religion & Spirituality": { en: "Religion & Spirituality", ar: "الدين والروحانية", fr: "Religion et spiritualité" },
+  Research: { en: "Research", ar: "البحث", fr: "Recherche" },
+  Sales: { en: "Sales", ar: "المبيعات", fr: "Ventes" },
+  Science: { en: "Science", ar: "العلوم", fr: "Sciences" },
+  "Social Sciences": { en: "Social Sciences", ar: "العلوم الاجتماعية", fr: "Sciences sociales" },
+  "Taxes & Accounting": { en: "Taxes & Accounting", ar: "الضرائب والمحاسبة", fr: "Fiscalité et comptabilité" },
+  "Teaching & Education": {
+    en: "Teaching & Education",
+    ar: "التعليم والتدريس",
+    fr: "Enseignement et éducation",
+  },
+  "Visual Arts & Design": {
+    en: "Visual Arts & Design",
+    ar: "الفنون البصرية والتصميم",
+    fr: "Arts visuels et design",
+  },
+  "Writing & Mass Communication": {
+    en: "Writing & Mass Communication",
+    ar: "الكتابة والإعلام",
+    fr: "Écriture et communication de masse",
+  },
+};
+
+const CAREER_AREA_CODE = {
+  Athletics: "R",
+  "Computer Hardware & Electronics": "R",
+  "Nature & Agriculture": "R",
+  Military: "R",
+  "Protective Services": "R",
+  "Mechanics & Construction": "R",
+  Research: "I",
+  "Medical Science": "I",
+  Science: "I",
+  Mathematics: "I",
+  "Culinary Arts": "A",
+  "Visual Arts & Design": "A",
+  "Performing Arts": "A",
+  "Writing & Mass Communication": "A",
+  "Human Resources & Training": "S",
+  "Teaching & Education": "S",
+  "Healthcare Services": "S",
+  "Counseling & Helping": "S",
+  "Social Sciences": "S",
+  "Religion & Spirituality": "S",
+  Sales: "E",
+  "Marketing & Advertising": "E",
+  Entrepreneurship: "E",
+  Management: "E",
+  Law: "E",
+  "Politics & Public Speaking": "E",
+  "Programming & Information Systems": "C",
+  "Office Management": "C",
+  "Finance & Investing": "C",
+  "Taxes & Accounting": "C",
+};
+
 const normalizeQType = (row) => {
   const raw = ((row?.question_type || row?.questionType || "") + "").trim().toLowerCase();
   if (raw.startsWith("f")) return "fill";
@@ -512,7 +680,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setActiveBank((prev) => (visibleBankIds.includes(prev) ? prev : visibleBankIds[0]));
   }, [visibleBankIds]);
 
-  const [form, setForm] = useState(() => createDefaultForm(bank));
+  const [form, setForm] = useState(() => createBankForm(bank));
   const [questions, setQuestions] = useState([]);
   const [filters, setFilters] = useState({ type: "" });
   const [filtersPage, setFiltersPage] = useState(0);
@@ -539,6 +707,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const [libraryError, setLibraryError] = useState("");
   const [libraryForm, setLibraryForm] = useState({ title: "", url: "", file: null, kind: "file" });
   const isEditing = Boolean(editingRow);
+  const careerAreaOptions = Object.keys(CAREER_AREA_TRANSLATIONS);
   const isImporting = importRows.length > 0;
   const isImportingActive = isImporting && !isEditing;
   const currentImportRow = isImportingActive ? importRows[importIndex] : null;
@@ -567,7 +736,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   }, [form.questionType]);
 
   useEffect(() => {
-    const defaultForm = createDefaultForm(bank);
+    const defaultForm = createBankForm(bank);
     setForm(defaultForm);
     setEditingRow(null);
     setPreviewRow(null);
@@ -744,11 +913,26 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
 
   useEffect(() => {
     let ignore = false;
+    if (activeBank === "resources") {
+      setLoading(false);
+      setError("");
+      setQuestions([]);
+      return () => {
+        ignore = true;
+      };
+    }
     const load = async () => {
       setLoading(true);
       setError("");
       try {
-        const data = await listAssignmentQuestions({ table: bank.table });
+        const order =
+          bank.id === "career"
+            ? [
+                { column: "area_sort", ascending: true },
+                { column: "sort_index", ascending: true },
+              ]
+            : [{ column: "created_at", ascending: false }];
+        const data = await listAssignmentQuestions({ table: bank.table, order });
         if (!ignore) setQuestions(data);
       } catch (err) {
         console.error("assignment question list", err);
@@ -761,14 +945,15 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     return () => {
       ignore = true;
     };
-  }, [bank.table, copy.loadError, reloadKey]);
+  }, [activeBank, bank.table, copy.loadError, reloadKey]);
 
   const filteredQuestions = useMemo(() => {
+    if (bank.id === "career") return questions;
     return questions.filter((q) => {
       const matchType = !filters.type || filters.type === "all" ? true : normalizeQType(q) === filters.type;
       return matchType;
     });
-  }, [questions, filters]);
+  }, [questions, filters, bank.id]);
 
   const totalFilterPages = Math.max(1, Math.ceil(Math.max(filteredQuestions.length, 1) / FILTERS_PAGE_SIZE));
   const paginatedQuestions = useMemo(() => {
@@ -799,6 +984,17 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
 
   const handleChange = (field, value) => {
     setForm((prev) => {
+      if (field === "area" && bank.id === "career") {
+        const translations = CAREER_AREA_TRANSLATIONS[value] || {};
+        return {
+          ...prev,
+          area: value,
+          code: CAREER_AREA_CODE[value] || prev.code,
+          areaEn: translations.en || value || prev.areaEn,
+          areaFr: translations.fr || prev.areaFr,
+          areaAr: translations.ar || prev.areaAr,
+        };
+      }
       if (field === "subject") {
         if (bank.subjectLocked) return prev;
         const subjectValue = value;
@@ -837,7 +1033,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
   const handleReset = () => {
-    const defaultForm = createDefaultForm(bank);
+    const defaultForm = createBankForm(bank);
     setForm(defaultForm);
     setSuccessMessage("");
     setEditingRow(null);
@@ -979,6 +1175,10 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       alert("Upload a file or paste a link.");
       return;
     }
+    if (url && !file && !isSafeExternalUrl(url)) {
+      alert("Link must start with http:// or https://");
+      return;
+    }
     try {
       setLibraryLoading(true);
       let finalUrl = url;
@@ -1034,7 +1234,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
       applyImportRow(importRows[nextIndex]);
       if (message) setSuccessMessage(message);
     } else {
-      const defaultForm = createDefaultForm(bank);
+      const defaultForm = createBankForm(bank);
       setImportRows([]);
       setImportIndex(0);
       setForm(defaultForm);
@@ -1056,7 +1256,7 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
     setSuccessMessage("");
     setPreviewRow(null);
     setEditingRow(null);
-    const defaultForm = createDefaultForm(bank);
+    const defaultForm = createBankForm(bank);
     setForm(defaultForm);
     setShowImageTools(false);
     setShowTableBuilder(false);
@@ -1064,6 +1264,10 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
 const handleImportFile = async (event) => {
+  if (bank.id === "career") {
+    event.target.value = "";
+    return;
+  }
   const file = event.target.files?.[0];
   if (!file) return;
     try {
@@ -1088,6 +1292,18 @@ const handleImportFile = async (event) => {
   };
 
 const validate = () => {
+    if (bank.id === "career") {
+      const hasEn = promptHasContent(form.textEn || "");
+      const hasFr = promptHasContent(form.textFr || "");
+      const hasAr = promptHasContent(form.textAr || "");
+      if (!hasEn || !hasFr || !hasAr) return "Career guidance prompt must be provided in EN, FR, and AR.";
+
+      const isValidInt = (value) => value === "" || /^-?\d+$/.test(String(value).trim());
+      if (!isValidInt(form.sortIndex)) return "Sort index must be an integer.";
+      if (!isValidInt(form.areaSort)) return "Area sort must be an integer.";
+      return "";
+    }
+
     if (!form.questionType) return copy.questionTypeRequired || COPY.EN.questionTypeRequired;
     if (!promptHasContent(form.question || "")) return "Question is required.";
     if (!bank.subjectLocked && !form.subject) return copy.subjectRequired || COPY.EN.subjectRequired;
@@ -1119,6 +1335,25 @@ const validate = () => {
   };
 
   const buildFormFromRow = (row, targetBank = bank) => {
+    if (targetBank.id === "career") {
+      const base = createBankForm(targetBank);
+      return {
+        ...base,
+        code: row.code || "",
+        area: row.area || "",
+        areaEn: row.area_en || "",
+        areaFr: row.area_fr || "",
+        areaAr: row.area_ar || "",
+        textEn: toEditorHtml(row.text_en || ""),
+        textFr: toEditorHtml(row.text_fr || ""),
+        textAr: toEditorHtml(row.text_ar || ""),
+        disc: row.disc || "",
+        bloom: row.bloom || "",
+        unGoal: row.un_goal || "",
+        sortIndex: row.sort_index == null ? "" : String(row.sort_index),
+        areaSort: row.area_sort == null ? "" : String(row.area_sort),
+      };
+    }
     const type = normalizeQType(row);
     const rowSubjectRaw = row.subject || targetBank.defaultSubject || SUBJECT_OPTIONS[0].value;
     const normalizedRowSubject = normalizeSubjectValue(rowSubjectRaw);
@@ -1181,6 +1416,17 @@ const validate = () => {
       return;
     }
 
+    const toNullTrimmed = (value) => {
+      const trimmed = String(value ?? "").trim();
+      return trimmed ? trimmed : null;
+    };
+    const toNullableInt = (value) => {
+      const trimmed = String(value ?? "").trim();
+      if (!trimmed) return null;
+      const parsed = Number.parseInt(trimmed, 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
     const supportsAssignmentType = bank.supportsAssignmentType !== false;
     const supportsHardness = bank.supportsHardness !== false;
     const supportsSkill = bank.supportsSkill !== false;
@@ -1198,34 +1444,54 @@ const validate = () => {
 
     const correctColumn = bank.correctColumn || "correct_answer";
 
-    const payload = {
-      question: form.question.trim(),
-      subject: subjectValue,
-    };
+    let payload;
 
-    if (supportsAssignmentType) {
+    if (bank.id === "career") {
+      payload = {
+        code: toNullTrimmed(form.code),
+        area: toNullTrimmed(form.area),
+        area_en: toNullTrimmed(form.areaEn),
+        area_fr: toNullTrimmed(form.areaFr),
+        area_ar: toNullTrimmed(form.areaAr),
+        text_en: toNullTrimmed(form.textEn),
+        text_fr: toNullTrimmed(form.textFr),
+        text_ar: toNullTrimmed(form.textAr),
+        disc: toNullTrimmed(form.disc),
+        bloom: toNullTrimmed(form.bloom),
+        un_goal: toNullTrimmed(form.unGoal),
+        sort_index: toNullableInt(form.sortIndex),
+        area_sort: toNullableInt(form.areaSort),
+      };
+    } else {
+      payload = {
+        question: form.question.trim(),
+        subject: subjectValue,
+      };
+    }
+
+    if (bank.id !== "career" && supportsAssignmentType) {
       payload.assignment_type = assignmentType;
     }
-    if (supportsQuestionType) {
+    if (bank.id !== "career" && supportsQuestionType) {
       payload.question_type = form.questionType;
     }
-    if (supportsImageUrl) {
+    if (bank.id !== "career" && supportsImageUrl) {
       payload.image_url = form.imageUrl.trim() || null;
     }
-    if (supportsHardness) {
+    if (bank.id !== "career" && supportsHardness) {
       const hardnessColumn = bank.hardnessColumn || "hardness";
       payload[hardnessColumn] = form.hardness || null;
     }
-    if (supportsSkill) {
+    if (bank.id !== "career" && supportsSkill) {
       payload.skill = form.skill.trim() || null;
     }
 
-    if (bank.supportsUnitLesson && normalizedSubject === "math") {
+    if (bank.id !== "career" && bank.supportsUnitLesson && normalizedSubject === "math") {
       payload.unit = (form.unit || "").trim();
       payload.lesson = (form.lesson || "").trim();
     }
 
-    if (form.questionType === "mcq") {
+    if (bank.id !== "career" && form.questionType === "mcq") {
       const mcqPayload = {
         answer_a: form.answerA.trim(),
         answer_b: form.answerB.trim(),
@@ -1236,7 +1502,7 @@ const validate = () => {
         mcqPayload[correctColumn] = form.correctAnswer;
       }
       Object.assign(payload, mcqPayload);
-    } else {
+    } else if (bank.id !== "career") {
       const fill = form.fillAnswer.trim();
       const fillPayload = {
         answer_a: fill,
@@ -1256,7 +1522,7 @@ const validate = () => {
       if (isEditing) {
         record = await updateAssignmentQuestion(editingRow.id, payload, { table: bank.table });
         setQuestions((prev) => prev.map((q) => (q.id === record.id ? record : q)));
-        const defaultForm = createDefaultForm(bank);
+        const defaultForm = createBankForm(bank);
         setForm(defaultForm);
         setEditingRow(null);
         setShowImageTools(false);
@@ -1270,7 +1536,7 @@ const validate = () => {
           const isLast = importIndex === importRows.length - 1;
           advanceImport(isLast ? copy.importFinished : copy.createSuccess);
         } else {
-          const defaultForm = createDefaultForm(bank);
+          const defaultForm = createBankForm(bank);
           setForm(defaultForm);
           setShowImageTools(false);
           setShowTableBuilder(false);
@@ -1359,29 +1625,31 @@ const validate = () => {
       <Card>
         <p style={{ marginTop: 0, color: "#6b7280" }}>{copy.subtitle}</p>
         <div style={actionBarStyle}>
-          <div style={actionBarInfoStyle}>
-            <Btn variant="secondary" onClick={() => importInputRef.current?.click()}>
-              {copy.importLabel}
-            </Btn>
-            <span style={actionBarHintStyle}>{copy.importHint}</span>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".csv"
-              style={{ display: "none" }}
-              onChange={handleImportFile}
-            />
-          </div>
+          {bank.id !== "career" && (
+            <div style={actionBarInfoStyle}>
+              <Btn variant="secondary" onClick={() => importInputRef.current?.click()}>
+                {copy.importLabel}
+              </Btn>
+              <span style={actionBarHintStyle}>{copy.importHint}</span>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".csv"
+                style={{ display: "none" }}
+                onChange={handleImportFile}
+              />
+            </div>
+          )}
           <Btn variant="secondary" onClick={refreshQuestions}>
             {copy.refresh}
           </Btn>
         </div>
-        {importError && (
+        {bank.id !== "career" && importError && (
           <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#fee2e2", border: "1px solid #fecaca", color: "#b91c1c" }}>
             {importError}
           </div>
         )}
-        {isImportingActive && (
+        {bank.id !== "career" && isImportingActive && (
           <div style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8" }}>
             {copy.importingStatus.replace("{current}", String(importIndex + 1)).replace("{total}", String(importRows.length))}
           </div>
@@ -1392,99 +1660,203 @@ const validate = () => {
               {copy.editingNotice}
             </div>
           )}
-        <FormSection title={copy.sectionSetup || COPY.EN.sectionSetup} description={copy.sectionSetupDesc || COPY.EN.sectionSetupDesc}>
-          <div style={twoColumnGridStyle}>
-            <div style={{ display: "grid", gap: 8 }}>
-              <label style={{ fontWeight: 600 }}>{copy.questionType}</label>
-              <select
-                value={form.questionType}
-                onChange={(e) => handleChange("questionType", e.target.value)}
-                style={selectStyle}
-                required
-              >
-                <option value=""> </option>
-                {QUESTION_TYPES.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {copy[item.labelKey]}
-                  </option>
-                ))}
-              </select>
-            </div>
-              <div style={{ display: "grid", gap: 8 }}>
-                <label style={{ fontWeight: 600 }}>{copy.subject}</label>
-                {bank.subjectLocked ? (
-                  <div style={lockedFieldStyle}>{subjectLabel(form.subject, lang)}</div>
-                ) : (
-              <select
-                value={form.subject}
-                onChange={(e) => handleChange("subject", e.target.value)}
-                style={selectStyle}
-                required
-              >
-                <option value=""> </option>
-                {SUBJECT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label[lang] || opt.label.EN}
-                  </option>
-                ))}
-                  </select>
-                )}
-              </div>
-            </div>
-            <GridInputs copy={copy} form={form} handleChange={handleChange} lang={lang} bank={bank} />
-          </FormSection>
-
-          <FormSection title={copy.sectionPrompt || COPY.EN.sectionPrompt} description={copy.sectionPromptDesc || COPY.EN.sectionPromptDesc}>
-            <RichTextEditor
-              value={form.question}
-              onChange={(html) => handleChange("question", html)}
-              placeholder="Start typing your question..."
-            />
-          </FormSection>
-
-          <FormSection title={copy.sectionAnswers || COPY.EN.sectionAnswers} description={copy.sectionAnswersDesc || COPY.EN.sectionAnswersDesc}>
-            {form.questionType === "mcq" ? (
-              <div style={{ display: "grid", gap: 16 }}>
-                {["A", "B", "C", "D"].map((label) => (
-                  <div key={label} style={{ display: "grid", gap: 6 }}>
-                    <span style={{ fontWeight: 600 }}>{`${copy.answer(label)}`}</span>
-                    <RichTextEditor
-                      value={form[`answer${label}`]}
-                      onChange={(html) => handleChange(`answer${label}`, html)}
-                      placeholder={`Answer ${label}`}
-                      variant="compact"
-                    />
-                  </div>
-                ))}
-                <div style={{ display: "grid", gap: 8 }}>
-                  <label style={{ fontWeight: 600 }}>{copy.correctAnswer}</label>
+        {bank.id === "career" ? (
+          <>
+            <FormSection title="Career Guidance Item" description="Saves to cg_career_questions (code/area/text + metadata).">
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <LabeledInput label="Code (optional)" value={form.code} onChange={(e) => handleChange("code", e.target.value)} />
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Area (base)</span>
                   <select
-                    value={form.correctAnswer}
-                    onChange={(e) => handleChange("correctAnswer", e.target.value)}
+                    value={form.area}
+                    onChange={(e) => handleChange("area", e.target.value)}
+                    style={selectStyle}
+                    required
+                  >
+                    <option value="">Select area</option>
+                    {careerAreaOptions.map((area) => (
+                      <option key={area} value={area}>
+                        {area}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>DISC (optional)</span>
+                  <select
+                    value={form.disc}
+                    onChange={(e) => handleChange("disc", e.target.value)}
+                    style={selectStyle}
+                  >
+                    <option value=""> </option>
+                    {DISC_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>BLOOM (optional)</span>
+                  <select
+                    value={form.bloom}
+                    onChange={(e) => handleChange("bloom", e.target.value)}
+                    style={selectStyle}
+                  >
+                    <option value=""> </option>
+                    {BLOOM_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>UN Goal (optional)</span>
+                  <select
+                    value={form.unGoal}
+                    onChange={(e) => handleChange("unGoal", e.target.value)}
+                    style={selectStyle}
+                  >
+                    <option value=""> </option>
+                    {UN_GOAL_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Area sort (optional)</span>
+                  <input type="number" value={form.areaSort} onChange={(e) => handleChange("areaSort", e.target.value)} style={inputStyle} />
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Sort index (optional)</span>
+                  <input type="number" value={form.sortIndex} onChange={(e) => handleChange("sortIndex", e.target.value)} style={inputStyle} />
+                </label>
+              </div>
+
+              <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                <LabeledInput label="Area (EN)" value={form.areaEn} onChange={(e) => handleChange("areaEn", e.target.value)} />
+                <LabeledInput label="Area (FR)" value={form.areaFr} onChange={(e) => handleChange("areaFr", e.target.value)} />
+                <LabeledInput label="Area (AR)" value={form.areaAr} onChange={(e) => handleChange("areaAr", e.target.value)} />
+              </div>
+            </FormSection>
+
+            <FormSection title="Prompt Text" description="Provide all three languages (EN/FR/AR).">
+              <div style={{ display: "grid", gap: 16 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Text (EN)</span>
+                  <RichTextEditor value={form.textEn} onChange={(html) => handleChange("textEn", html)} placeholder="English prompt..." />
+                </div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Text (FR)</span>
+                  <RichTextEditor value={form.textFr} onChange={(html) => handleChange("textFr", html)} placeholder="French prompt..." />
+                </div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Text (AR)</span>
+                  <RichTextEditor value={form.textAr} onChange={(html) => handleChange("textAr", html)} placeholder="Arabic prompt..." />
+                </div>
+              </div>
+            </FormSection>
+          </>
+        ) : (
+          <>
+            <FormSection title={copy.sectionSetup || COPY.EN.sectionSetup} description={copy.sectionSetupDesc || COPY.EN.sectionSetupDesc}>
+              <div style={twoColumnGridStyle}>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <label style={{ fontWeight: 600 }}>{copy.questionType}</label>
+                  <select
+                    value={form.questionType}
+                    onChange={(e) => handleChange("questionType", e.target.value)}
                     style={selectStyle}
                     required
                   >
                     <option value=""> </option>
-                    {["A", "B", "C", "D"].map((label) => (
-                      <option key={label} value={label}>
-                        {label}
+                    {QUESTION_TYPES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {copy[item.labelKey]}
                       </option>
                     ))}
                   </select>
                 </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <label style={{ fontWeight: 600 }}>{copy.subject}</label>
+                  {bank.subjectLocked ? (
+                    <div style={lockedFieldStyle}>{subjectLabel(form.subject, lang)}</div>
+                  ) : (
+                    <select
+                      value={form.subject}
+                      onChange={(e) => handleChange("subject", e.target.value)}
+                      style={selectStyle}
+                      required
+                    >
+                      <option value=""> </option>
+                      {SUBJECT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label[lang] || opt.label.EN}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div style={{ display: "grid", gap: 8 }}>
-                <label style={{ fontWeight: 600 }}>{copy.fillAnswerLabel}</label>
-                <RichTextEditor
-                  value={form.fillAnswer}
-                  onChange={(html) => handleChange("fillAnswer", html)}
-                  placeholder={copy.fillAnswerLabel}
-                  variant="compact"
-                />
-              </div>
-            )}
-          </FormSection>
+              <GridInputs copy={copy} form={form} handleChange={handleChange} lang={lang} bank={bank} />
+            </FormSection>
+
+            <FormSection title={copy.sectionPrompt || COPY.EN.sectionPrompt} description={copy.sectionPromptDesc || COPY.EN.sectionPromptDesc}>
+              <RichTextEditor
+                value={form.question}
+                onChange={(html) => handleChange("question", html)}
+                placeholder="Start typing your question..."
+              />
+            </FormSection>
+
+            <FormSection title={copy.sectionAnswers || COPY.EN.sectionAnswers} description={copy.sectionAnswersDesc || COPY.EN.sectionAnswersDesc}>
+              {form.questionType === "mcq" ? (
+                <div style={{ display: "grid", gap: 16 }}>
+                  {["A", "B", "C", "D"].map((label) => (
+                    <div key={label} style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontWeight: 600 }}>{`${copy.answer(label)}`}</span>
+                      <RichTextEditor
+                        value={form[`answer${label}`]}
+                        onChange={(html) => handleChange(`answer${label}`, html)}
+                        placeholder={`Answer ${label}`}
+                        variant="compact"
+                      />
+                    </div>
+                  ))}
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <label style={{ fontWeight: 600 }}>{copy.correctAnswer}</label>
+                    <select
+                      value={form.correctAnswer}
+                      onChange={(e) => handleChange("correctAnswer", e.target.value)}
+                      style={selectStyle}
+                      required
+                    >
+                      <option value=""> </option>
+                      {["A", "B", "C", "D"].map((label) => (
+                        <option key={label} value={label}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <label style={{ fontWeight: 600 }}>{copy.fillAnswerLabel}</label>
+                  <RichTextEditor
+                    value={form.fillAnswer}
+                    onChange={(html) => handleChange("fillAnswer", html)}
+                    placeholder={copy.fillAnswerLabel}
+                    variant="compact"
+                  />
+                </div>
+              )}
+            </FormSection>
+          </>
+        )}
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button
@@ -1513,7 +1885,7 @@ const validate = () => {
         </form>
       </Card>
 
-      {isImportingActive && currentImportRow && (
+      {bank.id !== "career" && isImportingActive && currentImportRow && (
         <Card style={{ marginTop: 16, background: "#f8fafc" }}>
           <h3 style={{ marginTop: 0 }}>{copy.importPreviewTitle}</h3>
           <div style={{ display: "grid", gap: 12 }}>
@@ -1561,22 +1933,24 @@ const validate = () => {
             <strong>{copy.filters}</strong>
             <p style={filterDescriptionStyle}>{copy.sectionFiltersDesc || COPY.EN.sectionFiltersDesc}</p>
           </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span>{copy.filterQuestionType}</span>
-            <select
-          value={filters.type}
-          onChange={(e) => setFilters((prev) => ({ ...prev, type: e.target.value }))}
-          style={selectStyle}
-        >
-          <option value=""> </option>
-          <option value="all">{copy.filterAll}</option>
-              {QUESTION_TYPES.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {copy[opt.labelKey]}
-                </option>
-              ))}
-            </select>
-          </label>
+          {bank.id !== "career" && (
+            <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span>{copy.filterQuestionType}</span>
+              <select
+                value={filters.type}
+                onChange={(e) => setFilters((prev) => ({ ...prev, type: e.target.value }))}
+                style={selectStyle}
+              >
+                <option value=""> </option>
+                <option value="all">{copy.filterAll}</option>
+                {QUESTION_TYPES.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {copy[opt.labelKey]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         {loading ? (
@@ -1587,102 +1961,165 @@ const validate = () => {
           <p style={{ color: "#6b7280" }}>{copy.noResults}</p>
         ) : (
           <>
-          <div style={{ overflowX: "auto", marginTop: 16 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
-              <thead>
-                <tr style={tableHeaderRowStyle}>
-                  <th style={thStyle}>{copy.tableQuestion}</th>
-                  <th style={thStyle}>{copy.tableSubject}</th>
-                  {bank.supportsUnitLesson && (
-                    <>
-                      <th style={thStyle}>{copy.tableUnit}</th>
-                      <th style={thStyle}>{copy.tableLesson}</th>
-                    </>
-                  )}
-                  <th style={thStyle}>{copy.tableType}</th>
-                  <th style={thStyle}>{copy.tableHardness}</th>
-                  <th style={thStyle}>{copy.tableSkill}</th>
-                  <th style={thStyle}>{copy.tableImage}</th>
-                  <th style={thStyle}>{copy.tableCreated}</th>
-                  <th style={thStyle}>{copy.tableActions}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedQuestions.map((row) => (
-                  <tr key={row.id} style={tbodyRowStyle}>
-                    <td style={tdStyle}>{firstWords(row.question, 3)}</td>
-                    <td style={tdStyle}>{subjectLabel(row.subject, lang)}</td>
+           <div style={{ overflowX: "auto", marginTop: 16 }}>
+            {bank.id === "career" ? (
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+                <thead>
+                  <tr style={tableHeaderRowStyle}>
+                    <th style={thStyle}>Code</th>
+                    <th style={thStyle}>Area</th>
+                    <th style={thStyle}>Text</th>
+                    <th style={thStyle}>DISC</th>
+                    <th style={thStyle}>BLOOM</th>
+                    <th style={thStyle}>UN Goal</th>
+                    <th style={thStyle}>Area sort</th>
+                    <th style={thStyle}>Sort</th>
+                    <th style={thStyle}>{copy.tableActions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedQuestions.map((row) => (
+                    <tr key={row.id} style={tbodyRowStyle}>
+                      <td style={tdStyle}>{row.code || "-"}</td>
+                      <td style={tdStyle}>{getCareerAreaForLang(row, lang) || "-"}</td>
+                      <td style={tdStyle}>{firstWords(getCareerTextForLang(row, lang), 6)}</td>
+                      <td style={tdStyle}>{row.disc || "-"}</td>
+                      <td style={tdStyle}>{row.bloom || "-"}</td>
+                      <td style={tdStyle}>{row.un_goal || "-"}</td>
+                      <td style={tdStyle}>{row.area_sort ?? "-"}</td>
+                      <td style={tdStyle}>{row.sort_index ?? "-"}</td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => handlePreview(row)}
+                            style={actionButtonStyle}
+                            aria-label={copy.preview}
+                            title={copy.preview}
+                          >
+                            <EyeIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(row)}
+                            style={actionButtonStyle}
+                            aria-label={copy.edit}
+                            title={copy.edit}
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(row)}
+                            style={dangerButtonStyle}
+                            aria-label={copy.delete}
+                            title={copy.delete}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+                <thead>
+                  <tr style={tableHeaderRowStyle}>
+                    <th style={thStyle}>{copy.tableQuestion}</th>
+                    <th style={thStyle}>{copy.tableSubject}</th>
                     {bank.supportsUnitLesson && (
                       <>
-                        <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "—"}</td>
-                        <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "—"}</td>
+                        <th style={thStyle}>{copy.tableUnit}</th>
+                        <th style={thStyle}>{copy.tableLesson}</th>
                       </>
                     )}
-                    <td style={tdStyle}>{normalizeQType(row) === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
-                    <td style={tdStyle}>{hardnessLabel(getRowHardness(row, bank), lang)}</td>
-                    <td style={tdStyle}>{row.skill || "—"}</td>
-                    <td style={tdStyle}>
-                      {row.image_url ? (() => {
-                        const href = resolveImageUrl(row.image_url);
-                        if (!href) return "—";
-                        const isLocal = row.image_url.startsWith(LOCAL_IMAGE_PREFIX);
-                        if (isLocal) {
+                    <th style={thStyle}>{copy.tableType}</th>
+                    <th style={thStyle}>{copy.tableHardness}</th>
+                    <th style={thStyle}>{copy.tableSkill}</th>
+                    <th style={thStyle}>{copy.tableImage}</th>
+                    <th style={thStyle}>{copy.tableCreated}</th>
+                    <th style={thStyle}>{copy.tableActions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedQuestions.map((row) => (
+                    <tr key={row.id} style={tbodyRowStyle}>
+                      <td style={tdStyle}>{firstWords(row.question, 3)}</td>
+                      <td style={tdStyle}>{subjectLabel(row.subject, lang)}</td>
+                      {bank.supportsUnitLesson && (
+                        <>
+                          <td style={tdStyle}>{row.subject === "math" ? unitLabel(row.subject, row.unit, lang) : "-"}</td>
+                          <td style={tdStyle}>{row.subject === "math" ? lessonLabel(row.subject, row.unit, row.lesson, lang) : "-"}</td>
+                        </>
+                      )}
+                      <td style={tdStyle}>{normalizeQType(row) === "mcq" ? copy.mcqLabel : copy.fillLabel}</td>
+                      <td style={tdStyle}>{hardnessLabel(getRowHardness(row, bank), lang)}</td>
+                      <td style={tdStyle}>{row.skill || "-"}</td>
+                      <td style={tdStyle}>
+                        {row.image_url ? (() => {
+                          const href = resolveImageUrl(row.image_url);
+                          if (!href) return "-";
+                          const isLocal = row.image_url.startsWith(LOCAL_IMAGE_PREFIX);
+                          if (isLocal) {
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => window.open(href, "_blank", "noopener")}
+                                style={{ background: "none", border: "1px solid #bfdbfe", color: "#2563eb", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
+                              >
+                                View
+                              </button>
+                            );
+                          }
                           return (
-                            <button
-                              type="button"
-                              onClick={() => window.open(href, "_blank", "noopener")}
-                              style={{ background: "none", border: "1px solid #bfdbfe", color: "#2563eb", borderRadius: 6, padding: "4px 8px", cursor: "pointer" }}
-                            >
-                              View
-                            </button>
-                          );
-                        }
-                        return (
-                          <a href={href} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
+                          <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>
                             View
                           </a>
-                        );
-                      })() : (
-                        "—"
-                      )}
-                    </td>
-                    <td style={tdStyle}>{new Date(row.created_at).toLocaleString()}</td>
-                    <td style={tdStyle}>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => handlePreview(row)}
-                          style={actionButtonStyle}
-                          aria-label={copy.preview}
-                          title={copy.preview}
-                        >
-                          <EyeIcon />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(row)}
-                          style={actionButtonStyle}
-                          aria-label={copy.edit}
-                          title={copy.edit}
-                        >
-                          <EditIcon />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(row)}
-                          style={dangerButtonStyle}
-                          aria-label={copy.delete}
-                          title={copy.delete}
-                        >
-                          <TrashIcon />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          );
+                        })() : (
+                          "-"
+                        )}
+                      </td>
+                      <td style={tdStyle}>{row.created_at ? new Date(row.created_at).toLocaleString() : "-"}</td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => handlePreview(row)}
+                            style={actionButtonStyle}
+                            aria-label={copy.preview}
+                            title={copy.preview}
+                          >
+                            <EyeIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(row)}
+                            style={actionButtonStyle}
+                            aria-label={copy.edit}
+                            title={copy.edit}
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(row)}
+                            style={dangerButtonStyle}
+                            aria-label={copy.delete}
+                            title={copy.delete}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+           </div>
           {filteredQuestions.length > 0 && (
             <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
               <span style={{ color: "#4b5563", fontSize: 14 }}>
@@ -1794,9 +2231,13 @@ const validate = () => {
                 <div style={{ fontSize: 12, color: "#6b7280", textTransform: "uppercase" }}>{item.kind || "file"}</div>
                 {item.url && (
                   <div style={{ wordBreak: "break-word", fontSize: 12 }}>
-                    <a href={item.url} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
-                      {item.url}
-                    </a>
+                    {isSafeExternalUrl(item.url) ? (
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>
+                        {item.url}
+                      </a>
+                    ) : (
+                      <span>{item.url}</span>
+                    )}
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
@@ -1824,128 +2265,172 @@ const validate = () => {
             </div>
 
             <div style={{ display: "grid", gap: 16 }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                  gap: 12,
-                  alignItems: "flex-start",
-                }}
-              >
-                {(() => {
-                  const questionHasImg = /<img[^>]+src=/i.test(previewRow.question || "");
-                  const questionHtml = questionHasImg ? sanitizeRichTextHtml(previewRow.question || "") : null;
-                  return (
-                    <div style={{ display: "grid", gap: 10 }}>
-                      <div style={{ marginBottom: 4, color: "#6b7280", fontSize: 13 }}>
-                        Question preview (matches test view)
-                      </div>
-                      <div style={{ color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
-                        {questionHasImg ? (
-                          <div
-                            style={{ overflowX: "auto" }}
-                            dangerouslySetInnerHTML={{ __html: questionHtml }}
-                          />
-                        ) : (
-                          renderMathText(previewRow.question)
-                        )}
-                      </div>
-                      {previewRow.image_url && (
-                        <div style={{ marginTop: 4 }}>
-                          <img
-                            src={resolveImageUrl(previewRow.image_url)}
-                            alt=""
-                            style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid #e5e7eb" }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+              {bank.id === "career" ? (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "#6b7280", fontSize: 14 }}>
+                    <span><strong>Code:</strong> {previewRow.code || "-"}</span>
+                    <span><strong>Area:</strong> {getCareerAreaForLang(previewRow, lang) || "-"}</span>
+                    <span><strong>DISC:</strong> {previewRow.disc || "-"}</span>
+                    <span><strong>BLOOM:</strong> {previewRow.bloom || "-"}</span>
+                    <span><strong>UN Goal:</strong> {previewRow.un_goal || "-"}</span>
+                    <span><strong>Area sort:</strong> {previewRow.area_sort ?? "-"}</span>
+                    <span><strong>Sort index:</strong> {previewRow.sort_index ?? "-"}</span>
+                  </div>
 
-                <div style={{ display: "grid", gap: 8 }}>
-                  {normalizeQType(previewRow) === "fill" ? (
-                    <div
-                      style={{
-                        padding: "12px 14px",
-                        borderRadius: 10,
-                        border: "1px solid #e5e7eb",
-                        background: "#fff",
-                      }}
-                    >
-                      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>{copy.fillAnswerLabel}</div>
-                      <div style={{ display: "grid", gap: 6 }}>
-                        {String(previewRow.correct_answer || previewRow.correct || previewRow.answer_a || "—")
-                          .split(/[\n\r,;|]+/)
-                          .map((ans, idx) => {
-                            const val = ans.trim();
-                            return (
-                              <div key={idx} style={{ fontWeight: 600, color: "#111827" }}>
-                                {renderMathText(val || "—")}
-                              </div>
-                            );
-                          })}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                      gap: 12,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ marginBottom: 2, color: "#6b7280", fontSize: 13 }}>Text (EN)</div>
+                      <div style={{ color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
+                        {renderMathText(previewRow.text_en || "—")}
                       </div>
                     </div>
-                  ) : (
-                    [previewRow.answer_a, previewRow.answer_b, previewRow.answer_c, previewRow.answer_d].map((answer, index) => {
-                      const letter = String.fromCharCode(65 + index);
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ marginBottom: 2, color: "#6b7280", fontSize: 13 }}>Text (FR)</div>
+                      <div style={{ color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
+                        {renderMathText(previewRow.text_fr || "—")}
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ marginBottom: 2, color: "#6b7280", fontSize: 13 }}>Text (AR)</div>
+                      <div style={{ color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
+                        {renderMathText(previewRow.text_ar || "—")}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                      gap: 12,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    {(() => {
+                      const questionHasImg = /<img[^>]+src=/i.test(previewRow.question || "");
+                      const questionHtml = questionHasImg ? sanitizeRichTextHtml(previewRow.question || "") : null;
                       return (
+                        <div style={{ display: "grid", gap: 10 }}>
+                          <div style={{ marginBottom: 4, color: "#6b7280", fontSize: 13 }}>
+                            Question preview (matches test view)
+                          </div>
+                          <div style={{ color: "#111827", lineHeight: 1.5, fontWeight: 500, fontSize: 14 }}>
+                            {questionHasImg ? (
+                              <div
+                                style={{ overflowX: "auto" }}
+                                dangerouslySetInnerHTML={{ __html: questionHtml }}
+                              />
+                            ) : (
+                              renderMathText(previewRow.question)
+                            )}
+                          </div>
+                          {previewRow.image_url && (
+                            <div style={{ marginTop: 4 }}>
+                              <img
+                                src={resolveImageUrl(previewRow.image_url)}
+                                alt=""
+                                style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid #e5e7eb" }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {normalizeQType(previewRow) === "fill" ? (
                         <div
-                          key={letter}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
                             padding: "12px 14px",
                             borderRadius: 10,
                             border: "1px solid #e5e7eb",
                             background: "#fff",
                           }}
                         >
-                          <span
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 999,
-                              border: "1px solid #d1d5db",
-                              color: "#111827",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontWeight: 700,
-                              background: "#f9fafb",
-                            }}
-                          >
-                            {letter}
-                          </span>
-                          <span style={{ color: "#111827" }}>{renderMathText(answer)}</span>
+                          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 6 }}>{copy.fillAnswerLabel}</div>
+                          <div style={{ display: "grid", gap: 6 }}>
+                            {String(previewRow.correct_answer || previewRow.correct || previewRow.answer_a || "-")
+                              .split(/[\n\r,;|]+/)
+                              .map((ans, idx) => {
+                                const val = ans.trim();
+                                return (
+                                  <div key={idx} style={{ fontWeight: 600, color: "#111827" }}>
+                                    {renderMathText(val || "-")}
+                                  </div>
+                                );
+                              })}
+                          </div>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                      ) : (
+                        [previewRow.answer_a, previewRow.answer_b, previewRow.answer_c, previewRow.answer_d].map((answer, index) => {
+                          const letter = String.fromCharCode(65 + index);
+                          return (
+                            <div
+                              key={letter}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                                padding: "12px 14px",
+                                borderRadius: 10,
+                                border: "1px solid #e5e7eb",
+                                background: "#fff",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 999,
+                                  border: "1px solid #d1d5db",
+                                  color: "#111827",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: 700,
+                                  background: "#f9fafb",
+                                }}
+                              >
+                                {letter}
+                              </span>
+                              <span style={{ color: "#111827" }}>{renderMathText(answer)}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "#6b7280", fontSize: 14 }}>
-                <span>
-                  <strong>{copy.tableSubject}:</strong> {subjectLabel(previewRow.subject, lang)}
-                </span>
-                <span>
-                  <strong>{copy.tableUnit}:</strong> {unitLabel(previewRow.subject, previewRow.unit, lang)}
-                </span>
-                <span>
-                  <strong>{copy.tableLesson}:</strong> {lessonLabel(previewRow.subject, previewRow.unit, previewRow.lesson, lang)}
-                </span>
-                <span>
-                  <strong>{copy.tableHardness}:</strong> {hardnessLabel(getRowHardness(previewRow, bank), lang)}
-                </span>
-                {previewRow.skill && (
-                  <span>
-                    <strong>{copy.tableSkill}:</strong> {previewRow.skill}
-                  </span>
-                )}
-              </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, color: "#6b7280", fontSize: 14 }}>
+                    <span>
+                      <strong>{copy.tableSubject}:</strong> {subjectLabel(previewRow.subject, lang)}
+                    </span>
+                    <span>
+                      <strong>{copy.tableUnit}:</strong> {unitLabel(previewRow.subject, previewRow.unit, lang)}
+                    </span>
+                    <span>
+                      <strong>{copy.tableLesson}:</strong> {lessonLabel(previewRow.subject, previewRow.unit, previewRow.lesson, lang)}
+                    </span>
+                    <span>
+                      <strong>{copy.tableHardness}:</strong> {hardnessLabel(getRowHardness(previewRow, bank), lang)}
+                    </span>
+                    {previewRow.skill && (
+                      <span>
+                        <strong>{copy.tableSkill}:</strong> {previewRow.skill}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2231,6 +2716,8 @@ function GridInputs({ copy, form, handleChange, lang, bank }) {
   const subjectValueLower = (bank.subjectLocked ? bank.defaultSubject : form.subject || "").toLowerCase();
   const showMathSelectors = bank.supportsUnitLesson && subjectValueLower === "math";
   const showMathSkills = subjectValueLower === "math";
+  const showHardness = bank.supportsHardness !== false;
+  const showSkill = bank.supportsSkill !== false;
 
   return (
     <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
@@ -2271,42 +2758,46 @@ function GridInputs({ copy, form, handleChange, lang, bank }) {
           </select>
         </label>
       )}
-      <label style={{ display: "grid", gap: 6 }}>
-        <span style={{ fontWeight: 600 }}>
-          {copy.hardness} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({copy.optional})</span>
-        </span>
-        <select
-          value={form.hardness}
-          onChange={(e) => handleChange("hardness", e.target.value)}
-          style={selectStyle}
-        >
-          <option value=""> </option>
-          {HARDNESS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label[lang] || opt.label.EN}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label style={{ display: "grid", gap: 6 }}>
-        <span style={{ fontWeight: 600 }}>
-          {copy.skill} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({copy.optional})</span>
-        </span>
-        <input
-          type="text"
-          list={showMathSkills ? "skill-options" : undefined}
-          value={form.skill}
-          onChange={(e) => handleChange("skill", e.target.value)}
-          style={inputStyle}
-        />
-        {showMathSkills && (
-          <datalist id="skill-options">
-            {SKILL_OPTIONS.map((opt) => (
-              <option key={opt} value={opt} />
+      {showHardness && (
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontWeight: 600 }}>
+            {copy.hardness} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({copy.optional})</span>
+          </span>
+          <select
+            value={form.hardness}
+            onChange={(e) => handleChange("hardness", e.target.value)}
+            style={selectStyle}
+          >
+            <option value=""> </option>
+            {HARDNESS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label[lang] || opt.label.EN}
+              </option>
             ))}
-          </datalist>
-        )}
-      </label>
+          </select>
+        </label>
+      )}
+      {showSkill && (
+        <label style={{ display: "grid", gap: 6 }}>
+          <span style={{ fontWeight: 600 }}>
+            {copy.skill} <span style={{ color: "#9ca3af", fontWeight: 400 }}>({copy.optional})</span>
+          </span>
+          <input
+            type="text"
+            list={showMathSkills ? "skill-options" : undefined}
+            value={form.skill}
+            onChange={(e) => handleChange("skill", e.target.value)}
+            style={inputStyle}
+          />
+          {showMathSkills && (
+            <datalist id="skill-options">
+              {SKILL_OPTIONS.map((opt) => (
+                <option key={opt} value={opt} />
+              ))}
+            </datalist>
+          )}
+        </label>
+      )}
     </div>
   );
 }
@@ -2847,14 +3338,27 @@ const persistLocalImages = (map) => {
   }
 };
 
+const isSafeHttpUrl = (value = "") => {
+  const trimmed = String(value || "").trim();
+  const lower = trimmed.toLowerCase();
+  return lower.startsWith("https://") || lower.startsWith("http://");
+};
+
+const isSafeDataImageUrl = (value = "") => {
+  const trimmed = String(value || "").trim();
+  return /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(trimmed);
+};
+
 const resolveImageUrl = (value) => {
-  if (!value) return "";
-  if (value.startsWith(LOCAL_IMAGE_PREFIX)) {
-    const key = value.slice(LOCAL_IMAGE_PREFIX.length);
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith(LOCAL_IMAGE_PREFIX)) {
+    const key = raw.slice(LOCAL_IMAGE_PREFIX.length);
     const images = loadLocalImages();
     return images[key] || "";
   }
-  return value;
+  if (isSafeHttpUrl(raw) || isSafeDataImageUrl(raw)) return raw;
+  return "";
 };
 
 const TABLE_TARGET_VALUES = {
@@ -3338,7 +3842,3 @@ function normalizeCSVRow(record = {}) {
     assignment_type: get("assignment_type") || "quiz",
   };
 }
-
-
-
-

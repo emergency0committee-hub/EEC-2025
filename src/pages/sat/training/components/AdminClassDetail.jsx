@@ -8,6 +8,7 @@ import {
   SUBJECT_OPTIONS,
   MATH_UNIT_OPTIONS,
 } from "../../../../lib/questionBanks.js";
+import { sanitizeRichTextHtml } from "../../../../lib/richText.js";
 
 function SubjectSelect({ value, onChange, disabledLabel }) {
   if (disabledLabel) {
@@ -888,17 +889,17 @@ export default function AdminClassDetail({
                               gridTemplateColumns: hasChoices ? "minmax(0, 2fr) minmax(0, 1fr)" : "1fr",
                             }}
                           >
-                            <div
-                              style={{
-                                padding: 12,
-                                border: "1px solid #e5e7eb",
-                                borderRadius: 10,
-                                background: "#f9fafb",
-                                color: "#1f2937",
-                                lineHeight: 1.6,
-                              }}
-                              dangerouslySetInnerHTML={{ __html: q.text || "" }}
-                            />
+                              <div
+                                style={{
+                                  padding: 12,
+                                  border: "1px solid #e5e7eb",
+                                  borderRadius: 10,
+                                  background: "#f9fafb",
+                                  color: "#1f2937",
+                                  lineHeight: 1.6,
+                                }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(q.text || "") }}
+                              />
                             {hasChoices && (
                               <div
                                 style={{
@@ -1140,4 +1141,3 @@ AdminClassDetail.defaultProps = {
   highlightKey: null,
   catalogError: "",
 };
-

@@ -8,6 +8,19 @@ const escapeHtml = (value = "") =>
 
 export const HIGHLIGHT_COLOR = "#ede9fe";
 
+const isSafeHttpUrl = (value = "") => {
+  const trimmed = String(value || "").trim();
+  const lower = trimmed.toLowerCase();
+  return lower.startsWith("https://") || lower.startsWith("http://");
+};
+
+const isSafeDataImageUrl = (value = "") => {
+  const trimmed = String(value || "").trim();
+  return /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(trimmed);
+};
+
+const isSafeImageSrc = (value = "") => isSafeHttpUrl(value) || isSafeDataImageUrl(value);
+
 export const mergeStyles = (base, extra) => {
   const trimmedExtra = (extra || "").trim();
   if (!trimmedExtra) return base;
@@ -101,7 +114,7 @@ export const sanitizeRichTextHtml = (html = "") => {
     });
     doc.querySelectorAll("a").forEach((anchor) => {
       const href = anchor.getAttribute("href") || "";
-      if (!href.startsWith("http")) {
+      if (!isSafeHttpUrl(href)) {
         anchor.removeAttribute("href");
       } else {
         anchor.setAttribute("target", "_blank");
@@ -110,7 +123,7 @@ export const sanitizeRichTextHtml = (html = "") => {
     });
     doc.querySelectorAll("img").forEach((img) => {
       const src = img.getAttribute("src") || "";
-      if (!src) {
+      if (!src || !isSafeImageSrc(src)) {
         img.remove();
       } else {
         const current = img.getAttribute("style") || "";
