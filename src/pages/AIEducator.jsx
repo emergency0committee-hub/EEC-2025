@@ -1,5 +1,5 @@
 // src/pages/AIEducator.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { jsPDF } from "jspdf";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
@@ -16,6 +16,20 @@ const PLANNING_TABS = [
   { key: "unit", label: "Unit Planning" },
   { key: "syllabus", label: "Syllabus Planning" },
 ];
+
+const GRADEBOOK_STORAGE_KEY = "ai_educator_gradebook_v1";
+
+const makeId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+const normalizeGradebookLabel = (value) => String(value || "").trim();
+
+const buildGradebookDefaults = () => ({
+  version: 1,
+  students: [],
+  skills: [],
+  assessments: [],
+  scores: {},
+});
 
 const UNIT_PLAN_SECTIONS = [
   {
@@ -633,6 +647,222 @@ function useSyllabusState() {
   };
 }
 
+function useGradebookState() {
+  const [gradebook, setGradebook] = useState(() => {
+    if (typeof window === "undefined") return buildGradebookDefaults();
+    try {
+      const raw = localStorage.getItem(GRADEBOOK_STORAGE_KEY);
+      if (!raw) return buildGradebookDefaults();
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return buildGradebookDefaults();
+      return {
+        ...buildGradebookDefaults(),
+        ...parsed,
+        students: Array.isArray(parsed.students) ? parsed.students : [],
+        skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+        assessments: Array.isArray(parsed.assessments) ? parsed.assessments : [],
+        scores: parsed.scores && typeof parsed.scores === "object" ? parsed.scores : {},
+      };
+    } catch {
+      return buildGradebookDefaults();
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GRADEBOOK_STORAGE_KEY, JSON.stringify(gradebook));
+    } catch {}
+  }, [gradebook]);
+
+  const applyGradebook = (updater) => {
+    setGradebook((prev) => {
+      try {
+        const next = updater(prev);
+        if (!next || typeof next !== "object") return prev;
+        return next;
+      } catch (err) {
+        console.error("gradebook update", err);
+        return prev;
+      }
+    });
+  };
+
+  const resetGradebook = () => setGradebook(buildGradebookDefaults());
+
+  const addStudent = (name) => {
+    const clean = normalizeGradebookLabel(name);
+    if (!clean) return;
+    setGradebook((prev) => {
+      const exists = prev.students.some((student) => student.name.toLowerCase() === clean.toLowerCase());
+      if (exists) return prev;
+      return {
+        ...prev,
+        students: [...prev.students, { id: makeId(), name: clean }],
+      };
+    });
+  };
+
+  const removeStudent = (studentId) => {
+    setGradebook((prev) => {
+      const nextStudents = prev.students.filter((student) => student.id !== studentId);
+      const nextScores = { ...prev.scores };
+      Object.keys(nextScores).forEach((assessmentId) => {
+        const assessmentScores = nextScores[assessmentId];
+        if (!assessmentScores || typeof assessmentScores !== "object") return;
+        const { [studentId]: _removed, ...rest } = assessmentScores;
+        nextScores[assessmentId] = rest;
+      });
+      return { ...prev, students: nextStudents, scores: nextScores };
+    });
+  };
+
+  const addSkill = (name) => {
+    const clean = normalizeGradebookLabel(name);
+    if (!clean) return;
+    setGradebook((prev) => {
+      const exists = prev.skills.some((skill) => skill.toLowerCase() === clean.toLowerCase());
+      if (exists) return prev;
+      return { ...prev, skills: [...prev.skills, clean] };
+    });
+  };
+
+  const removeSkill = (skillName) => {
+    setGradebook((prev) => {
+      const nextSkills = prev.skills.filter((skill) => skill !== skillName);
+      const nextAssessments = prev.assessments.map((assessment) => ({
+        ...assessment,
+        questions: (assessment.questions || []).map((question) =>
+          question.skill === skillName ? { ...question, skill: "" } : question
+        ),
+      }));
+      return { ...prev, skills: nextSkills, assessments: nextAssessments };
+    });
+  };
+
+  const addAssessment = ({ title, date, questionCount }) => {
+    const cleanTitle = normalizeGradebookLabel(title);
+    if (!cleanTitle) return null;
+    const count = Math.max(1, Math.min(100, parseInt(questionCount, 10) || 1));
+    const id = makeId();
+    const questions = Array.from({ length: count }, (_, idx) => ({
+      id: `q${idx + 1}`,
+      label: `Q${idx + 1}`,
+      maxPoints: 1,
+      skill: "",
+    }));
+    const assessment = { id, title: cleanTitle, date: date || "", questions };
+    setGradebook((prev) => ({
+      ...prev,
+      assessments: [assessment, ...prev.assessments],
+      scores: { ...prev.scores, [id]: prev.scores[id] || {} },
+    }));
+    return id;
+  };
+
+  const removeAssessment = (assessmentId) => {
+    setGradebook((prev) => {
+      const nextAssessments = prev.assessments.filter((assessment) => assessment.id !== assessmentId);
+      const { [assessmentId]: _removed, ...restScores } = prev.scores || {};
+      return { ...prev, assessments: nextAssessments, scores: restScores };
+    });
+  };
+
+  const updateAssessmentMeta = (assessmentId, patch) => {
+    setGradebook((prev) => {
+      const nextAssessments = prev.assessments.map((assessment) =>
+        assessment.id === assessmentId ? { ...assessment, ...patch } : assessment
+      );
+      return { ...prev, assessments: nextAssessments };
+    });
+  };
+
+  const updateQuestionMeta = (assessmentId, questionId, patch) => {
+    setGradebook((prev) => {
+      const nextAssessments = prev.assessments.map((assessment) => {
+        if (assessment.id !== assessmentId) return assessment;
+        const nextQuestions = (assessment.questions || []).map((question) =>
+          question.id === questionId ? { ...question, ...patch } : question
+        );
+        return { ...assessment, questions: nextQuestions };
+      });
+      return { ...prev, assessments: nextAssessments };
+    });
+  };
+
+  const addQuestion = (assessmentId) => {
+    setGradebook((prev) => {
+      const nextAssessments = prev.assessments.map((assessment) => {
+        if (assessment.id !== assessmentId) return assessment;
+        const current = Array.isArray(assessment.questions) ? assessment.questions : [];
+        const used = new Set(current.map((question) => question.id));
+        let nextIndex = current.length + 1;
+        while (used.has(`q${nextIndex}`)) nextIndex += 1;
+        const nextId = `q${nextIndex}`;
+        return {
+          ...assessment,
+          questions: [...current, { id: nextId, label: `Q${nextIndex}`, maxPoints: 1, skill: "" }],
+        };
+      });
+      return { ...prev, assessments: nextAssessments };
+    });
+  };
+
+  const removeQuestion = (assessmentId, questionId) => {
+    setGradebook((prev) => {
+      const nextAssessments = prev.assessments.map((assessment) => {
+        if (assessment.id !== assessmentId) return assessment;
+        const nextQuestions = (assessment.questions || []).filter((question) => question.id !== questionId);
+        return { ...assessment, questions: nextQuestions };
+      });
+      const nextScores = { ...prev.scores };
+      const assessmentScores = nextScores[assessmentId];
+      if (assessmentScores && typeof assessmentScores === "object") {
+        Object.keys(assessmentScores).forEach((studentId) => {
+          const studentScores = assessmentScores[studentId];
+          if (!studentScores || typeof studentScores !== "object") return;
+          const { [questionId]: _removed, ...rest } = studentScores;
+          assessmentScores[studentId] = rest;
+        });
+        nextScores[assessmentId] = assessmentScores;
+      }
+      return { ...prev, assessments: nextAssessments, scores: nextScores };
+    });
+  };
+
+  const setScore = (assessmentId, studentId, questionId, score) => {
+    setGradebook((prev) => {
+      const nextScores = { ...(prev.scores || {}) };
+      const assessmentScores = (nextScores[assessmentId] && typeof nextScores[assessmentId] === "object") ? nextScores[assessmentId] : {};
+      const studentScores = (assessmentScores[studentId] && typeof assessmentScores[studentId] === "object") ? assessmentScores[studentId] : {};
+      nextScores[assessmentId] = {
+        ...assessmentScores,
+        [studentId]: {
+          ...studentScores,
+          [questionId]: score,
+        },
+      };
+      return { ...prev, scores: nextScores };
+    });
+  };
+
+  return {
+    gradebook,
+    applyGradebook,
+    resetGradebook,
+    addStudent,
+    removeStudent,
+    addSkill,
+    removeSkill,
+    addAssessment,
+    removeAssessment,
+    updateAssessmentMeta,
+    updateQuestionMeta,
+    addQuestion,
+    removeQuestion,
+    setScore,
+  };
+}
+
 function SectionField({ field, value, onChange }) {
   const baseStyles = {
     width: "100%",
@@ -688,6 +918,969 @@ function PlaceholderPanel({ title, description, steps }) {
       <p style={{ margin: 0, color: "#9ca3af", fontSize: 13 }}>
         More AI-assisted tools are coming soon. Share outlines now and export them alongside the syllabus.
       </p>
+    </div>
+  );
+}
+
+function BarList({ items, color = "#4f46e5" }) {
+  if (!items.length) {
+    return <div style={{ color: "#6b7280" }}>No data.</div>;
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {items.map((item) => (
+        <div key={item.label} style={{ display: "grid", gap: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13 }}>
+            <span style={{ fontWeight: 600, color: "#111827" }}>{item.label}</span>
+            <span style={{ color: "#6b7280" }}>
+              {Number.isFinite(item.value) ? `${Math.round(item.value)}%` : "—"}
+            </span>
+          </div>
+          <div style={{ height: 10, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${Math.max(0, Math.min(100, Number.isFinite(item.value) ? item.value : 0))}%`,
+                height: "100%",
+                borderRadius: 999,
+                background: color,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Histogram({ values }) {
+  const bins = useMemo(() => {
+    const next = Array.from({ length: 10 }, (_, idx) => ({
+      idx,
+      label: idx === 9 ? "90–100" : `${idx * 10}–${idx * 10 + 9}`,
+      count: 0,
+    }));
+    (values || []).forEach((raw) => {
+      const value = Number(raw);
+      if (!Number.isFinite(value)) return;
+      const idx = Math.max(0, Math.min(9, Math.floor(value / 10)));
+      next[idx].count += 1;
+    });
+    return next;
+  }, [values]);
+
+  const maxCount = Math.max(1, ...bins.map((bin) => bin.count));
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {bins.map((bin) => (
+        <div
+          key={bin.label}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "72px 1fr 40px",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <div style={{ fontSize: 12, color: "#6b7280" }}>{bin.label}</div>
+          <div style={{ height: 10, borderRadius: 999, background: "#e5e7eb", overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${(bin.count / maxCount) * 100}%`,
+                height: "100%",
+                borderRadius: 999,
+                background: "#0ea5e9",
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 12, color: "#111827", textAlign: "right" }}>{bin.count}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FeedbackAssessmentWorkspace() {
+  const {
+    gradebook,
+    applyGradebook,
+    resetGradebook,
+    addStudent,
+    removeStudent,
+    addSkill,
+    removeSkill,
+    addAssessment,
+    removeAssessment,
+    updateAssessmentMeta,
+    updateQuestionMeta,
+    addQuestion,
+    removeQuestion,
+    setScore,
+  } = useGradebookState();
+
+  const [studentDraft, setStudentDraft] = useState("");
+  const [skillDraft, setSkillDraft] = useState("");
+  const [assessmentTitle, setAssessmentTitle] = useState("");
+  const [assessmentDate, setAssessmentDate] = useState(() => {
+    try {
+      return new Date().toISOString().slice(0, 10);
+    } catch {
+      return "";
+    }
+  });
+  const [assessmentQuestionCount, setAssessmentQuestionCount] = useState("10");
+  const [activeAssessmentId, setActiveAssessmentId] = useState(gradebook.assessments[0]?.id || "");
+  const [activeStudentId, setActiveStudentId] = useState(gradebook.students[0]?.id || "");
+  const [gradingTab, setGradingTab] = useState("questions"); // questions | scores | analysis
+
+  useEffect(() => {
+    if (!gradebook.assessments.length) {
+      if (activeAssessmentId) setActiveAssessmentId("");
+      return;
+    }
+    if (!activeAssessmentId || !gradebook.assessments.some((assessment) => assessment.id === activeAssessmentId)) {
+      setActiveAssessmentId(gradebook.assessments[0].id);
+    }
+  }, [gradebook.assessments, activeAssessmentId]);
+
+  useEffect(() => {
+    if (!gradebook.students.length) {
+      if (activeStudentId) setActiveStudentId("");
+      return;
+    }
+    if (!activeStudentId || !gradebook.students.some((student) => student.id === activeStudentId)) {
+      setActiveStudentId(gradebook.students[0].id);
+    }
+  }, [gradebook.students, activeStudentId]);
+
+  const activeAssessment = useMemo(
+    () => gradebook.assessments.find((assessment) => assessment.id === activeAssessmentId) || null,
+    [gradebook.assessments, activeAssessmentId]
+  );
+
+  const activeStudent = useMemo(
+    () => gradebook.students.find((student) => student.id === activeStudentId) || null,
+    [gradebook.students, activeStudentId]
+  );
+
+  const inputStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    fontSize: 14,
+    boxSizing: "border-box",
+    fontFamily: "inherit",
+  };
+
+  const panelStyle = {
+    border: "1px solid #e5e7eb",
+    borderRadius: 14,
+    padding: 16,
+    background: "#ffffff",
+  };
+
+  const handleAddStudent = () => {
+    addStudent(studentDraft);
+    setStudentDraft("");
+  };
+
+  const handleAddSkill = () => {
+    addSkill(skillDraft);
+    setSkillDraft("");
+  };
+
+  const handleCreateAssessment = () => {
+    const id = addAssessment({ title: assessmentTitle, date: assessmentDate, questionCount: assessmentQuestionCount });
+    if (id) {
+      setActiveAssessmentId(id);
+      setAssessmentTitle("");
+    }
+  };
+
+  const handleStartNewGrading = () => {
+    const now = (() => {
+      try {
+        return new Date().toISOString().slice(0, 10);
+      } catch {
+        return "";
+      }
+    })();
+    const nextTitle = `Grading ${gradebook.assessments.length + 1}`;
+    const id = addAssessment({ title: nextTitle, date: now, questionCount: assessmentQuestionCount || "10" });
+    if (id) {
+      setActiveAssessmentId(id);
+      setGradingTab("questions");
+    }
+  };
+
+  const assessmentTotals = useMemo(() => {
+    const questions = activeAssessment?.questions || [];
+    const totalMax = questions.reduce((sum, question) => sum + (Number(question.maxPoints) || 0), 0);
+
+    const perStudent = gradebook.students.map((student) => {
+      const studentScores = gradebook.scores?.[activeAssessmentId]?.[student.id] || {};
+      const totalScore = questions.reduce((sum, question) => {
+        const raw = studentScores?.[question.id];
+        const value = Number(raw);
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+      const percent = totalMax > 0 ? (totalScore / totalMax) * 100 : 0;
+      return { studentId: student.id, totalScore, percent };
+    });
+
+    const classAverage = perStudent.length ? perStudent.reduce((sum, row) => sum + row.percent, 0) / perStudent.length : 0;
+    const sorted = [...perStudent].sort((a, b) => a.percent - b.percent);
+    const classMedian = sorted.length ? sorted[Math.floor(sorted.length / 2)].percent : 0;
+    const classMin = sorted.length ? sorted[0].percent : 0;
+    const classMax = sorted.length ? sorted[sorted.length - 1].percent : 0;
+
+    return { totalMax, perStudent, classAverage, classMedian, classMin, classMax };
+  }, [activeAssessment?.questions, activeAssessmentId, gradebook.scores, gradebook.students]);
+
+  const skillAnalysis = useMemo(() => {
+    const questions = activeAssessment?.questions || [];
+    const skillsFromQuestions = Array.from(
+      new Set(questions.map((question) => normalizeGradebookLabel(question.skill) || "Unassigned").filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b));
+
+    const skillMeta = skillsFromQuestions.map((skill) => {
+      const related = questions.filter((question) => (normalizeGradebookLabel(question.skill) || "Unassigned") === skill);
+      const maxPoints = related.reduce((sum, question) => sum + (Number(question.maxPoints) || 0), 0);
+      return { skill, questionIds: related.map((question) => question.id), maxPoints };
+    });
+
+    const studentSkillPercents = {};
+    gradebook.students.forEach((student) => {
+      const studentScores = gradebook.scores?.[activeAssessmentId]?.[student.id] || {};
+      studentSkillPercents[student.id] = skillMeta.map((meta) => {
+        const scored = meta.questionIds.reduce((sum, qid) => {
+          const value = Number(studentScores?.[qid]);
+          return sum + (Number.isFinite(value) ? value : 0);
+        }, 0);
+        const pct = meta.maxPoints > 0 ? (scored / meta.maxPoints) * 100 : 0;
+        return { skill: meta.skill, percent: pct };
+      });
+    });
+
+    const classSkill = skillMeta.map((meta) => {
+      if (!gradebook.students.length || meta.maxPoints <= 0) return { label: meta.skill, value: 0 };
+      let totalScored = 0;
+      gradebook.students.forEach((student) => {
+        const studentScores = gradebook.scores?.[activeAssessmentId]?.[student.id] || {};
+        meta.questionIds.forEach((qid) => {
+          const value = Number(studentScores?.[qid]);
+          totalScored += Number.isFinite(value) ? value : 0;
+        });
+      });
+      const denom = meta.maxPoints * gradebook.students.length;
+      return { label: meta.skill, value: denom > 0 ? (totalScored / denom) * 100 : 0 };
+    });
+
+    return { studentSkillPercents, classSkill };
+  }, [activeAssessment?.questions, activeAssessmentId, gradebook.scores, gradebook.students]);
+
+  const activeStudentSkillBars = useMemo(() => {
+    if (!activeStudentId) return [];
+    const entries = skillAnalysis.studentSkillPercents?.[activeStudentId] || [];
+    return entries.map((entry) => ({ label: entry.skill, value: entry.percent }));
+  }, [activeStudentId, skillAnalysis.studentSkillPercents]);
+
+  const activeStudentTotals = useMemo(
+    () => assessmentTotals.perStudent.find((row) => row.studentId === activeStudentId) || null,
+    [assessmentTotals.perStudent, activeStudentId]
+  );
+
+  const distribution = useMemo(() => assessmentTotals.perStudent.map((row) => row.percent), [assessmentTotals.perStudent]);
+  const questions = activeAssessment?.questions || [];
+  const totalsByStudentId = useMemo(() => {
+    const next = {};
+    assessmentTotals.perStudent.forEach((row) => {
+      next[row.studentId] = row;
+    });
+    return next;
+  }, [assessmentTotals.perStudent]);
+
+  const parseClipboardGrid = (text) => {
+    if (!text) return [];
+    const lines = String(text).replace(/\r/g, "").split("\n");
+    while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+    const grid = lines.map((line) => line.split("\t"));
+    if (grid.length === 1 && grid[0].length === 1 && grid[0][0] === "") return [];
+    return grid;
+  };
+
+  const normalizeSkillCellValue = (skills, raw) => {
+    const clean = normalizeGradebookLabel(raw);
+    if (!clean) return { value: "", skillsToAdd: [] };
+    const match = skills.find((skill) => skill.toLowerCase() === clean.toLowerCase());
+    if (match) return { value: match, skillsToAdd: [] };
+    return { value: clean, skillsToAdd: [clean] };
+  };
+
+  const handlePasteQuestionRow = (kind, startQuestionIndex) => (event) => {
+    if (!activeAssessmentId) return;
+    const text = event.clipboardData?.getData("text") || "";
+    const grid = parseClipboardGrid(text);
+    if (grid.length === 0) return;
+    event.preventDefault();
+
+    const row = grid[0] || [];
+    applyGradebook((prev) => {
+      const assessment = prev.assessments.find((item) => item.id === activeAssessmentId);
+      if (!assessment) return prev;
+      const currentQuestions = Array.isArray(assessment.questions) ? assessment.questions : [];
+      const patches = {};
+      const pendingSkills = new Set();
+
+      row.forEach((cell, offset) => {
+        const question = currentQuestions[startQuestionIndex + offset];
+        if (!question) return;
+        const raw = String(cell ?? "");
+        if (kind === "label") {
+          patches[question.id] = { label: raw };
+          return;
+        }
+        if (kind === "max") {
+          if (raw.trim() === "") {
+            patches[question.id] = { maxPoints: "" };
+            return;
+          }
+          const parsed = Number(raw);
+          if (!Number.isFinite(parsed)) return;
+          patches[question.id] = { maxPoints: Math.max(0, parsed) };
+          return;
+        }
+        if (kind === "skill") {
+          const normalized = normalizeSkillCellValue(prev.skills, raw);
+          patches[question.id] = { skill: normalized.value };
+          normalized.skillsToAdd.forEach((entry) => pendingSkills.add(entry));
+        }
+      });
+
+      if (Object.keys(patches).length === 0) return prev;
+
+      const nextAssessments = prev.assessments.map((item) => {
+        if (item.id !== activeAssessmentId) return item;
+        const nextQuestions = (item.questions || []).map((question) => {
+          const patch = patches[question.id];
+          return patch ? { ...question, ...patch } : question;
+        });
+        return { ...item, questions: nextQuestions };
+      });
+
+      const nextSkills = pendingSkills.size ? [...prev.skills, ...Array.from(pendingSkills)] : prev.skills;
+      return { ...prev, skills: nextSkills, assessments: nextAssessments };
+    });
+  };
+
+  const handlePasteScores = (startStudentIndex, startQuestionIndex) => (event) => {
+    if (!activeAssessmentId) return;
+    const text = event.clipboardData?.getData("text") || "";
+    const grid = parseClipboardGrid(text);
+    if (grid.length === 0) return;
+    event.preventDefault();
+
+    applyGradebook((prev) => {
+      const assessment = prev.assessments.find((item) => item.id === activeAssessmentId);
+      if (!assessment) return prev;
+      const currentQuestions = Array.isArray(assessment.questions) ? assessment.questions : [];
+      const currentStudents = Array.isArray(prev.students) ? prev.students : [];
+
+      const nextScores = { ...(prev.scores || {}) };
+      const assessmentScores = (nextScores[activeAssessmentId] && typeof nextScores[activeAssessmentId] === "object")
+        ? { ...nextScores[activeAssessmentId] }
+        : {};
+
+      grid.forEach((row, rowOffset) => {
+        const student = currentStudents[startStudentIndex + rowOffset];
+        if (!student) return;
+        const existingStudentScores =
+          assessmentScores[student.id] && typeof assessmentScores[student.id] === "object"
+            ? assessmentScores[student.id]
+            : {};
+        const studentScores = { ...existingStudentScores };
+
+        row.forEach((cell, colOffset) => {
+          const question = currentQuestions[startQuestionIndex + colOffset];
+          if (!question) return;
+          const raw = String(cell ?? "");
+          if (raw.trim() === "") {
+            studentScores[question.id] = null;
+            return;
+          }
+          const parsed = Number(raw);
+          if (!Number.isFinite(parsed)) return;
+          const maxPoints = Math.max(0, Number(question.maxPoints) || 0);
+          const clamped = Math.max(0, Math.min(maxPoints, parsed));
+          studentScores[question.id] = clamped;
+        });
+
+        assessmentScores[student.id] = studentScores;
+      });
+
+      nextScores[activeAssessmentId] = assessmentScores;
+      return { ...prev, scores: nextScores };
+    });
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div>
+          <h3 style={{ margin: 0, color: "#111827" }}>Gradebook & Analysis</h3>
+          <p style={{ margin: "6px 0 0", color: "#6b7280" }}>
+            Add students, assessments, and question skills, then enter scores to see student and class analytics.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Btn variant="primary" onClick={handleStartNewGrading}>
+            Start New Grading
+          </Btn>
+          <Btn
+            variant="secondary"
+            onClick={() => {
+              if (window.confirm("Clear all saved gradebook data in this browser?")) resetGradebook();
+            }}
+          >
+            Clear Gradebook
+          </Btn>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1fr) 2fr", gap: 16, alignItems: "start" }}>
+        <div style={{ display: "grid", gap: 16 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {[
+              { key: "questions", label: "Sheet 1: Questions & Skills" },
+              { key: "scores", label: "Sheet 2: Student Scores" },
+              { key: "analysis", label: "Analysis" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setGradingTab(tab.key)}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 999,
+                  border: gradingTab === tab.key ? "1px solid #4f46e5" : "1px solid #d1d5db",
+                  background: gradingTab === tab.key ? "#eef2ff" : "#fff",
+                  color: gradingTab === tab.key ? "#312e81" : "#374151",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {gradingTab !== "analysis" && (
+          <section style={panelStyle}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Students</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={studentDraft}
+                onChange={(e) => setStudentDraft(e.target.value)}
+                placeholder="Add student name..."
+                style={inputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddStudent();
+                  }
+                }}
+              />
+              <Btn variant="primary" onClick={handleAddStudent}>
+                Add
+              </Btn>
+            </div>
+            <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
+              {gradebook.students.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>No students yet.</div>
+              ) : (
+                gradebook.students.map((student) => (
+                  <div
+                    key={student.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                      background: student.id === activeStudentId ? "#eef2ff" : "#ffffff",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveStudentId(student.id)}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        padding: 0,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontWeight: student.id === activeStudentId ? 700 : 600,
+                        color: "#111827",
+                      }}
+                    >
+                      {student.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeStudent(student.id)}
+                      style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}
+                      title="Remove student"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+          )}
+
+          {gradingTab === "analysis" && (
+          <section style={panelStyle}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Skills</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                value={skillDraft}
+                onChange={(e) => setSkillDraft(e.target.value)}
+                placeholder="Add skill tag..."
+                style={inputStyle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddSkill();
+                  }
+                }}
+              />
+              <Btn variant="primary" onClick={handleAddSkill}>
+                Add
+              </Btn>
+            </div>
+            <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
+              {gradebook.skills.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>Add skills to tag questions (e.g., Algebra, Reading, Grammar).</div>
+              ) : (
+                gradebook.skills.map((skill) => (
+                  <div
+                    key={skill}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, color: "#111827" }}>{skill}</div>
+                    <button
+                      type="button"
+                      onClick={() => removeSkill(skill)}
+                      style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}
+                      title="Remove skill"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+          )}
+          <section style={panelStyle}>
+            <div style={{ fontWeight: 700, marginBottom: 10 }}>Assessments</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              <input
+                value={assessmentTitle}
+                onChange={(e) => setAssessmentTitle(e.target.value)}
+                placeholder="Assessment title..."
+                style={inputStyle}
+              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <input type="date" value={assessmentDate} onChange={(e) => setAssessmentDate(e.target.value)} style={inputStyle} />
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={assessmentQuestionCount}
+                  onChange={(e) => setAssessmentQuestionCount(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+              <Btn variant="primary" onClick={handleCreateAssessment}>
+                Create Assessment
+              </Btn>
+            </div>
+
+            <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
+              {gradebook.assessments.length === 0 ? (
+                <div style={{ color: "#6b7280" }}>No assessments yet.</div>
+              ) : (
+                gradebook.assessments.map((assessment) => (
+                  <div
+                    key={assessment.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                      background: assessment.id === activeAssessmentId ? "#eef2ff" : "#ffffff",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setActiveAssessmentId(assessment.id)}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        padding: 0,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontWeight: assessment.id === activeAssessmentId ? 700 : 600,
+                        color: "#111827",
+                      }}
+                    >
+                      <div>{assessment.title}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{assessment.date || "—"}</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm("Delete this assessment and its scores?")) {
+                          removeAssessment(assessment.id);
+                          if (assessment.id === activeAssessmentId) setActiveAssessmentId("");
+                        }
+                      }}
+                      style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontWeight: 700 }}
+                      title="Delete assessment"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+
+        <div style={{ display: "grid", gap: 16 }}>
+          {gradingTab !== "analysis" && (
+          <section style={panelStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>
+                  {gradingTab === "questions" ? "Sheet 1: Questions & Skills" : "Sheet 2: Student Scores"}
+                </div>
+                <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>
+                  {gradingTab === "questions"
+                    ? "Edit question labels, assign skills, and set max points (paste from Excel/Sheets)."
+                    : "Enter student scores per question (paste a block from Excel/Sheets)."}
+                </div>
+              </div>
+              {activeAssessment && (
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <Btn variant="secondary" onClick={() => addQuestion(activeAssessment.id)}>
+                    + Add Question
+                  </Btn>
+                  <label style={{ display: "grid", gap: 4 }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Assessment title</span>
+                    <input
+                      value={activeAssessment.title || ""}
+                      onChange={(e) => updateAssessmentMeta(activeAssessment.id, { title: e.target.value })}
+                      style={{ ...inputStyle, width: 240, fontSize: 13 }}
+                    />
+                  </label>
+                  <label style={{ display: "grid", gap: 4 }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>Date</span>
+                    <input
+                      type="date"
+                      value={activeAssessment.date || ""}
+                      onChange={(e) => updateAssessmentMeta(activeAssessment.id, { date: e.target.value })}
+                      style={{ ...inputStyle, width: 160, fontSize: 13 }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {!activeAssessment ? (
+              <div style={{ marginTop: 12, color: "#6b7280" }}>Select or create an assessment to begin.</div>
+            ) : (
+              <div style={{ overflowX: "auto", marginTop: 12 }}>
+                <datalist id="ai-educator-skill-options">
+                  {gradebook.skills.map((skill) => (
+                    <option key={skill} value={skill} />
+                  ))}
+                </datalist>
+                <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", border: "1px solid #e5e7eb" }}>
+                  <thead>
+                    <tr style={{ background: "#eef2ff" }}>
+                      <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 13, borderBottom: "1px solid #e5e7eb" }}>
+                        {gradingTab === "questions" ? "Question" : "Student"}
+                      </th>
+                      {questions.map((question, questionIndex) => (
+                        <th key={question.id} style={{ padding: "8px 10px", borderBottom: "1px solid #e5e7eb", verticalAlign: "top" }}>
+                          {gradingTab === "questions" ? (
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <input
+                                value={question.label || ""}
+                                onChange={(e) => updateQuestionMeta(activeAssessment.id, question.id, { label: e.target.value })}
+                                onPaste={handlePasteQuestionRow("label", questionIndex)}
+                                placeholder={question.id}
+                                style={{ ...inputStyle, fontSize: 12, padding: "8px 10px" }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm("Remove this question column? Scores for it will be deleted.")) {
+                                    removeQuestion(activeAssessment.id, question.id);
+                                  }
+                                }}
+                                style={{ border: "none", background: "none", color: "#b91c1c", cursor: "pointer", fontWeight: 800 }}
+                                title="Remove question"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "grid", gap: 2, minWidth: 90 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#111827" }}>{question.label || question.id}</div>
+                              <div style={{ fontSize: 11, color: "#6b7280" }}>
+                                {(question.skill || "").trim() ? `Skill: ${question.skill} | ` : ""}Max: {Math.max(0, Number(question.maxPoints) || 0)}
+                              </div>
+                            </div>
+                          )}
+                        </th>
+                      ))}
+                      <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 13, borderBottom: "1px solid #e5e7eb" }}>
+                        {gradingTab === "questions" ? "Total Max" : "Total"}
+                      </th>
+                      <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 13, borderBottom: "1px solid #e5e7eb" }}>
+                        {gradingTab === "questions" ? "" : "%"}
+                      </th>
+                    </tr>
+                    {gradingTab === "questions" && (
+                      <tr style={{ background: "#f8fafc" }}>
+                        <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#6b7280", borderBottom: "1px solid #e5e7eb" }}>
+                          Skill
+                        </th>
+                        {questions.map((question, questionIndex) => (
+                          <th key={question.id} style={{ padding: "6px 10px", borderBottom: "1px solid #e5e7eb" }}>
+                            <input
+                              type="text"
+                              list="ai-educator-skill-options"
+                              value={question.skill || ""}
+                              onChange={(e) => updateQuestionMeta(activeAssessment.id, question.id, { skill: e.target.value })}
+                              onBlur={(e) => {
+                                const value = normalizeGradebookLabel(e.target.value);
+                                if (value) addSkill(value);
+                              }}
+                              onPaste={handlePasteQuestionRow("skill", questionIndex)}
+                              placeholder="Skill"
+                              style={{ ...inputStyle, fontSize: 12, padding: "8px 10px" }}
+                            />
+                          </th>
+                        ))}
+                        <th style={{ borderBottom: "1px solid #e5e7eb" }} />
+                        <th style={{ borderBottom: "1px solid #e5e7eb" }} />
+                      </tr>
+                    )}
+                    {gradingTab === "questions" && (
+                      <tr style={{ background: "#f8fafc" }}>
+                        <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12, color: "#6b7280", borderBottom: "1px solid #e5e7eb" }}>
+                          Max
+                        </th>
+                        {questions.map((question, questionIndex) => (
+                          <th key={question.id} style={{ padding: "6px 10px", borderBottom: "1px solid #e5e7eb" }}>
+                            <input
+                              type="number"
+                              min="0"
+                              value={question.maxPoints ?? ""}
+                              onChange={(e) => updateQuestionMeta(activeAssessment.id, question.id, { maxPoints: e.target.value })}
+                              onPaste={handlePasteQuestionRow("max", questionIndex)}
+                              placeholder="0"
+                              style={{ ...inputStyle, fontSize: 12, padding: "8px 10px" }}
+                            />
+                          </th>
+                        ))}
+                        <th style={{ padding: "8px 12px", fontSize: 12, color: "#6b7280", borderBottom: "1px solid #e5e7eb" }}>
+                          {assessmentTotals.totalMax}
+                        </th>
+                        <th style={{ borderBottom: "1px solid #e5e7eb" }} />
+                      </tr>
+                    )}
+                  </thead>
+                  {gradingTab === "scores" ? (
+                    <tbody>
+                      {gradebook.students.length === 0 ? (
+                        <tr>
+                          <td colSpan={questions.length + 3} style={{ padding: "12px", color: "#6b7280" }}>
+                            Add students to start entering scores.
+                          </td>
+                        </tr>
+                      ) : (
+                        gradebook.students.map((student, studentIndex) => {
+                          const totals = totalsByStudentId[student.id] || { totalScore: 0, percent: 0 };
+                          return (
+                            <tr key={student.id} style={{ background: student.id === activeStudentId ? "#fef3c7" : "#ffffff" }}>
+                              <td style={{ padding: "8px 12px", borderBottom: "1px solid #f3f4f6", fontWeight: 700, color: "#111827" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveStudentId(student.id)}
+                                  style={{ border: "none", background: "none", padding: 0, cursor: "pointer", fontWeight: 700, color: "#111827" }}
+                                >
+                                  {student.name}
+                                </button>
+                              </td>
+                              {questions.map((question, questionIndex) => {
+                                const raw = gradebook.scores?.[activeAssessment.id]?.[student.id]?.[question.id];
+                                const value = raw === null || raw === undefined ? "" : String(raw);
+                                const maxPoints = Math.max(0, Number(question.maxPoints) || 0);
+                                return (
+                                  <td key={`${student.id}-${question.id}`} style={{ padding: "6px 10px", borderBottom: "1px solid #f3f4f6" }}>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={maxPoints}
+                                      value={value}
+                                      onChange={(e) => {
+                                        const nextRaw = e.target.value;
+                                        if (nextRaw === "") {
+                                          setScore(activeAssessment.id, student.id, question.id, null);
+                                          return;
+                                        }
+                                        const parsed = Number(nextRaw);
+                                        if (!Number.isFinite(parsed)) return;
+                                        const clamped = Math.max(0, Math.min(maxPoints, parsed));
+                                        setScore(activeAssessment.id, student.id, question.id, clamped);
+                                      }}
+                                      onPaste={handlePasteScores(studentIndex, questionIndex)}
+                                      style={{ ...inputStyle, fontSize: 12, padding: "8px 10px", width: 90 }}
+                                    />
+                                  </td>
+                                );
+                              })}
+                              <td style={{ padding: "8px 12px", borderBottom: "1px solid #f3f4f6", fontWeight: 700, color: "#111827" }}>
+                                {totals.totalScore.toFixed(1)}
+                              </td>
+                              <td style={{ padding: "8px 12px", borderBottom: "1px solid #f3f4f6", color: "#111827" }}>
+                                {Math.round(totals.percent)}%
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  ) : (
+                    <tbody>
+                      <tr>
+                        <td colSpan={questions.length + 3} style={{ padding: "12px", color: "#6b7280" }}>
+                          Switch to "Sheet 2: Student Scores" to enter grades.
+                        </td>
+                      </tr>
+                    </tbody>
+                  )}
+                </table>
+                <div style={{ marginTop: 8, color: "#6b7280", fontSize: 12 }}>
+                  {gradingTab === "questions"
+                    ? "Tip: paste a row from Excel/Sheets into a Question/Skill/Max cell to fill across question columns."
+                    : "Tip: copy a block from Excel/Sheets and paste into any score cell to fill multiple students × questions."}
+                </div>
+              </div>
+            )}
+          </section>
+          )}
+          {gradingTab === "analysis" && (
+          <section style={panelStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>Analytics</div>
+                <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>Student and class performance summary.</div>
+              </div>
+              <label style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "#6b7280" }}>Student</span>
+                <select value={activeStudentId} onChange={(e) => setActiveStudentId(e.target.value)} style={{ ...inputStyle, width: 240, fontSize: 13 }}>
+                  <option value=""> </option>
+                  {gradebook.students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {!activeAssessment ? (
+              <div style={{ marginTop: 12, color: "#6b7280" }}>Select an assessment to view analytics.</div>
+            ) : gradebook.students.length === 0 ? (
+              <div style={{ marginTop: 12, color: "#6b7280" }}>Add students and enter scores to view analytics.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 16, marginTop: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                  {[
+                    { label: "Class Avg", value: assessmentTotals.classAverage },
+                    { label: "Median", value: assessmentTotals.classMedian },
+                    { label: "Min", value: assessmentTotals.classMin },
+                    { label: "Max", value: assessmentTotals.classMax },
+                  ].map((item) => (
+                    <div key={item.label} style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 12, background: "#ffffff" }}>
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{item.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#111827" }}>{Math.round(item.value)}%</div>
+                    </div>
+                  ))}
+                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 12, background: "#ffffff" }}>
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>Student</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#111827" }}>
+                      {activeStudentTotals ? `${Math.round(activeStudentTotals.percent)}%` : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 10 }}>Class Skill Averages</div>
+                    <BarList items={skillAnalysis.classSkill} color="#2563eb" />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 10 }}>Score Distribution</div>
+                    <Histogram values={distribution} />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 10 }}>
+                      {activeStudent ? `Skill Breakdown — ${activeStudent.name}` : "Skill Breakdown — Student"}
+                    </div>
+                    <BarList items={activeStudentSkillBars} color="#a855f7" />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: 10 }}>Notes</div>
+                    <div style={{ color: "#6b7280", fontSize: 13, lineHeight: 1.5 }}>
+                      Tips:
+                      <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                        <li>Add skills first, then tag each question to see skill charts.</li>
+                        <li>Leave a score blank while grading; totals treat blank as 0 until filled.</li>
+                        <li>Data is stored locally in this browser.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1229,17 +2422,7 @@ export default function AIEducator({ onNavigate }) {
       );
     }
 
-    return (
-      <PlaceholderPanel
-        title="Feedback & Assessment Workspace"
-        description="Track formative checkpoints, rubric feedback, and post-assessment reflections."
-        steps={[
-          "Capture quick evidence notes after each lesson or small-group meeting.",
-          "Draft rubric criteria or comment banks for recurring tasks.",
-          "Plan student conferences or peer-feedback cycles.",
-        ]}
-      />
-    );
+    return <FeedbackAssessmentWorkspace />;
   };
 
   return (
