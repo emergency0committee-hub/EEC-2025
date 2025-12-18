@@ -644,33 +644,40 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   };
 
   const copy = COPY[lang] || COPY.EN;
+  const storedRole = (() => {
+    try {
+      if (typeof window === "undefined") return "";
+      const raw = localStorage.getItem("cg_current_user_v1");
+      if (!raw) return "";
+      const stored = JSON.parse(raw);
+      return String(stored.role || "").toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
   const isAdmin = (() => {
     try {
       if (typeof window === "undefined") return false;
       if (localStorage.getItem("cg_admin_ok_v1") === "1") return true;
-      const raw = localStorage.getItem("cg_current_user_v1");
-      if (!raw) return false;
-      const stored = JSON.parse(raw);
-      const role = String(stored.role || "").toLowerCase();
-      return role === "admin" || role === "administrator";
+      return storedRole === "admin" || storedRole === "administrator";
     } catch {
       return false;
     }
   })();
+  const isStaff = storedRole === "staff";
 
   const [activeBank, setActiveBank] = useState("math");
   const visibleBanks = useMemo(
     () =>
       [
         ...Object.values(BANKS).filter((cfg) => {
-          if (cfg.id === "diagnostic" || cfg.id === "career") {
-            return isAdmin;
-          }
+          if (cfg.id === "diagnostic") return isAdmin;
+          if (cfg.id === "career") return isAdmin || isStaff;
           return true;
         }),
         { id: "resources", labelKey: "tabResources" },
       ],
-    [isAdmin]
+    [isAdmin, isStaff]
   );
   const visibleBankIds = useMemo(() => visibleBanks.map((cfg) => cfg.id), [visibleBanks]);
   const bank = BANKS[activeBank] || BANKS.math;
