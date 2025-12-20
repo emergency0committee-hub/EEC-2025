@@ -1554,7 +1554,14 @@ const validate = () => {
     } catch (err) {
       const context = isEditing ? "update" : "create";
       console.error(`${context} assignment question`, err);
-      alert(err?.message || "Failed to save question.");
+      const message = String(err?.message || "");
+      if (bank.id === "career" && /has no field "updated_at"/i.test(message)) {
+        alert(
+          `Supabase schema fix needed:\n\nYour table "cg_career_questions" is missing the "updated_at" column, but a trigger is trying to set it on UPDATE.\n\nRun in Supabase SQL editor:\nALTER TABLE public.cg_career_questions ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();\n\n(Also mirrored in supabase/schema.sql)`,
+        );
+        return;
+      }
+      alert(message || "Failed to save question.");
     } finally {
       setSubmitting(false);
     }

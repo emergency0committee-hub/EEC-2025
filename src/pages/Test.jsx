@@ -6,7 +6,7 @@ import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
 import useCountdown from "../hooks/useCountdown.js";
-import { LANGS, STR } from "../i18n/strings.js";
+import { STR } from "../i18n/strings.js";
 import PaletteOverlay from "./test/PaletteOverlay.jsx";
 
 import {
@@ -20,6 +20,7 @@ import {
 import { validateAll } from "../lib/validate.js";
 import { saveTestSubmission } from "../lib/supabaseStorage.js";
 import { supabase } from "../lib/supabase.js";
+import { toEditorHtml } from "../lib/richText.js";
 
 const toPlainString = (value) => {
   if (value == null) return "";
@@ -34,11 +35,6 @@ const pickFirstFilled = (...values) => {
 };
 const phoneDigitsLength = (value) => toPlainString(value).replace(/[^\d]/g, "").length;
 const isPhoneValid = (value) => phoneDigitsLength(value) >= 6;
-
-import {
-  RIASEC_SCALE_MAX,
-  Q_UNIFIED_CLEAN as RAW_RIASEC,
-} from "../questionBank.js";
 
 const SCHOOL_OPTIONS = [
   { value: "Al - Jinan International School", label: "Al - Jinan International School" },
@@ -58,18 +54,75 @@ const GRADE_OPTIONS = [
 ];
 
 const ENV_CG_ACCESS_CODE = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
+const ENV_CG_QUESTIONS_TABLE = (import.meta.env.VITE_CG_QUESTIONS_TABLE || "cg_career_questions").trim();
+const RIASEC_SCALE_MAX = 5;
 
 /* ====================== Validation / Questions ====================== */
-const RAW_APT = [];
-const RAW_WORK = [];
-const RAW_INT = [];
+const RIASEC_QUESTIONS_PER_AREA = 5;
+const takeFirstNPerArea = (questions, nPerArea) => {
+  const n = Math.max(0, Number(nPerArea) || 0);
+  const counts = new Map();
+  const out = [];
+  for (const q of questions || []) {
+    const area = q?.area || "";
+    const key = area ? area : "__NO_AREA__";
+    const cur = counts.get(key) || 0;
+    if (cur >= n) continue;
+    counts.set(key, cur + 1);
+    out.push(q);
+  }
+  return out;
+};
 
-const { Q_RIASEC, Q_APT, Q_WORK, Q_INT } = validateAll({
-  Q_RIASEC: RAW_RIASEC,
-  Q_APT: RAW_APT,
-  Q_WORK: RAW_WORK,
-  Q_INT: RAW_INT,
-});
+const CAREER_QUESTIONS_SELECT =
+  "id, code, area, area_en, area_fr, area_ar, text_en, text_fr, text_ar, disc, bloom, un_goal, sort_index, area_sort";
+
+const normalizeString = (value) => (value == null ? "" : String(value));
+const normalizeTrimmed = (value) => normalizeString(value).trim();
+const toFiniteNumberOr = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const mapCareerRowToQuestion = (row) => {
+  const id = normalizeTrimmed(row?.id);
+  const code = normalizeTrimmed(row?.code);
+  const areaEN = normalizeTrimmed(row?.area_en);
+  const areaFR = normalizeTrimmed(row?.area_fr);
+  const areaAR = normalizeTrimmed(row?.area_ar);
+  const area = areaEN || normalizeTrimmed(row?.area);
+  const textEN = normalizeString(row?.text_en);
+  const textFR = normalizeString(row?.text_fr);
+  const textAR = normalizeString(row?.text_ar);
+  const fallbackText = textEN || textFR || textAR || "";
+  return {
+    id,
+    code,
+    area,
+    areaEN: areaEN || area,
+    areaFR,
+    areaAR,
+    text: fallbackText,
+    textEN: textEN || fallbackText,
+    textFR,
+    textAR,
+    DISC: normalizeTrimmed(row?.disc),
+    BLOOM: normalizeTrimmed(row?.bloom),
+    UN_Goal: normalizeTrimmed(row?.un_goal),
+    sortIndex: row?.sort_index,
+    areaSort: row?.area_sort,
+  };
+};
+
+const sortCareerQuestions = (a, b) => {
+  const areaA = toFiniteNumberOr(a?.areaSort, Number.POSITIVE_INFINITY);
+  const areaB = toFiniteNumberOr(b?.areaSort, Number.POSITIVE_INFINITY);
+  if (areaA !== areaB) return areaA - areaB;
+  const idxA = toFiniteNumberOr(a?.sortIndex, Number.POSITIVE_INFINITY);
+  const idxB = toFiniteNumberOr(b?.sortIndex, Number.POSITIVE_INFINITY);
+  if (idxA !== idxB) return idxA - idxB;
+  return normalizeString(a?.id).localeCompare(normalizeString(b?.id));
+};
 
 /* ====================== Local profile keys ====================== */
 const PROFILE_KEY = "cg_profile_v1";
@@ -147,7 +200,10 @@ function pillarAggAndCountsFromAnswers(questions, ansTF) {
 
 /* ====================== MAIN COMPONENT ====================== */
 export default function Test({ onNavigate, lang = "EN", setLang, preview = false }) {
-  const lenR = Q_RIASEC.length;
+  const [riasecQuestions, setRiasecQuestions] = useState([]);
+  const [riasecLoading, setRiasecLoading] = useState(false);
+  const [riasecError, setRiasecError] = useState("");
+  const lenR = riasecQuestions.length;
   const INTRO = 0;
   const R_START = 1;
   const LAST = R_START + Math.max(0, lenR - 1);
@@ -210,6 +266,56 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     });
     return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
   }, []);
+
+  const loadRiasecQuestions = useCallback(async () => {
+    if (!ENV_CG_QUESTIONS_TABLE) {
+      setRiasecQuestions([]);
+      setRiasecError("Questions table is not configured (missing VITE_CG_QUESTIONS_TABLE).");
+      return;
+    }
+    setRiasecLoading(true);
+    setRiasecError("");
+    try {
+      const pageSize = 1000;
+      let from = 0;
+      const allRows = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from(ENV_CG_QUESTIONS_TABLE)
+          .select(CAREER_QUESTIONS_SELECT)
+          .order("area_sort", { ascending: true })
+          .order("sort_index", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const rows = Array.isArray(data) ? data : [];
+        allRows.push(...rows);
+        if (rows.length < pageSize) break;
+        from += pageSize;
+      }
+
+      const mapped = allRows
+        .map(mapCareerRowToQuestion)
+        .filter((q) => Boolean(q?.id) && Boolean(q?.code) && Boolean(String(q?.text || "").trim()));
+      mapped.sort(sortCareerQuestions);
+      const perArea = takeFirstNPerArea(mapped, RIASEC_QUESTIONS_PER_AREA);
+      const validated = validateAll({ Q_RIASEC: perArea, Q_APT: [], Q_WORK: [], Q_INT: [] });
+      setRiasecQuestions(validated.Q_RIASEC || []);
+
+      if (!(validated.Q_RIASEC || []).length) {
+        throw new Error("No career questions were loaded. Check the cg_career_questions table and RLS permissions.");
+      }
+    } catch (err) {
+      console.error("cg career questions load", err);
+      setRiasecQuestions([]);
+      setRiasecError(err?.message || "Unable to load career questions. Please try again.");
+    } finally {
+      setRiasecLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRiasecQuestions();
+  }, [loadRiasecQuestions]);
 
   const [page, setPage] = useState(INTRO);
   const isAdmin = (() => {
@@ -340,16 +446,18 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   // Preview mode: skip access/profile and jump straight to questions without saving
   useEffect(() => {
     if (!isPreview || previewInitRef.current) return;
+    if (riasecLoading || riasecError) return;
+    if (!riasecQuestions.length) return;
     previewInitRef.current = true;
     setCgUnlocked(true);
     const chosen = (examLang || lang || "EN") || "EN";
     setExamLang(chosen);
     try { localStorage.setItem("cg_exam_lang", chosen); } catch {}
     setExamLocked(true);
-    setShuffledRIASEC(shuffleArray(Q_RIASEC));
+    setShuffledRIASEC(shuffleArray(riasecQuestions));
     setStartTs(Date.now());
     setPage(R_START);
-  }, [isPreview, lang, examLang, R_START]);
+  }, [isPreview, lang, examLang, R_START, riasecLoading, riasecError, riasecQuestions]);
 
   const cd = useCountdown(timerMin * 60);
   const hasEndedRef = useRef(false);
@@ -451,8 +559,12 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       participantError: "Veuillez saisir votre nom, votre école, votre classe, votre numéro de téléphone et une adresse e-mail valide pour continuer.",
     },
   };
-  const ui = UI[localeKey] || UI.EN;
-  const LANG_LABELS = { EN: "English", AR: "العربية", FR: "Français" };
+  const examLocaleKey = String((examLang || lang || "EN") || "EN").toUpperCase();
+  const ui = UI[examLocaleKey] || UI.EN;
+  const isRTL = examLocaleKey.startsWith("AR");
+  const rtlPageStyle = isRTL ? { direction: "rtl", textAlign: "right" } : undefined;
+  const LANG_LABELS = { EN: "English", FR: "Français", AR: "العربية" };
+  const EXAM_LANG_CODES = ["EN", "FR", "AR"];
   const signInTitle = strings.signInTitle || loginLabel;
   const signInPrompt = strings.signInSubtitle || ui.accessDesc || "Please sign in to continue.";
   const backHomeLabel = ui.backHome || strings.backToHome || "Back Home";
@@ -639,16 +751,16 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   };
 
   // Derived results
-  const riasecSums = useMemo(() => riasecFromAnswers(Q_RIASEC || [], ansTF), [ansTF]);
-  const answeredCounts = useMemo(() => answeredCountByLetter(Q_RIASEC || [], ansTF), [ansTF]);
+  const riasecSums = useMemo(() => riasecFromAnswers(riasecQuestions || [], ansTF), [riasecQuestions, ansTF]);
+  const answeredCounts = useMemo(() => answeredCountByLetter(riasecQuestions || [], ansTF), [riasecQuestions, ansTF]);
   const top3 = useMemo(() => topRIASECFiltered(riasecSums, answeredCounts), [riasecSums, answeredCounts]);
   const radarData = useMemo(() => riasecRadarDataFiltered(riasecSums, answeredCounts, RIASEC_SCALE_MAX), [riasecSums, answeredCounts]);
-  const areaPerc = useMemo(() => riasecAreaPercents(Q_RIASEC || [], ansTF, RIASEC_SCALE_MAX), [ansTF]);
-  const interestsPerc = useMemo(() => interestPercents(Q_INT || [], ansTF), [ansTF]);
+  const areaPerc = useMemo(() => riasecAreaPercents(riasecQuestions || [], ansTF, RIASEC_SCALE_MAX), [riasecQuestions, ansTF]);
+  const interestsPerc = useMemo(() => interestPercents([], ansTF), [ansTF]);
 
   const { pillarAgg, pillarCounts } = useMemo(
-    () => pillarAggAndCountsFromAnswers(Q_RIASEC || [], ansTF),
-    [ansTF]
+    () => pillarAggAndCountsFromAnswers(riasecQuestions || [], ansTF),
+    [riasecQuestions, ansTF]
   );
 
   const answeredIndexes = useMemo(() => {
@@ -668,19 +780,31 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       setShowProfileError(true);
       return;
     }
+    if (riasecLoading) {
+      alert("Questions are still loading. Please wait a moment and try again.");
+      return;
+    }
+    if (riasecError) {
+      alert(`Could not load questions. ${riasecError}`);
+      return;
+    }
+    if (!riasecQuestions.length) {
+      alert("No questions are available right now. Please try again later.");
+      return;
+    }
     setShowProfileError(false);
     // Require language selection and lock it for the session
-    const chosen = String(examLang || "").trim();
+    const chosen = String(examLang || "").trim().toUpperCase();
     if (!chosen) {
       alert("Please select the test language before starting.");
       return;
     }
     try { localStorage.setItem("cg_exam_lang", chosen); } catch {}
-    if (typeof setLang === "function") setLang(chosen);
+    if (typeof setLang === "function" && (chosen === "EN" || chosen === "FR")) setLang(chosen);
     setExamLocked(true);
     // Shuffle questions each time the test starts
     hasEndedRef.current = false;
-    setShuffledRIASEC(shuffleArray(Q_RIASEC));
+    setShuffledRIASEC(shuffleArray(riasecQuestions));
     cd.reset(); cd.start();
     setStartTs(Date.now());
     setPage(R_START);
@@ -703,7 +827,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
         radarData,
         areaPercents: areaPerc,
         pillarAgg,
-        pillarCounts,
+        pillarCounts: { ...(pillarCounts || {}), totalQuestions },
         topCodes,
       };
       const goToResults = () =>
@@ -713,7 +837,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
           interestPercents: interestsPerc,
           participant: { ...profile, ts: Date.now() },
           pillarAgg,
-          pillarCounts,
+          pillarCounts: { ...(pillarCounts || {}), totalQuestions },
         });
 
       if (isPreview) {
@@ -773,9 +897,16 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
 
   if (!isPreview && tabExited) {
     return (
-      <PageWrap>
+      <PageWrap style={rtlPageStyle}>
         <Card>
-          <p style={{ color: "#6b7280", margin: 0 }}>Session paused because the tab was switched. Please refresh to restart.</p>
+          <p style={{ color: "#6b7280", margin: 0 }}>
+            Session paused because the tab was switched. Click Continue to resume (or refresh to restart).
+          </p>
+          <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "flex-start" }}>
+            <Btn variant="primary" onClick={() => setTabExited(false)}>
+              Continue
+            </Btn>
+          </div>
         </Card>
       </PageWrap>
     );
@@ -783,8 +914,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
 
   if (authLoading) {
   return (
-    <PageWrap style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
-        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={lang} />
+    <PageWrap style={{ ...(rtlPageStyle || {}), userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
+        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={examLocaleKey} />
         <Card>
           <p style={{ color: "#6b7280" }}>
             {ui.checkingSession || "Please wait while we verify your session."}
@@ -796,8 +927,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
 
   if (!authUser) {
     return (
-      <PageWrap>
-        <HeaderBar title={signInTitle} right={null} lang={lang} />
+      <PageWrap style={rtlPageStyle}>
+        <HeaderBar title={signInTitle} right={null} lang={examLocaleKey} />
         <Card>
           <p style={{ color: "#6b7280" }}>{signInPrompt}</p>
           <div style={{ display: "flex", gap: 8 }}>
@@ -811,8 +942,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
 
   if (accountLoading) {
     return (
-      <PageWrap>
-        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={lang} />
+      <PageWrap style={rtlPageStyle}>
+        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={examLocaleKey} />
         <Card>
           <p style={{ color: "#6b7280" }}>
             {ui.checkingSession || "Please wait while we verify your account details."}
@@ -839,8 +970,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     };
 
     return (
-      <PageWrap>
-        <HeaderBar title={gateTitle} right={null} lang={lang} />
+      <PageWrap style={rtlPageStyle}>
+        <HeaderBar title={gateTitle} right={null} lang={examLocaleKey} />
         <Card>
           <h2 style={{ marginTop: 0 }}>{gateTitle}</h2>
           <p style={{ color: "#475569", marginBottom: 8 }}>{gateDesc}</p>
@@ -959,8 +1090,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   // Intro
   if (page === INTRO) {
     return (
-      <PageWrap>
-        <HeaderBar title="Career Guidance Test" lang={lang} />
+      <PageWrap style={rtlPageStyle}>
+        <HeaderBar title="Career Guidance Test" lang={examLang || lang} />
         <Card>
           {!cgUnlocked ? (
             <>
@@ -995,25 +1126,51 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
                 <div style={{ fontWeight: 700, marginBottom: 8 }}>{ui.chooseLang}</div>
                 <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 10 }}>{ui.lockedNote}</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {LANGS.map((l) => (
+                  {EXAM_LANG_CODES.map((code) => (
                     <button
-                      key={l.code}
-                      onClick={() => setExamLang(l.code)}
-                      aria-pressed={examLang === l.code}
+                      key={code}
+                      onClick={() => setExamLang(code)}
+                      aria-pressed={examLang === code}
                       style={{
                         padding: "8px 12px",
                         borderRadius: 8,
-                        border: examLang === l.code ? "2px solid #2563eb" : "1px solid #d1d5db",
-                        background: examLang === l.code ? "#eff6ff" : "#fff",
+                        border: examLang === code ? "2px solid #2563eb" : "1px solid #d1d5db",
+                        background: examLang === code ? "#eff6ff" : "#fff",
                         fontWeight: 600,
                         cursor: "pointer",
                         minWidth: 80,
                       }}
                     >
-                      {LANG_LABELS[l.code] || l.code} ({l.code})
+                      {LANG_LABELS[code] || code} ({code})
                     </button>
                   ))}
                 </div>
+              </div>
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: 12,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 10,
+                  background: "#ffffff",
+                }}
+              >
+                {riasecLoading ? (
+                  <div style={{ color: "#475569", fontSize: 14 }}>Loading questions…</div>
+                ) : riasecError ? (
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <div style={{ color: "#dc2626", fontSize: 14, flex: "1 1 260px" }}>
+                      Could not load questions. {riasecError}
+                    </div>
+                    <Btn variant="secondary" onClick={loadRiasecQuestions}>
+                      Retry
+                    </Btn>
+                  </div>
+                ) : (
+                  <div style={{ color: "#475569", fontSize: 14 }}>
+                    Questions loaded: <b>{riasecQuestions.length}</b>
+                  </div>
+                )}
               </div>
               <p style={{ color:"#475569" }}>{ui.signedInAs} <b>{authUser?.email || profile.email || "user"}</b>. Your account details will be used for the report.</p>
               <div style={{ marginTop: 16, padding: 16, border: "1px solid #e2e8f0", borderRadius: 12, background: "#f8fafc" }}>
@@ -1048,7 +1205,13 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
               </div>
               <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
                 <Btn variant="back" onClick={()=>onNavigate("home")}>{ui.backHome}</Btn>
-                <Btn variant="primary" onClick={startTest}>{ui.startTest}</Btn>
+                <Btn
+                  variant="primary"
+                  onClick={startTest}
+                  disabled={riasecLoading || Boolean(riasecError) || riasecQuestions.length === 0}
+                >
+                  {riasecLoading ? "Loading…" : ui.startTest}
+                </Btn>
               </div>
             </>
           )}
@@ -1065,23 +1228,21 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     const current = ansTF[q.id];
     const isLast = page === LAST;
     return (
-      <PageWrap>
-        <HeaderBar title="Career Guidance Test" right={null} lang={lang} />
+      <PageWrap style={rtlPageStyle}>
+        <HeaderBar title="Career Guidance Test" right={null} lang={examLang || lang} />
         <Card>
           <ProgressBar value={Math.round((indexFromPage(page)/totalQuestions)*100)} />
           <div style={{ marginTop: 18 }}>
             {(() => {
               const activeLang = examLocked ? (examLang || lang) : lang;
-              const qText = cleanText(pickLocalized(q, "text", activeLang));
-              const qArea = pickLocalized(q, "area", activeLang);
+              const rawText = cleanText(pickLocalized(q, "text", activeLang));
+              const qHtml = toEditorHtml(rawText);
               return (
                 <>
-                  <h3 style={{ margin: 0, color: "#111827" }}>{qText}</h3>
-                  {qArea && (
-                    <div style={{ marginTop: 8, fontSize: 13, color: "#374151" }}>
-                      <b>{ui.area}</b> {cleanText(qArea)}
-                    </div>
-                  )}
+                  <div
+                    style={{ margin: 0, color: "#111827", fontSize: 18, fontWeight: 700, lineHeight: 1.6 }}
+                    dangerouslySetInnerHTML={{ __html: qHtml }}
+                  />
                 </>
               );
             })()}

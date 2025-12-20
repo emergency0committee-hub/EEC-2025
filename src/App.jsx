@@ -426,8 +426,8 @@ const currentUser = (() => {
 
   if (route === "home")   return withHelper(<Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />, helper);
   if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
-  if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} />;
-  if (route === "about")  return <About onNavigate={onNavigate} lang={lang} />;
+  if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+  if (route === "about")  return <About onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
@@ -660,5 +660,3 @@ const currentUser = (() => {
     </PageWrap>
   );
 }
-
-

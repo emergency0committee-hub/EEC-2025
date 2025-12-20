@@ -1033,6 +1033,8 @@ function FeedbackAssessmentWorkspace() {
   const [activeAssessmentId, setActiveAssessmentId] = useState(gradebook.assessments[0]?.id || "");
   const [activeStudentId, setActiveStudentId] = useState(gradebook.students[0]?.id || "");
   const [gradingTab, setGradingTab] = useState("questions"); // questions | scores | analysis
+  const [isNewGradingModalOpen, setIsNewGradingModalOpen] = useState(false);
+  const [newGradingQuestionCount, setNewGradingQuestionCount] = useState("10");
 
   useEffect(() => {
     if (!gradebook.assessments.length) {
@@ -1100,6 +1102,17 @@ function FeedbackAssessmentWorkspace() {
   };
 
   const handleStartNewGrading = () => {
+    setNewGradingQuestionCount(assessmentQuestionCount || "10");
+    setIsNewGradingModalOpen(true);
+  };
+
+  const handleConfirmNewGrading = () => {
+    const fallback = Math.max(1, Math.min(100, parseInt(assessmentQuestionCount, 10) || 10));
+    const parsed = parseInt(String(newGradingQuestionCount ?? "").trim(), 10);
+    const count = Math.max(1, Math.min(100, Number.isFinite(parsed) ? parsed : fallback));
+    const countStr = String(count);
+    setAssessmentQuestionCount(countStr);
+
     const now = (() => {
       try {
         return new Date().toISOString().slice(0, 10);
@@ -1108,11 +1121,12 @@ function FeedbackAssessmentWorkspace() {
       }
     })();
     const nextTitle = `Grading ${gradebook.assessments.length + 1}`;
-    const id = addAssessment({ title: nextTitle, date: now, questionCount: assessmentQuestionCount || "10" });
+    const id = addAssessment({ title: nextTitle, date: now, questionCount: countStr });
     if (id) {
       setActiveAssessmentId(id);
       setGradingTab("questions");
     }
+    setIsNewGradingModalOpen(false);
   };
 
   const assessmentTotals = useMemo(() => {
@@ -1327,6 +1341,55 @@ function FeedbackAssessmentWorkspace() {
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {isNewGradingModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(17, 24, 39, 0.45)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            zIndex: 1000,
+          }}
+          onClick={() => setIsNewGradingModalOpen(false)}
+        >
+          <div
+            style={{ ...panelStyle, width: "min(520px, 100%)", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontWeight: 800, color: "#111827" }}>Start New Grading</div>
+            <div style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>How many questions are in this assessment?</div>
+            <label style={{ display: "grid", gap: 6, marginTop: 12 }}>
+              <span style={{ fontSize: 12, color: "#6b7280" }}>Number of questions</span>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                value={newGradingQuestionCount}
+                onChange={(e) => setNewGradingQuestionCount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleConfirmNewGrading();
+                  }
+                }}
+                style={inputStyle}
+              />
+            </label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
+              <Btn variant="secondary" onClick={() => setIsNewGradingModalOpen(false)}>
+                Cancel
+              </Btn>
+              <Btn variant="primary" onClick={handleConfirmNewGrading}>
+                Start
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div>
           <h3 style={{ margin: 0, color: "#111827" }}>Gradebook & Analysis</h3>
@@ -1349,8 +1412,8 @@ function FeedbackAssessmentWorkspace() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(260px, 1fr) 2fr", gap: 16, alignItems: "start" }}>
-        <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ display: "grid", gap: 16, alignItems: "start" }}>
+        <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {[
               { key: "questions", label: "Sheet 1: Questions & Skills" },
@@ -1572,9 +1635,9 @@ function FeedbackAssessmentWorkspace() {
           </section>
         </div>
 
-        <div style={{ display: "grid", gap: 16 }}>
+        <div style={{ display: "grid", gap: 16, minWidth: 0 }}>
           {gradingTab !== "analysis" && (
-          <section style={panelStyle}>
+          <section style={{ ...panelStyle, minWidth: 0, overflow: "hidden" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
               <div>
                 <div style={{ fontWeight: 700 }}>
@@ -1587,7 +1650,7 @@ function FeedbackAssessmentWorkspace() {
                 </div>
               </div>
               {activeAssessment && (
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
                   <Btn variant="secondary" onClick={() => addQuestion(activeAssessment.id)}>
                     + Add Question
                   </Btn>
@@ -1615,7 +1678,7 @@ function FeedbackAssessmentWorkspace() {
             {!activeAssessment ? (
               <div style={{ marginTop: 12, color: "#6b7280" }}>Select or create an assessment to begin.</div>
             ) : (
-              <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <div style={{ overflowX: "auto", overflowY: "auto", maxWidth: "100%", marginTop: 12 }}>
                 <datalist id="ai-educator-skill-options">
                   {gradebook.skills.map((skill) => (
                     <option key={skill} value={skill} />
@@ -1800,7 +1863,7 @@ function FeedbackAssessmentWorkspace() {
           </section>
           )}
           {gradingTab === "analysis" && (
-          <section style={panelStyle}>
+          <section style={{ ...panelStyle, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
               <div>
                 <div style={{ fontWeight: 700 }}>Analytics</div>

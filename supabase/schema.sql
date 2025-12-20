@@ -66,3 +66,40 @@ do $$ begin
   using ( auth.uid() = id )
   with check ( auth.uid() = id );
 exception when duplicate_object then null; end $$;
+
+-- Career Guidance question bank (used by the Career Guidance test + bank manager)
+-- Note: If you already created this table without `updated_at`, run the `alter table` below.
+create table if not exists public.cg_career_questions (
+  id uuid not null default gen_random_uuid (),
+  code text null,
+  area text null,
+  area_en text null,
+  area_fr text null,
+  area_ar text null,
+  text_en text null,
+  text_fr text null,
+  text_ar text null,
+  disc text null,
+  bloom text null,
+  un_goal text null,
+  sort_index integer null,
+  area_sort integer null,
+  updated_at timestamptz not null default now(),
+  constraint cg_career_questions_pkey primary key (id)
+);
+
+alter table public.cg_career_questions
+  add column if not exists updated_at timestamptz not null default now();
+
+create or replace function public.cg_career_questions_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_career_questions_updated_at on public.cg_career_questions;
+create trigger trg_cg_career_questions_updated_at
+before update on public.cg_career_questions for each row
+execute function public.cg_career_questions_set_updated_at();

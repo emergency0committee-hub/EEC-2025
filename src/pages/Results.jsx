@@ -206,7 +206,7 @@ export default function Results({ resultId, participant, submission = null, onNa
   const pillarCounts = resultData?.pillarCounts || {};
   const answersObj = resultData?.answers || {};
   const answeredCount = Object.keys(answersObj || {}).length;
-  const totalQuestions = 300;
+  const totalQuestions = Number(pillarCounts?.totalQuestions) || 300;
   const answeredPct = totalQuestions > 0 ? answeredCount / totalQuestions : 0;
   const durationSeconds = (() => {
     // prefer explicit duration fields
@@ -945,7 +945,6 @@ export default function Results({ resultId, participant, submission = null, onNa
     </PageWrap>
   );
 }
-
 
 
 

@@ -39,7 +39,7 @@ export function validateArray(name, arr, checks) {
 export function validateAll({ Q_RIASEC, Q_APT, Q_WORK, Q_INT }) {
   // RIASEC: id, text, code; area is optional string
   const riasec = validateArray("Q_RIASEC", Q_RIASEC, [
-    (q) => Number.isInteger(q?.id),
+    (q) => Number.isInteger(q?.id) || (typeof q?.id === "string" && q.id.trim().length > 0),
     (q) => typeof q?.text === "string" && q.text.trim().length > 0,
     (q) => typeof q?.code === "string" && q.code.trim().length >= 1,
     (q) => q?.area === undefined || typeof q.area === "string",
@@ -47,7 +47,7 @@ export function validateAll({ Q_RIASEC, Q_APT, Q_WORK, Q_INT }) {
 
   // Aptitude: id, text, domain, options[], correct idx
   const apt = validateArray("Q_APT", Q_APT, [
-    (q) => Number.isInteger(q?.id),
+    (q) => Number.isInteger(q?.id) || (typeof q?.id === "string" && q.id.trim().length > 0),
     (q) => typeof q?.text === "string" && q.text.trim().length > 0,
     (q) => typeof q?.domain === "string" && q.domain.trim().length > 0,
     (q) => Array.isArray(q?.options) && q.options.length >= 2 && q.options.every((o) => typeof o === "string"),
@@ -56,14 +56,14 @@ export function validateAll({ Q_RIASEC, Q_APT, Q_WORK, Q_INT }) {
 
   // Work: id, key, text
   const work = validateArray("Q_WORK", Q_WORK, [
-    (q) => Number.isInteger(q?.id),
+    (q) => Number.isInteger(q?.id) || (typeof q?.id === "string" && q.id.trim().length > 0),
     (q) => typeof q?.text === "string" && q.text.trim().length > 0,
     (q) => typeof q?.key === "string" && q.key.trim().length > 0,
   ]);
 
   // Interests: id, cluster, text
   const int = validateArray("Q_INT", Q_INT, [
-    (q) => Number.isInteger(q?.id),
+    (q) => Number.isInteger(q?.id) || (typeof q?.id === "string" && q.id.trim().length > 0),
     (q) => typeof q?.text === "string" && q.text.trim().length > 0,
     (q) => typeof q?.cluster === "string" && q.cluster.trim().length > 0,
   ]);
