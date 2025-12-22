@@ -16,6 +16,9 @@ const PROFILE_CHUNK_SIZE = 99;
 const normalizeEmail = (value) =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
+const normalizeSchool = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
 const deriveRowEmail = (row) => {
   if (!row) return "";
   const candidates = [
@@ -111,8 +114,16 @@ export default function AdminDashboard({ onNavigate }) {
     onNavigate: PropTypes.func.isRequired,
   };
 
+  const MIN_COMPLETION_PCT = 0.8;
+  const MIN_DURATION_MINUTES_NEW = 20;
+  const MIN_DURATION_MINUTES_OLD = 30;
+
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [studentCountsBySchool, setStudentCountsBySchool] = useState({});
+  const [studentCountsLoading, setStudentCountsLoading] = useState(false);
+  const [studentCountsLoaded, setStudentCountsLoaded] = useState(false);
+  const [studentCountsError, setStudentCountsError] = useState("");
   const [selectedSchool, setSelectedSchool] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
@@ -141,6 +152,49 @@ export default function AdminDashboard({ onNavigate }) {
   const activeSchoolFilter = lockSchoolToUser ? viewerSchool : selectedSchool;
   const canManageSubmissions = viewerRole === "admin";
 
+  const loadStudentCounts = useCallback(async () => {
+    if (!canManageSubmissions) return;
+    setStudentCountsLoading(true);
+    setStudentCountsError("");
+    try {
+      const table = import.meta.env.VITE_USERS_TABLE || "profiles";
+      const pageSize = 1000;
+      let from = 0;
+      const rows = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from(table)
+          .select("school, role")
+          .order("id", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const chunk = Array.isArray(data) ? data : [];
+        rows.push(...chunk);
+        if (chunk.length < pageSize) break;
+        from += pageSize;
+        if (from > 100000) break;
+      }
+      const counts = {};
+      rows.forEach((profile) => {
+        const schoolKey = normalizeSchool(profile?.school);
+        if (!schoolKey) return;
+        const role = String(profile?.role || "").trim().toLowerCase();
+        const isStudent = !role || role === "student" || role === "user";
+        if (!isStudent) return;
+        counts[schoolKey] = (counts[schoolKey] || 0) + 1;
+      });
+      setStudentCountsBySchool(counts);
+      setStudentCountsLoaded(true);
+    } catch (err) {
+      console.error("Failed to load student counts:", err);
+      setStudentCountsBySchool({});
+      setStudentCountsLoaded(false);
+      setStudentCountsError(err?.message || "Failed to load student counts.");
+    } finally {
+      setStudentCountsLoading(false);
+    }
+  }, [canManageSubmissions]);
+
   useEffect(() => {
     if (lockSchoolToUser && selectedSchool !== viewerSchool) {
       setSelectedSchool(viewerSchool);
@@ -159,6 +213,17 @@ export default function AdminDashboard({ onNavigate }) {
       console.warn("Failed to persist timer minutes", err);
     }
   }, [timerMin]);
+
+  useEffect(() => {
+    if (!canManageSubmissions) {
+      setStudentCountsBySchool({});
+      setStudentCountsLoaded(false);
+      setStudentCountsError("");
+      setStudentCountsLoading(false);
+      return;
+    }
+    loadStudentCounts();
+  }, [canManageSubmissions, loadStudentCounts]);
 
   const realSubmissions = useMemo(
     () => submissions.filter((s) => !s?._demo),
@@ -185,6 +250,99 @@ export default function AdminDashboard({ onNavigate }) {
     return (p.school || "").trim();
   };
 
+  const getSchoolLabel = (submission) => {
+    const school =
+      (submission?.participant?.school || "").trim() ||
+      (submission?.profile_match?.school || "").trim() ||
+      (submission?.profile?.school || "").trim() ||
+      (submission?.school || "").trim();
+    return school || "Unknown";
+  };
+
+  const getTotalQuestions = (submission) => {
+    const counts =
+      submission?.pillar_counts ||
+      submission?.pillarCounts ||
+      submission?.pillar_count ||
+      submission?.pillarCount ||
+      {};
+    const raw = counts?.totalQuestions ?? counts?.total_questions ?? counts?.total_questions_count ?? null;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    return 300;
+  };
+
+  const getAnsweredCount = (submission) => {
+    const profileSource = submission?.profile_match || submission?.profile || {};
+    const participant = submission?.participant || {};
+    const numericCandidates = [
+      profileSource.answered_count,
+      participant.answered_count,
+      participant.answered,
+      submission?.answered_count,
+      submission?.answer_count,
+    ];
+    for (const candidate of numericCandidates) {
+      const parsed = Number(candidate);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+    const containers = [submission?.answers, submission?.answers_json, participant?.answers, profileSource?.answers];
+    for (const container of containers) {
+      if (Array.isArray(container)) return container.length;
+      if (container && typeof container === "object") return Object.keys(container).length;
+      if (typeof container === "string") {
+        const trimmed = container.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parsed.length;
+          if (parsed && typeof parsed === "object") return Object.keys(parsed).length;
+        } catch {
+          continue;
+        }
+      }
+    }
+    return 0;
+  };
+
+  const getDurationSeconds = (submission) => {
+    const participant = submission?.participant || submission?.profile || {};
+    const directSecondsCandidates = [
+      submission?.duration_sec,
+      submission?.durationSeconds,
+      participant?.duration_sec,
+      participant?.durationSeconds,
+    ];
+    for (const candidate of directSecondsCandidates) {
+      const parsed = Number(candidate);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+    }
+    const directMinutesCandidates = [submission?.duration_minutes, submission?.durationMinutes, participant?.duration_minutes, participant?.durationMinutes];
+    for (const candidate of directMinutesCandidates) {
+      const parsed = Number(candidate);
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed * 60;
+    }
+    try {
+      const start = participant?.started_at ? new Date(participant.started_at).getTime() : NaN;
+      const end = participant?.finished_at ? new Date(participant.finished_at).getTime() : NaN;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+      return Math.round((end - start) / 1000);
+    } catch {
+      return null;
+    }
+  };
+
+  const isSubmissionIncomplete = (submission) => {
+    const answeredCount = getAnsweredCount(submission);
+    const totalQuestions = getTotalQuestions(submission);
+    const answeredPct = totalQuestions > 0 ? answeredCount / totalQuestions : 0;
+    const durationSeconds = getDurationSeconds(submission);
+    const durationMinutes =
+      typeof durationSeconds === "number" && Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
+    const minDurationMinutes = totalQuestions > 200 ? MIN_DURATION_MINUTES_OLD : MIN_DURATION_MINUTES_NEW;
+    return (durationMinutes != null && durationMinutes < minDurationMinutes) || answeredPct < MIN_COMPLETION_PCT;
+  };
+
   const bulkEntries = bulkSet?.entries || [];
   const bulkActive = bulkEntries.length > 0;
   const canViewSubmission = (submission) => {
@@ -201,6 +359,24 @@ export default function AdminDashboard({ onNavigate }) {
       (sub) => getSchool(sub).trim().toLowerCase() === target
     );
   }, [submissions, activeSchoolFilter]);
+
+  const incompleteBySchoolRows = useMemo(() => {
+    const map = new Map();
+    (visibleSubmissions || [])
+      .filter((sub) => sub && !sub._demo)
+      .forEach((sub) => {
+        const school = getSchoolLabel(sub);
+        const key = school.toLowerCase();
+        const cur = map.get(key) || { school, total: 0, incomplete: 0 };
+        cur.total += 1;
+        if (isSubmissionIncomplete(sub)) cur.incomplete += 1;
+        map.set(key, cur);
+      });
+    return Array.from(map.values()).sort((a, b) =>
+      a.school.localeCompare(b.school, undefined, { sensitivity: "base" })
+    );
+  }, [visibleSubmissions]);
+
   const sortedSubmissions = useMemo(() => {
     const list = [...visibleSubmissions];
     list.sort((a, b) => {
@@ -641,8 +817,14 @@ export default function AdminDashboard({ onNavigate }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <h3 style={{ marginTop: 0, marginBottom: 0 }}>Recent Test Submissions</h3>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Btn variant="secondary" onClick={fetchSubmissions} disabled={loading}>
-                {loading ? "Refreshing..." : "Refresh"}
+              <Btn
+                variant="secondary"
+                onClick={async () => {
+                  await Promise.all([fetchSubmissions(), canManageSubmissions ? loadStudentCounts() : Promise.resolve()]);
+                }}
+                disabled={loading || studentCountsLoading}
+              >
+                {loading || studentCountsLoading ? "Refreshing..." : "Refresh"}
               </Btn>
               {canManageSubmissions && (
                 <Btn
@@ -719,6 +901,67 @@ export default function AdminDashboard({ onNavigate }) {
                 ? `No submissions found for ${activeSchoolFilter} yet.`
                 : "No submissions available."}
             </p>
+          )}
+
+          {canManageSubmissions && !loading && (
+            <div
+              className="no-print"
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid #e5e7eb",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+                <h4 style={{ margin: 0, color: "#111827" }}>Incomplete by School</h4>
+                <div style={{ color: "#6b7280", fontSize: 13 }}>
+                  Rules: {">="} {Math.round(MIN_COMPLETION_PCT * 100)}% answered and {">="} {MIN_DURATION_MINUTES_NEW} min (150Q) / {">="} {MIN_DURATION_MINUTES_OLD} min (300Q)
+                </div>
+              </div>
+              {incompleteBySchoolRows.length ? (
+                <div style={{ overflowX: "auto", marginTop: 10 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                    <thead>
+                      <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>School</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Students</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Participants</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Incomplete</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {incompleteBySchoolRows.map((row) => {
+                        const pct = row.total > 0 ? row.incomplete / row.total : 0;
+                        const schoolKey = normalizeSchool(row.school);
+                        const studentCount =
+                          studentCountsLoaded ? (studentCountsBySchool[schoolKey] || 0) : null;
+                        return (
+                          <tr key={row.school} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                            <td style={{ padding: 12 }}>{row.school}</td>
+                            <td style={{ padding: 12 }}>
+                              {studentCountsLoading ? "..." : studentCountsLoaded ? studentCount : "-"}
+                            </td>
+                            <td style={{ padding: 12 }}>{row.total}</td>
+                            <td style={{ padding: 12, fontWeight: 700, color: row.incomplete ? "#b91c1c" : "#111827" }}>
+                              {row.incomplete}
+                            </td>
+                            <td style={{ padding: 12 }}>{Math.round(pct * 100)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, color: "#6b7280" }}>No submissions available.</div>
+              )}
+              {studentCountsError && (
+                <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13 }}>
+                  Student account counts unavailable: {studentCountsError}
+                </div>
+              )}
+            </div>
           )}
 
           <div
@@ -1042,15 +1285,5 @@ export default function AdminDashboard({ onNavigate }) {
     </PageWrap>
   );
 }
-
-
-
-
-
-
-
-
-
-
 
 

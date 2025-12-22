@@ -208,6 +208,10 @@ export default function Results({ resultId, participant, submission = null, onNa
   const answeredCount = Object.keys(answersObj || {}).length;
   const totalQuestions = Number(pillarCounts?.totalQuestions) || 300;
   const answeredPct = totalQuestions > 0 ? answeredCount / totalQuestions : 0;
+  const MIN_COMPLETION_PCT = 0.8;
+  const MIN_DURATION_MINUTES_NEW = 20;
+  const MIN_DURATION_MINUTES_OLD = 30;
+  const minDurationMinutes = totalQuestions > 200 ? MIN_DURATION_MINUTES_OLD : MIN_DURATION_MINUTES_NEW;
   const durationSeconds = (() => {
     // prefer explicit duration fields
     const d = resultData?.durationSeconds;
@@ -226,7 +230,7 @@ export default function Results({ resultId, participant, submission = null, onNa
   const durationMinutes =
     typeof durationSeconds === "number" && Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
   const isIncomplete =
-    (durationMinutes != null && durationMinutes < 30) || answeredPct < 0.8;
+    (durationMinutes != null && durationMinutes < minDurationMinutes) || answeredPct < MIN_COMPLETION_PCT;
 
   const themeOrder = useMemo(
     () => [...radarData].sort((a, b) => b.score - a.score).map((d) => d.code),
@@ -595,10 +599,10 @@ export default function Results({ resultId, participant, submission = null, onNa
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Career Guidance Submission Rules</div>
         <ul style={{ margin: 0, paddingLeft: 18, color: "#1e3a8a", lineHeight: 1.5 }}>
           <li>
-            A submission is considered valid only if the student answers at least <strong>80% of the questions</strong>.
+            A submission is considered valid only if the student answers at least <strong>{Math.round(MIN_COMPLETION_PCT * 100)}% of the questions</strong>.
           </li>
           <li>
-            The total time spent must be <strong>30 minutes or more</strong>. Finishing earlier marks the result as incomplete.
+            The total time spent must be <strong>{minDurationMinutes} minutes or more</strong>. Finishing earlier marks the result as incomplete.
           </li>
           <li>
             Any attempt that fails either rule is automatically labeled “Marked Incomplete” and should be retaken under supervised
@@ -945,8 +949,6 @@ export default function Results({ resultId, participant, submission = null, onNa
     </PageWrap>
   );
 }
-
-
 
 
 
