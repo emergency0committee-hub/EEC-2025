@@ -97,6 +97,8 @@ const RULE_CARD = {
   padding: 14,
   background: "#ffffff",
   boxShadow: "0 2px 10px rgba(15,23,42,0.06)",
+  boxSizing: "border-box",
+  width: "100%",
   minWidth: "100%",
   scrollSnapAlign: "center",
   flex: "0 0 100%",

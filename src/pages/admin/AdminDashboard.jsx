@@ -19,6 +19,76 @@ const normalizeEmail = (value) =>
 const normalizeSchool = (value) =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
+const normalizeRiasec = (value) =>
+  String(value || "")
+    .toUpperCase()
+    .replace(/[^RIASEC]/g, "");
+
+const parseTopCodes = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === "object") {
+    if (Array.isArray(value.top_codes)) return value.top_codes;
+    if (Array.isArray(value.topCodes)) return value.topCodes;
+    if (Array.isArray(value.codes)) return value.codes;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (
+      (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+      (trimmed.startsWith("{") && trimmed.endsWith("}"))
+    ) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return parseTopCodes(parsed);
+      } catch {
+        return [];
+      }
+    }
+    if (trimmed.includes(",")) return trimmed.split(",").map((part) => part.trim());
+    return trimmed.split("");
+  }
+  return [];
+};
+
+const extractTop3FromRadar = (radarData) => {
+  if (!Array.isArray(radarData)) return "";
+  const list = radarData
+    .map((entry) => ({
+      code: normalizeRiasec(entry?.code || "").charAt(0),
+      score: Number(entry?.score ?? entry?.percent ?? entry?.value ?? 0),
+    }))
+    .filter((entry) => entry.code);
+  list.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code));
+  return list
+    .slice(0, 3)
+    .map((entry) => entry.code)
+    .join("");
+};
+
+const extractTop3Code = (submission) => {
+  if (!submission) return "";
+  const fromRadar = extractTop3FromRadar(submission.radar_data || submission.radarData || submission.radar || []);
+  if (fromRadar) return fromRadar;
+  const rawTop =
+    submission.top_codes ??
+    submission.topCodes ??
+    submission.top_codes_json ??
+    submission.topCodesJson ??
+    submission.top_codes_list ??
+    submission.topCodesList;
+  const fromTop = parseTopCodes(rawTop)
+    .flatMap((item) => normalizeRiasec(item).split(""))
+    .filter(Boolean)
+    .join("")
+    .slice(0, 3);
+  if (fromTop) return fromTop;
+  const fromCode = normalizeRiasec(submission.riasec_code || submission.riasecCode || "").slice(0, 3);
+  if (fromCode) return fromCode;
+  return "";
+};
+
 const deriveRowEmail = (row) => {
   if (!row) return "";
   const candidates = [
@@ -151,6 +221,24 @@ export default function AdminDashboard({ onNavigate }) {
   const lockSchoolToUser = Boolean(viewerSchool) && viewerRole === "school";
   const activeSchoolFilter = lockSchoolToUser ? viewerSchool : selectedSchool;
   const canManageSubmissions = viewerRole === "admin";
+  const downloadCsv = (filename, rows) => {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const escapeCell = (value) => {
+      const text = String(value ?? "");
+      if (/["\n,]/.test(text)) return `"${text.replace(/"/g, "\"\"")}"`;
+      return text;
+    };
+    const csv = safeRows.map((row) => row.map(escapeCell).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const loadStudentCounts = useCallback(async () => {
     if (!canManageSubmissions) return;
@@ -259,6 +347,23 @@ export default function AdminDashboard({ onNavigate }) {
     return school || "Unknown";
   };
 
+  const getParticipantLabel = (submission) => {
+    const participant =
+      submission?.participant ||
+      submission?.profile_match ||
+      submission?.profile ||
+      {};
+    const label = (
+      participant?.name ||
+      participant?.full_name ||
+      participant?.username ||
+      participant?.email ||
+      submission?.user_email ||
+      ""
+    ).trim();
+    return label || "Unknown";
+  };
+
   const getTotalQuestions = (submission) => {
     const counts =
       submission?.pillar_counts ||
@@ -362,6 +467,8 @@ export default function AdminDashboard({ onNavigate }) {
 
   const incompleteBySchoolRows = useMemo(() => {
     const map = new Map();
+    let totalAll = 0;
+    let totalIncomplete = 0;
     (visibleSubmissions || [])
       .filter((sub) => sub && !sub._demo)
       .forEach((sub) => {
@@ -369,13 +476,118 @@ export default function AdminDashboard({ onNavigate }) {
         const key = school.toLowerCase();
         const cur = map.get(key) || { school, total: 0, incomplete: 0 };
         cur.total += 1;
-        if (isSubmissionIncomplete(sub)) cur.incomplete += 1;
+        totalAll += 1;
+        if (isSubmissionIncomplete(sub)) {
+          cur.incomplete += 1;
+          totalIncomplete += 1;
+        }
         map.set(key, cur);
       });
-    return Array.from(map.values()).sort((a, b) =>
+    const rows = Array.from(map.values()).sort((a, b) =>
       a.school.localeCompare(b.school, undefined, { sensitivity: "base" })
     );
+    return { rows, totalAll, totalIncomplete };
   }, [visibleSubmissions]);
+
+  const top3HierarchyRows = useMemo(() => {
+    const firstMap = new Map();
+    let totalCount = 0;
+    (visibleSubmissions || [])
+      .filter((sub) => sub && !sub._demo)
+      .forEach((sub) => {
+        if (isSubmissionIncomplete(sub)) return;
+        const codeRaw = extractTop3Code(sub);
+        const letters = normalizeRiasec(codeRaw).split("");
+        const first = letters[0] || "Unknown";
+        const second = letters[1] || "-";
+        const third = letters[2] || "-";
+        totalCount += 1;
+        if (!firstMap.has(first)) firstMap.set(first, new Map());
+        const secondMap = firstMap.get(first);
+        if (!secondMap.has(second)) secondMap.set(second, new Map());
+        const thirdMap = secondMap.get(second);
+        const entry = thirdMap.get(third) || {
+          first,
+          second,
+          third,
+          count: 0,
+          students: [],
+          rowSpanFirst: 0,
+          rowSpanSecond: 0,
+        };
+        entry.count += 1;
+        entry.students.push({
+          name: getParticipantLabel(sub),
+          school: getSchoolLabel(sub),
+        });
+        thirdMap.set(third, entry);
+      });
+
+    const order = { R: 0, I: 1, A: 2, S: 3, E: 4, C: 5 };
+    const sortKey = (value) => {
+      const v = String(value || "").toUpperCase();
+      if (v === "Unknown") return { rank: 2, val: "" };
+      if (v === "-") return { rank: 1, val: "" };
+      const pos = order[v];
+      return { rank: 0, val: Number.isFinite(pos) ? pos : 99 };
+    };
+    const sortValues = (a, b) => {
+      const ka = sortKey(a);
+      const kb = sortKey(b);
+      if (ka.rank !== kb.rank) return ka.rank - kb.rank;
+      return ka.val - kb.val;
+    };
+
+    const rows = [];
+    const firstKeys = Array.from(firstMap.keys()).sort(sortValues);
+    firstKeys.forEach((first) => {
+      const secondMap = firstMap.get(first);
+      const secondKeys = Array.from(secondMap.keys()).sort(sortValues);
+      secondKeys.forEach((second) => {
+        const thirdMap = secondMap.get(second);
+        const thirdKeys = Array.from(thirdMap.keys()).sort(sortValues);
+        thirdKeys.forEach((third) => {
+          rows.push(thirdMap.get(third));
+        });
+      });
+    });
+
+    let i = 0;
+    while (i < rows.length) {
+      const first = rows[i].first;
+      let j = i;
+      while (j < rows.length && rows[j].first === first) j += 1;
+      rows[i].rowSpanFirst = j - i;
+      for (let k = i + 1; k < j; k += 1) rows[k].rowSpanFirst = 0;
+
+      let m = i;
+      while (m < j) {
+        const second = rows[m].second;
+        let n = m;
+        while (n < j && rows[n].second === second) n += 1;
+        rows[m].rowSpanSecond = n - m;
+        for (let k = m + 1; k < n; k += 1) rows[k].rowSpanSecond = 0;
+        m = n;
+      }
+      i = j;
+    }
+    return { rows, totalCount };
+  }, [visibleSubmissions]);
+
+  const top3CsvRows = useMemo(() => {
+    const header = ["First Letter", "Second Letter", "Third Letter", "Count", "Students"];
+    const rows = top3HierarchyRows.rows.map((group) => {
+      const studentList = group.students
+        .map((student) => {
+          const showSchool = !lockSchoolToUser && student.school && student.school !== "Unknown";
+          return showSchool ? `${student.name} (${student.school})` : student.name;
+        })
+        .join("; ");
+      return [group.first, group.second, group.third, group.count, studentList];
+    });
+    rows.push(["Total", "", "", top3HierarchyRows.totalCount, ""]);
+    return [header, ...rows];
+  }, [top3HierarchyRows, lockSchoolToUser]);
 
   const sortedSubmissions = useMemo(() => {
     const list = [...visibleSubmissions];
@@ -918,7 +1130,7 @@ export default function AdminDashboard({ onNavigate }) {
                   Rules: {">="} {Math.round(MIN_COMPLETION_PCT * 100)}% answered and {">="} {MIN_DURATION_MINUTES_NEW} min (150Q) / {">="} {MIN_DURATION_MINUTES_OLD} min (300Q)
                 </div>
               </div>
-              {incompleteBySchoolRows.length ? (
+              {incompleteBySchoolRows.rows.length ? (
                 <div style={{ overflowX: "auto", marginTop: 10 }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                     <thead>
@@ -931,7 +1143,7 @@ export default function AdminDashboard({ onNavigate }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {incompleteBySchoolRows.map((row) => {
+                      {incompleteBySchoolRows.rows.map((row) => {
                         const pct = row.total > 0 ? row.incomplete / row.total : 0;
                         const schoolKey = normalizeSchool(row.school);
                         const studentCount =
@@ -950,6 +1162,17 @@ export default function AdminDashboard({ onNavigate }) {
                           </tr>
                         );
                       })}
+                      <tr style={{ background: "#f8fafc", borderTop: "2px solid #e5e7eb" }}>
+                        <td style={{ padding: 12, fontWeight: 800 }}>Total</td>
+                        <td style={{ padding: 12 }} />
+                        <td style={{ padding: 12, fontWeight: 800 }}>{incompleteBySchoolRows.totalAll}</td>
+                        <td style={{ padding: 12, fontWeight: 800 }}>{incompleteBySchoolRows.totalIncomplete}</td>
+                        <td style={{ padding: 12, fontWeight: 800 }}>
+                          {incompleteBySchoolRows.totalAll > 0
+                            ? `${Math.round((incompleteBySchoolRows.totalIncomplete / incompleteBySchoolRows.totalAll) * 100)}%`
+                            : "0%"}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -960,6 +1183,105 @@ export default function AdminDashboard({ onNavigate }) {
                 <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13 }}>
                   Student account counts unavailable: {studentCountsError}
                 </div>
+              )}
+            </div>
+          )}
+
+          {!loading && (
+            <div
+              className="no-print"
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid #e5e7eb",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+                <h4 style={{ margin: 0, color: "#111827" }}>Top 3 Letter Groups</h4>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ color: "#6b7280", fontSize: 13 }}>
+                    Grouped by first, then second, then third letter. Matching letters are merged.
+                  </div>
+                  <Btn
+                    variant="secondary"
+                    onClick={() => downloadCsv("top3_letter_groups.csv", top3CsvRows)}
+                    disabled={!top3HierarchyRows.rows.length}
+                  >
+                    Export CSV
+                  </Btn>
+                </div>
+              </div>
+              {top3HierarchyRows.rows.length ? (
+                <div style={{ overflowX: "auto", marginTop: 10 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                    <thead>
+                      <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>1st Letter</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>2nd Letter</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>3rd Letter</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Students</th>
+                        <th style={{ padding: 12, textAlign: "left", fontWeight: 600 }}>Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {top3HierarchyRows.rows.map((group, index) => {
+                        const visible = group.students.slice(0, 8);
+                        const remaining = group.students.length - visible.length;
+                        return (
+                          <tr key={`${group.first}-${group.second}-${group.third}-${index}`} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                            {group.rowSpanFirst > 0 && (
+                              <td style={{ padding: 12, fontWeight: 700 }} rowSpan={group.rowSpanFirst}>
+                                {group.first}
+                              </td>
+                            )}
+                            {group.rowSpanSecond > 0 && (
+                              <td style={{ padding: 12, fontWeight: 700 }} rowSpan={group.rowSpanSecond}>
+                                {group.second}
+                              </td>
+                            )}
+                            <td style={{ padding: 12, fontWeight: 700 }}>{group.third}</td>
+                            <td style={{ padding: 12 }}>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                {visible.map((student, idx) => {
+                                  const showSchool = !lockSchoolToUser && student.school && student.school !== "Unknown";
+                                  const label = showSchool ? `${student.name} (${student.school})` : student.name;
+                                  return (
+                                    <span
+                                      key={`${group.first}-${group.second}-${group.third}-${idx}`}
+                                      style={{
+                                        padding: "4px 10px",
+                                        borderRadius: 999,
+                                        background: "#f1f5f9",
+                                        border: "1px solid #e2e8f0",
+                                        fontSize: 12,
+                                        color: "#0f172a",
+                                      }}
+                                      title={label}
+                                    >
+                                      {label}
+                                    </span>
+                                  );
+                                })}
+                                {remaining > 0 && (
+                                  <span style={{ fontSize: 12, color: "#64748b" }}>+{remaining} more</span>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: 12 }}>{group.count}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ background: "#f8fafc", borderTop: "2px solid #e5e7eb" }}>
+                        <td style={{ padding: 12, fontWeight: 800 }} colSpan={4}>
+                          Total
+                        </td>
+                        <td style={{ padding: 12, fontWeight: 800 }}>{top3HierarchyRows.totalCount}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ marginTop: 8, color: "#6b7280" }}>No grouped results yet.</div>
               )}
             </div>
           )}
@@ -1285,5 +1607,3 @@ export default function AdminDashboard({ onNavigate }) {
     </PageWrap>
   );
 }
-
-

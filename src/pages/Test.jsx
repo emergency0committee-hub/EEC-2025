@@ -753,7 +753,10 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   // Derived results
   const riasecSums = useMemo(() => riasecFromAnswers(riasecQuestions || [], ansTF), [riasecQuestions, ansTF]);
   const answeredCounts = useMemo(() => answeredCountByLetter(riasecQuestions || [], ansTF), [riasecQuestions, ansTF]);
-  const top3 = useMemo(() => topRIASECFiltered(riasecSums, answeredCounts), [riasecSums, answeredCounts]);
+  const top3 = useMemo(
+    () => topRIASECFiltered(riasecSums, answeredCounts, RIASEC_SCALE_MAX),
+    [riasecSums, answeredCounts]
+  );
   const radarData = useMemo(() => riasecRadarDataFiltered(riasecSums, answeredCounts, RIASEC_SCALE_MAX), [riasecSums, answeredCounts]);
   const areaPerc = useMemo(() => riasecAreaPercents(riasecQuestions || [], ansTF, RIASEC_SCALE_MAX), [riasecQuestions, ansTF]);
   const interestsPerc = useMemo(() => interestPercents([], ansTF), [ansTF]);

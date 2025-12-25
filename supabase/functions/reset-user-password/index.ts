@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { corsHeaders } from "https://esm.sh/@supabase/auth-helpers-shared@0.5.7";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 type ResetPayload = {
@@ -7,7 +6,13 @@ type ResetPayload = {
   newPassword?: string;
 };
 
-const requiredEnv = ["SUPABASE_URL", "SERVICE_ROLE_KEY", "ADMIN_RESET_TOKEN"] as const;
+const requiredEnv = ["SUPABASE_URL", "SERVICE_ROLE_KEY"] as const;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 function getEnv(name: (typeof requiredEnv)[number]): string {
   const value = Deno.env.get(name);
@@ -17,25 +22,60 @@ function getEnv(name: (typeof requiredEnv)[number]): string {
   return value;
 }
 
+function getBearerToken(req: Request): string {
+  const authHeader = req.headers.get("authorization") ?? "";
+  return authHeader.replace(/^Bearer\s+/i, "").trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get("authorization") ?? "";
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const allowedToken = getEnv("ADMIN_RESET_TOKEN");
-    if (!token || token !== allowedToken) {
-      return new Response("Unauthorized", {
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = getBearerToken(req);
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
-        status: 405,
+    const supabaseUrl = getEnv("SUPABASE_URL");
+    const serviceRoleKey = getEnv("SERVICE_ROLE_KEY");
+
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+
+    const {
+      data: { user },
+      error: userError,
+    } = await adminClient.auth.getUser(token);
+
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: profile, error: profileError } = await adminClient
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || profile?.role !== "admin") {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -50,13 +90,6 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const supabaseUrl = getEnv("SUPABASE_URL");
-    const serviceRoleKey = getEnv("SERVICE_ROLE_KEY");
-
-    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
 
     const { error } = await adminClient.auth.admin.updateUserById(userId, {
       password: newPassword,

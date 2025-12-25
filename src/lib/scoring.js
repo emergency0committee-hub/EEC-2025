@@ -22,9 +22,15 @@ export function answeredCountByLetter(questions, answers) {
   return counts;
 }
 
-export function topRIASECFiltered(scores, counts) {
-  const entries = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  return entries.slice(0, 3).map(([code, score]) => ({ code, score, count: counts[code] || 0 }));
+export function topRIASECFiltered(scores, counts, maxScale = 5) {
+  const entries = Object.entries(scores).map(([code, raw]) => {
+    const count = counts?.[code] || 0;
+    const max = count * maxScale;
+    const percent = max > 0 ? (Number(raw || 0) / max) * 100 : 0;
+    return { code, raw: Number(raw || 0), percent, count };
+  });
+  entries.sort((a, b) => b.percent - a.percent || b.raw - a.raw || a.code.localeCompare(b.code));
+  return entries.slice(0, 3).map(({ code, percent, raw, count }) => ({ code, score: percent, raw, count }));
 }
 
 export function riasecRadarDataFiltered(scores, counts, maxScale) {

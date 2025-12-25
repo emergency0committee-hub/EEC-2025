@@ -1,6 +1,7 @@
 // src/pages/sat/lessons/FunctionsAndDecimalsInteractive.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import { InlineMath } from "react-katex";
 import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
 import Btn from "../../../components/Btn.jsx";
 
@@ -319,7 +320,7 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
 
   const steps = useMemo(
     () => [
-      { id: "rules", label: "Interactive Rules" },
+      { id: "rules", label: "Fundamentals" },
       { id: "fractions", label: "Decimals and Fractions" },
       { id: "machine", label: "Function Machine" },
       { id: "clear", label: "Clear Decimals" },
@@ -358,13 +359,15 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
       return { ...(prev || {}), [normalized]: true };
     });
   };
-  const [rulesX, setRulesX] = useState(2.5);
-  const [rulesFracBase, setRulesFracBase] = useState(125);
-  const [rulesFracPlaces, setRulesFracPlaces] = useState(2);
-  const [rulesClearPow, setRulesClearPow] = useState(2);
-  const [rulesDomainX, setRulesDomainX] = useState(0.4);
-  const [rulesH, setRulesH] = useState(0.8);
-  const [rulesK, setRulesK] = useState(-0.4);
+  const [orderStep, setOrderStep] = useState(1);
+  const [foilA, setFoilA] = useState(2);
+  const [foilB, setFoilB] = useState(-3);
+  const [lcmA, setLcmA] = useState(6);
+  const [lcmB, setLcmB] = useState(8);
+  const [gcfA, setGcfA] = useState(24);
+  const [gcfB, setGcfB] = useState(36);
+  const [fracDenA, setFracDenA] = useState(3);
+  const [fracDenB, setFracDenB] = useState(5);
 
   // Step 2
   const [flipCount, setFlipCount] = useState(0);
@@ -426,7 +429,7 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
   );
 
   const completed = useMemo(() => {
-    const rulesComplete = ["substitution", "fraction", "clear", "domain", "transform"].every((k) => Boolean(rulesTouched?.[k]));
+    const rulesComplete = ["order", "foil", "lcm", "gcf", "fractions"].every((k) => Boolean(rulesTouched?.[k]));
     return {
       rules: rulesComplete,
       fractions: flipCount >= 3,
@@ -491,13 +494,15 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
     setStepIndex(0);
     setRulesSlide(0);
     setRulesTouched({});
-    setRulesX(2.5);
-    setRulesFracBase(125);
-    setRulesFracPlaces(2);
-    setRulesClearPow(2);
-    setRulesDomainX(0.4);
-    setRulesH(0.8);
-    setRulesK(-0.4);
+    setOrderStep(1);
+    setFoilA(2);
+    setFoilB(-3);
+    setLcmA(6);
+    setLcmB(8);
+    setGcfA(24);
+    setGcfB(36);
+    setFracDenA(3);
+    setFracDenB(5);
     setFlipCount(0);
     setMachineInput("");
     setMachineLastChoice(null);
@@ -555,18 +560,19 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
     () => ({
       rules: {
         recap:
-          "Core moves: substitute carefully, rewrite decimals as fractions, clear decimals with 10^n, check domain (denominator not zero and sqrt input nonnegative), and read transformations as vertex shifts.",
+          "Core moves: follow order of operations, multiply binomials with FOIL, use LCM to combine fractions, use GCF to factor/simplify, and clear denominators to solve fraction equations.",
         hints: [
-          "If x is negative, use parentheses before multiplying.",
-          "Use the maximum decimal places to choose 10^n.",
-          "Domain: denominator cannot be zero and 1.2 - x must be nonnegative.",
+          "Do parentheses first, then exponents, then multiply/divide, then add/subtract.",
+          "FOIL gives x^2 + (a + b)x + ab.",
+          "LCM clears denominators; GCF factors expressions.",
         ],
         answers: [
-          "f(2.5) = 0.3 * 2.5 - 1.2 = -0.45.",
-          "125/100 reduces to 5/4.",
-          "Multiply 0.08x + 0.6 = 1.24 by 100 to get 8x + 60 = 124.",
+          "6 + 2 * (5 - 3)^2 = 14.",
+          "(x + 2)(x - 3) = x^2 - x - 6.",
+          "LCM(6, 8) = 24; GCF(24, 36) = 12.",
+          "x/3 + 3/5 = 2 -> x = 4.2.",
         ],
-        pacing: "3 to 4 min. Demo each rule with one quick example.",
+        pacing: "4 to 5 min. Hit one quick example per rule.",
       },
       fractions: {
         recap: "Write the decimal as an integer over 10^n, then reduce with gcd.",
@@ -651,6 +657,8 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
         padding: 14,
         background: "#ffffff",
         boxShadow: "0 2px 10px rgba(15,23,42,0.06)",
+        boxSizing: "border-box",
+        width: "100%",
         minWidth: "100%",
         scrollSnapAlign: "center",
         flex: "0 0 100%",
@@ -658,48 +666,53 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
       const ruleTitle = { fontWeight: 900, color: "#0f172a" };
       const ruleText = { marginTop: 6, fontSize: 13, color: "#475569", lineHeight: 1.6 };
 
-      const RULES_X_MIN = -3;
-      const RULES_X_MAX = 4;
-      const xPercent = ((rulesX - RULES_X_MIN) / (RULES_X_MAX - RULES_X_MIN)) * 100;
-      const xText = fmt(rulesX, 1);
-      const needsParens = rulesX < 0;
-      const product = 0.3 * rulesX;
-      const fx = product - 1.2;
+      const orderSteps = [
+        { id: 1, label: "Parentheses: (5 - 3) = 2" },
+        { id: 2, label: "Exponents: 2^2 = 4" },
+        { id: 3, label: "Multiply: 2 * 4 = 8" },
+        { id: 4, label: "Add: 6 + 8 = 14" },
+      ];
+      const orderStepClamped = clamp(orderStep, 1, orderSteps.length);
 
-      const fracDenom = 10 ** rulesFracPlaces;
-      const fracNumer = Number.isFinite(rulesFracBase) ? Math.trunc(rulesFracBase) : 0;
-      const fracDiv = gcd(fracNumer, fracDenom);
-      const fracN = fracNumer / fracDiv;
-      const fracD = fracDenom / fracDiv;
-      const fracDecimal = placeDecimalFromInteger(fracNumer, rulesFracPlaces);
+      const foilSum = Number(foilA) + Number(foilB);
+      const foilProd = Number(foilA) * Number(foilB);
+      const foilAAbs = fmtIntish(Math.abs(foilA), 0);
+      const foilBAbs = fmtIntish(Math.abs(foilB), 0);
+      const foilASign = foilA >= 0 ? "+" : "-";
+      const foilBSign = foilB >= 0 ? "+" : "-";
+      const signed = (value, suffix = "") => {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return "";
+        const abs = fmtIntish(Math.abs(num), 0);
+        return `${num >= 0 ? "+" : "-"} ${abs}${suffix}`;
+      };
 
-      const clearMultiplier = 10 ** rulesClearPow;
-      const clearA = 0.08 * clearMultiplier;
-      const clearB = 0.6 * clearMultiplier;
-      const clearC = 1.24 * clearMultiplier;
-      const clearAll = isAlmostInteger(clearA) && isAlmostInteger(clearB) && isAlmostInteger(clearC);
-      const minimalPow = 2;
+      const lcmValue = (a, b) => {
+        const A = Math.abs(Number(a) || 0);
+        const B = Math.abs(Number(b) || 0);
+        if (!A || !B) return 0;
+        return Math.round((A * B) / gcd(A, B));
+      };
+      const lcmAB = lcmValue(lcmA, lcmB);
+      const lcmMultiplesA = Array.from({ length: 5 }, (_, i) => lcmA * (i + 1));
+      const lcmMultiplesB = Array.from({ length: 5 }, (_, i) => lcmB * (i + 1));
 
-      const domainTooHigh = rulesDomainX > 1.2 + 1e-9;
-      const domainDenomZero = Math.abs(rulesDomainX + 0.6) < 1e-6;
-      const domainOk = !domainTooHigh && !domainDenomZero;
-      const domainReason = domainDenomZero
-        ? "Invalid: denominator is 0 at x = -0.6."
-        : domainTooHigh
-          ? "Invalid: square root needs 1.2 - x to be nonnegative, so x must be less than or equal to 1.2."
-          : "Valid: both domain rules are satisfied.";
-      const domainMin = -1.2;
-      const domainMax = 1.6;
-      const domainPercent = ((rulesDomainX - domainMin) / (domainMax - domainMin)) * 100;
-      const markPercent = (value) => ((value - domainMin) / (domainMax - domainMin)) * 100;
+      const gcfVal = gcd(gcfA, gcfB);
+      const commonFactors = [];
+      const maxFactor = Math.min(gcfA, gcfB);
+      for (let i = 1; i <= maxFactor; i += 1) {
+        if (gcfA % i === 0 && gcfB % i === 0) commonFactors.push(i);
+      }
+      const commonFactorsText =
+        commonFactors.length > 12 ? `${commonFactors.slice(0, 12).join(", ")}...` : commonFactors.join(", ");
 
-      const hkMin = -2.0;
-      const hkMax = 2.0;
-      const toSvg = (value, min, max, size) => ((value - min) / (max - min)) * size;
-      const hkSvgW = 240;
-      const hkSvgH = 180;
-      const dotX = toSvg(rulesH, hkMin, hkMax, hkSvgW);
-      const dotY = hkSvgH - toSvg(rulesK, hkMin, hkMax, hkSvgH);
+      const FRACTION_NUM = 3;
+      const FRACTION_TARGET = 2;
+      const fracLcm = lcmValue(fracDenA, fracDenB);
+      const fracA = fracDenA ? fracLcm / fracDenA : 0;
+      const fracB = fracDenB ? (FRACTION_NUM * fracLcm) / fracDenB : 0;
+      const fracRhs = FRACTION_TARGET * fracLcm;
+      const fracX = fracA ? (fracRhs - fracB) / fracA : 0;
       const rulesSlideCount = 5;
       const goRulesSlide = (nextIndex) => {
         const clamped = clamp(nextIndex, 0, rulesSlideCount - 1);
@@ -717,9 +730,9 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
 
       return (
         <>
-          <h3 style={{ marginTop: 0 }}>Interactive Rules (Explain First)</h3>
+          <h3 style={{ marginTop: 0 }}>Fundamentals Rules (Explain First)</h3>
           <p style={{ color: "#475569" }}>
-            Use these 5 rules on hard SAT problems. Move sliders and click chips to watch the math update.
+            Core math rules: order of operations, FOIL, LCM, GCF, and solving fractions. Swipe to teach one rule at a time.
           </p>
 
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
@@ -780,436 +793,361 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
             }}
           >
             <div style={ruleCard}>
-              <div style={ruleTitle}>1) Substitute carefully (parentheses for negatives)</div>
+              <div style={ruleTitle}>1) Order of Operations (PEMDAS)</div>
               <div style={ruleText}>
-                When x is negative, wrap it: 0.3(-0.6) not 0.3-0.6. This prevents sign mistakes.
+                Parentheses -> Exponents -> Multiply/Divide -> Add/Subtract.
               </div>
 
               <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                  <div style={{ fontWeight: 900, color: "#0f172a" }}>f(x) = 0.3x - 1.2</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        touchRules("substitution");
-                        setRulesX(-0.6);
-                      }}
-                    >
-                      Try x = -0.6
-                    </Btn>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        touchRules("substitution");
-                        setRulesX(2.5);
-                      }}
-                    >
-                      Try x = 2.5
-                    </Btn>
-                  </div>
+                {(() => {
+                  const pemdasCells = [
+                    [
+                      {
+                        prefix: "Parentheses ( ) and other grouping symbols, like ",
+                        latex: "\\sqrt{}",
+                        suffix: " or { }",
+                      },
+                      { prefix: "Exponents ", latex: "x^y" },
+                    ],
+                    [
+                      { prefix: "Multiplication ", latex: "x \\times y" },
+                      { prefix: "Division ", latex: "\\frac{x}{y}" },
+                    ],
+                    [
+                      { prefix: "Addition ", latex: "x + y" },
+                      { prefix: "Subtraction ", latex: "x - y" },
+                    ],
+                  ];
+                  return (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <tbody>
+                      <tr style={{ background: "#eef2ff", borderBottom: "1px solid #e2e8f0" }}>
+                        {["Please Excuse", "My Dear", "Aunt Sally"].map((label, idx) => {
+                          const words = label.split(" ");
+                          return (
+                          <td
+                            key={label}
+                            style={{
+                              padding: "8px 10px",
+                              fontWeight: 900,
+                              color: "#0f172a",
+                              borderRight: idx === 2 ? "none" : "1px solid #e2e8f0",
+                            }}
+                          >
+                            <div style={{ fontSize: 15 }}>
+                              {words.map((word, wordIndex) => (
+                                <span key={`${label}-${wordIndex}`}>
+                                  <span style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>
+                                    {word.charAt(0)}
+                                  </span>
+                                  {word.slice(1)}
+                                  {wordIndex < words.length - 1 ? " " : ""}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          );
+                        })}
+                      </tr>
+                      <tr>
+                        {pemdasCells.map((lines, idx) => (
+                          <td
+                            key={`pemdas-body-${idx}`}
+                            style={{
+                              padding: "8px 10px",
+                              verticalAlign: "top",
+                              borderRight: idx === 2 ? "none" : "1px solid #e2e8f0",
+                            }}
+                          >
+                            {lines.map((line, lineIndex) => (
+                              <div key={`${line.prefix || "line"}-${lineIndex}`} style={{ marginTop: lineIndex ? 6 : 0, color: "#334155" }}>
+                                {line.prefix && <span>{line.prefix}</span>}
+                                {line.latex && (
+                                  <span style={{ marginLeft: line.prefix ? 2 : 0 }}>
+                                    <InlineMath math={line.latex} />
+                                  </span>
+                                )}
+                                {line.suffix && <span>{line.suffix}</span>}
+                                {line.latexAfter && (
+                                  <span style={{ marginLeft: 4 }}>
+                                    <InlineMath math={line.latexAfter} />
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
+                  );
+                })()}
 
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>Evaluate: 6 + 2 * (5 - 3)^2</div>
                 <div style={{ marginTop: 10 }}>
                   <input
                     type="range"
-                    min={RULES_X_MIN}
-                    max={RULES_X_MAX}
-                    step={0.1}
-                    value={rulesX}
+                    min={1}
+                    max={orderSteps.length}
+                    step={1}
+                    value={orderStepClamped}
                     onChange={(e) => {
-                      touchRules("substitution");
-                      setRulesX(Number(e.target.value));
+                      touchRules("order");
+                      setOrderStep(Number(e.target.value));
                     }}
                     style={{ width: "100%" }}
-                    aria-label="Choose x"
+                    aria-label="Order of operations step"
                   />
-                  <div style={{ position: "relative", height: 18, marginTop: 8, background: "#e2e8f0", borderRadius: 999 }}>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: `${clamp(xPercent, 0, 100)}%`,
-                        top: 2,
-                        transform: "translateX(-50%)",
-                        width: 14,
-                        height: 14,
-                        borderRadius: 999,
-                        background: needsParens ? "#ef4444" : "#111827",
-                        boxShadow: "0 6px 16px rgba(15,23,42,0.18)",
-                        transition: "left 80ms linear",
-                      }}
-                      title="x marker"
-                    />
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                    <span>{RULES_X_MIN}</span>
-                    <span>
-                      x = <b style={{ color: "#0f172a" }}>{xText}</b>
-                    </span>
-                    <span>{RULES_X_MAX}</span>
+                  <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
+                    Step {orderStepClamped} of {orderSteps.length}
                   </div>
                 </div>
-
-                <div style={{ marginTop: 12, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
-                  <div>
-                    f({xText}) = 0.3{" "}
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 10,
-                        border: "1px solid",
-                        borderColor: needsParens ? "#fecaca" : "#bae6fd",
-                        background: needsParens ? "#fee2e2" : "#e0f2fe",
-                        color: needsParens ? "#991b1b" : "#075985",
-                        fontWeight: 900,
-                      }}
-                    >
-                      ({xText})
-                    </span>{" "}
-                    - 1.2
-                  </div>
-                  <div>
-                    = {fmt(product, 2)} - 1.2
-                  </div>
-                  <div>
-                    = <b>{fmt(fx, 2)}</b>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={ruleCard}>
-              <div style={ruleTitle}>2) Decimals are fractions (integers over powers of 10)</div>
-              <div style={ruleText}>
-                Build a decimal by placing a decimal point, then simplify the fraction. This is why decimals often become clean
-                fractions on hard questions.
-              </div>
-
-              <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  {[3, 12, 8, 125].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => {
-                        touchRules("fraction");
-                        setRulesFracBase(n);
-                      }}
-                      style={{
-                        borderRadius: 999,
-                        border: "1px solid",
-                        borderColor: rulesFracBase === n ? "#111827" : "#d1d5db",
-                        background: rulesFracBase === n ? "#111827" : "#fff",
-                        color: rulesFracBase === n ? "#fff" : "#111827",
-                        padding: "8px 12px",
-                        cursor: "pointer",
-                        fontWeight: 900,
-                      }}
-                    >
-                      digits {n}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-                    <div style={{ fontWeight: 900, color: "#0f172a" }}>Decimal places</div>
-                    <div style={{ fontSize: 12, color: "#64748b" }}>
-                      places = <b style={{ color: "#0f172a" }}>{rulesFracPlaces}</b>
-                    </div>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={3}
-                    step={1}
-                    value={rulesFracPlaces}
-                    onChange={(e) => {
-                      touchRules("fraction");
-                      setRulesFracPlaces(Number(e.target.value));
-                    }}
-                    style={{ width: "100%", marginTop: 6 }}
-                    aria-label="Decimal places"
-                  />
-                </div>
-
-                <div style={{ marginTop: 12, display: "grid", gap: 6, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
-                  <div>
-                    Decimal: <b>{fracDecimal}</b>
-                  </div>
-                  <div>
-                    Raw fraction: <b>{fracNumer}/{fracDenom}</b>
-                  </div>
-                  <div>
-                    Simplified: <b>{fracD === 1 ? String(fracN) : `${fracN}/${fracD}`}</b>
-                  </div>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>
-                    Denominator is 10^places = {fracDenom}.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={ruleCard}>
-              <div style={ruleTitle}>3) Clear decimals by multiplying by 10^n</div>
-              <div style={ruleText}>
-                Choose n as the maximum number of decimal places. This turns the whole equation into integers so you can solve fast.
-              </div>
-
-              <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
-                <div style={{ fontWeight: 900, color: "#0f172a" }}>0.08x + 0.6 = 1.24</div>
-
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {[0, 1, 2, 3].map((pow) => {
-                    const m = 10 ** pow;
-                    const active = rulesClearPow === pow;
+                <div style={{ marginTop: 10, display: "grid", gap: 6 }}>
+                  {orderSteps.map((step) => {
+                    const active = orderStepClamped >= step.id;
                     return (
-                      <button
-                        key={pow}
-                        type="button"
-                        onClick={() => {
-                          touchRules("clear");
-                          setRulesClearPow(pow);
-                        }}
+                      <div
+                        key={step.id}
                         style={{
-                          borderRadius: 999,
-                          border: "1px solid",
-                          borderColor: active ? "#111827" : "#d1d5db",
-                          background: active ? "#111827" : "#fff",
-                          color: active ? "#fff" : "#111827",
-                          padding: "8px 12px",
-                          cursor: "pointer",
-                          fontWeight: 900,
+                          padding: "6px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb",
+                          background: active ? "#e0f2fe" : "#ffffff",
+                          color: active ? "#0f172a" : "#64748b",
+                          fontWeight: active ? 900 : 600,
+                          fontSize: 13,
                         }}
                       >
-                        *{m}
-                      </button>
+                        {step.label}
+                      </div>
                     );
                   })}
                 </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <input
-                    type="range"
-                    min={0}
-                    max={3}
-                    step={1}
-                    value={rulesClearPow}
-                    onChange={(e) => {
-                      touchRules("clear");
-                      setRulesClearPow(Number(e.target.value));
-                    }}
-                    style={{ width: "100%" }}
-                    aria-label="Power of 10"
-                  />
-                  <div style={{ marginTop: 8, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
-                    Multiply by <b>{clearMultiplier}</b>:
-                    <div style={{ marginTop: 6, fontWeight: 900, color: "#0f172a" }}>
-                      {fmtIntish(clearA, 2)}x + {fmtIntish(clearB, 2)} = {fmtIntish(clearC, 2)}
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: clearAll ? "#047857" : "#b91c1c" }}>
-                      {clearAll
-                        ? rulesClearPow === minimalPow
-                          ? "All integers, and this is the smallest power that works."
-                          : "All integers, but you can use a smaller power (100)."
-                        : "Decimals remain. Increase the power."}
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: 12, color: "#64748b" }}>
-                      Here, max decimal places is 2, so multiply by 10^2 = 100.
-                    </div>
-                  </div>
+                <div style={{ marginTop: 10, fontSize: 13, fontWeight: 900, color: orderStepClamped === 4 ? "#047857" : "#64748b" }}>
+                  {orderStepClamped === 4 ? "Answer: 14" : "Keep going to reach the final answer."}
                 </div>
               </div>
             </div>
 
             <div style={ruleCard}>
-              <div style={ruleTitle}>4) Domain: combine restrictions</div>
+              <div style={ruleTitle}>2) FOIL: Multiply Binomials</div>
               <div style={ruleText}>
-                Hard problems often hide two domain rules. Check denominators (not zero) and square roots (inside nonnegative).
+                First, Outer, Inner, Last. Then combine like terms.
               </div>
 
               <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
-                <div style={{ fontWeight: 900, color: "#0f172a" }}>p(x) = (x - 0.4)/(x + 0.6) + sqrt(1.2 - x)</div>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+                  <div style={{ fontWeight: 900, color: "#0f172a" }}>(x {foilASign} {foilAAbs})(x {foilBSign} {foilBAbs})</div>
+                  <div style={{ fontSize: 12, color: "#64748b" }}>
+                    a = <b style={{ color: "#0f172a" }}>{fmtIntish(foilA, 0)}</b>, b = <b style={{ color: "#0f172a" }}>{fmtIntish(foilB, 0)}</b>
+                  </div>
+                </div>
 
-                <div style={{ marginTop: 10 }}>
-                  <input
-                    type="range"
-                    min={domainMin}
-                    max={domainMax}
-                    step={0.05}
-                    value={rulesDomainX}
-                    onChange={(e) => {
-                      touchRules("domain");
-                      setRulesDomainX(Number(e.target.value));
-                    }}
-                    style={{ width: "100%" }}
-                    aria-label="Choose x for domain"
-                  />
-
-                  <div style={{ position: "relative", height: 18, marginTop: 8, background: "#e2e8f0", borderRadius: 999 }}>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: `${clamp(markPercent(-0.6), 0, 100)}%`,
-                        top: 0,
-                        transform: "translateX(-50%)",
-                        width: 4,
-                        height: "100%",
-                        background: "#ef4444",
-                        borderRadius: 999,
-                        opacity: 0.9,
+                <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>a</div>
+                    <input
+                      type="range"
+                      min={-6}
+                      max={6}
+                      step={1}
+                      value={foilA}
+                      onChange={(e) => {
+                        touchRules("foil");
+                        setFoilA(Number(e.target.value));
                       }}
-                      title="x = -0.6 (forbidden)"
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: `${clamp(markPercent(1.2), 0, 100)}%`,
-                        top: 0,
-                        transform: "translateX(-50%)",
-                        width: 4,
-                        height: "100%",
-                        background: "#64748b",
-                        borderRadius: 999,
-                        opacity: 0.7,
-                      }}
-                      title="x = 1.2 (upper bound)"
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: `${clamp(domainPercent, 0, 100)}%`,
-                        top: 2,
-                        transform: "translateX(-50%)",
-                        width: 14,
-                        height: 14,
-                        borderRadius: 999,
-                        background: domainOk ? "#22c55e" : "#ef4444",
-                        boxShadow: "0 6px 16px rgba(15,23,42,0.18)",
-                        transition: "left 80ms linear",
-                      }}
-                      title="x marker"
+                      style={{ width: "100%" }}
+                      aria-label="FOIL a"
                     />
                   </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                    <span>{domainMin}</span>
-                    <span>
-                      x = <b style={{ color: "#0f172a" }}>{fmt(rulesDomainX, 2)}</b>
-                    </span>
-                    <span>{domainMax}</span>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>b</div>
+                    <input
+                      type="range"
+                      min={-6}
+                      max={6}
+                      step={1}
+                      value={foilB}
+                      onChange={(e) => {
+                        touchRules("foil");
+                        setFoilB(Number(e.target.value));
+                      }}
+                      style={{ width: "100%" }}
+                      aria-label="FOIL b"
+                    />
                   </div>
+                </div>
 
-                  <div style={{ marginTop: 10, fontSize: 13, fontWeight: 900, color: domainOk ? "#047857" : "#b91c1c" }}>
-                    {domainReason}
-                  </div>
-
-                  <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        touchRules("domain");
-                        setRulesDomainX(-0.6);
-                      }}
-                    >
-                      Jump to -0.6
-                    </Btn>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        touchRules("domain");
-                        setRulesDomainX(1.3);
-                      }}
-                    >
-                      Jump to 1.3
-                    </Btn>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        touchRules("domain");
-                        setRulesDomainX(1.2);
-                      }}
-                    >
-                      Jump to 1.2
-                    </Btn>
+                <div style={{ marginTop: 12, display: "grid", gap: 6, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
+                  <div>First: x · x = x^2</div>
+                  <div>Outer: x · {fmtIntish(foilB, 0)} = {fmtIntish(foilB, 0)}x</div>
+                  <div>Inner: {fmtIntish(foilA, 0)} · x = {fmtIntish(foilA, 0)}x</div>
+                  <div>Last: {fmtIntish(foilA, 0)} · {fmtIntish(foilB, 0)} = {fmtIntish(foilProd, 0)}</div>
+                  <div style={{ marginTop: 4, fontWeight: 900, color: "#0f172a" }}>
+                    x^2 {signed(foilSum, "x")} {signed(foilProd)}
                   </div>
                 </div>
               </div>
             </div>
 
             <div style={ruleCard}>
-              <div style={ruleTitle}>5) Transformations: the vertex moves with (h, k)</div>
+              <div style={ruleTitle}>3) Least Common Multiple (LCM)</div>
               <div style={ruleText}>
-                For y = (x - h)^2 + k, the vertex is (h, k). Sliding h moves left/right and sliding k moves up/down.
+                LCM is the smallest number both values divide into. Use it to combine fractions fast.
               </div>
 
               <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
                 <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                      <div style={{ fontWeight: 900, color: "#0f172a" }}>h</div>
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        h = <b style={{ color: "#0f172a" }}>{fmt(rulesH, 1)}</b>
-                      </div>
-                    </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Number A</div>
                     <input
                       type="range"
-                      min={hkMin}
-                      max={hkMax}
-                      step={0.1}
-                      value={rulesH}
+                      min={2}
+                      max={12}
+                      step={1}
+                      value={lcmA}
                       onChange={(e) => {
-                        touchRules("transform");
-                        setRulesH(Number(e.target.value));
+                        touchRules("lcm");
+                        setLcmA(Number(e.target.value));
                       }}
                       style={{ width: "100%" }}
-                      aria-label="h slider"
+                      aria-label="LCM number A"
                     />
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#0f172a", fontWeight: 900 }}>A = {lcmA}</div>
                   </div>
-
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
-                      <div style={{ fontWeight: 900, color: "#0f172a" }}>k</div>
-                      <div style={{ fontSize: 12, color: "#64748b" }}>
-                        k = <b style={{ color: "#0f172a" }}>{fmt(rulesK, 1)}</b>
-                      </div>
-                    </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Number B</div>
                     <input
                       type="range"
-                      min={hkMin}
-                      max={hkMax}
-                      step={0.1}
-                      value={rulesK}
+                      min={2}
+                      max={12}
+                      step={1}
+                      value={lcmB}
                       onChange={(e) => {
-                        touchRules("transform");
-                        setRulesK(Number(e.target.value));
+                        touchRules("lcm");
+                        setLcmB(Number(e.target.value));
                       }}
                       style={{ width: "100%" }}
-                      aria-label="k slider"
+                      aria-label="LCM number B"
+                    />
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#0f172a", fontWeight: 900 }}>B = {lcmB}</div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
+                  <div>Multiples of {lcmA}: {lcmMultiplesA.join(", ")}</div>
+                  <div>Multiples of {lcmB}: {lcmMultiplesB.join(", ")}</div>
+                  <div style={{ marginTop: 6, fontWeight: 900, color: "#0f172a" }}>LCM({lcmA}, {lcmB}) = {lcmAB}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={ruleCard}>
+              <div style={ruleTitle}>4) Greatest Common Factor (GCF)</div>
+              <div style={ruleText}>
+                The GCF is the largest factor shared by both numbers. Use it to simplify expressions.
+              </div>
+
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Number A</div>
+                    <input
+                      type="range"
+                      min={12}
+                      max={60}
+                      step={1}
+                      value={gcfA}
+                      onChange={(e) => {
+                        touchRules("gcf");
+                        setGcfA(Number(e.target.value));
+                      }}
+                      style={{ width: "100%" }}
+                      aria-label="GCF number A"
+                    />
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#0f172a", fontWeight: 900 }}>A = {gcfA}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Number B</div>
+                    <input
+                      type="range"
+                      min={12}
+                      max={60}
+                      step={1}
+                      value={gcfB}
+                      onChange={(e) => {
+                        touchRules("gcf");
+                        setGcfB(Number(e.target.value));
+                      }}
+                      style={{ width: "100%" }}
+                      aria-label="GCF number B"
+                    />
+                    <div style={{ marginTop: 4, fontSize: 12, color: "#0f172a", fontWeight: 900 }}>B = {gcfB}</div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
+                  <div>Common factors: {commonFactorsText || "-"}</div>
+                  <div style={{ marginTop: 6, fontWeight: 900, color: "#0f172a" }}>GCF({gcfA}, {gcfB}) = {gcfVal}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={ruleCard}>
+              <div style={ruleTitle}>5) Solve Equations with Fractions</div>
+              <div style={ruleText}>
+                Clear denominators by multiplying every term by the LCM of the denominators.
+              </div>
+
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                  x / {fracDenA} + {FRACTION_NUM} / {fracDenB} = {FRACTION_TARGET}
+                </div>
+
+                <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Denominator A</div>
+                    <input
+                      type="range"
+                      min={2}
+                      max={12}
+                      step={1}
+                      value={fracDenA}
+                      onChange={(e) => {
+                        touchRules("fractions");
+                        setFracDenA(Number(e.target.value));
+                      }}
+                      style={{ width: "100%" }}
+                      aria-label="Fraction denominator A"
                     />
                   </div>
-
-                  <svg width={hkSvgW} height={hkSvgH} style={{ width: "100%", height: "auto", display: "block" }}>
-                    <rect x="0" y="0" width={hkSvgW} height={hkSvgH} rx="12" fill="#ffffff" stroke="#e5e7eb" />
-                    <line x1={hkSvgW / 2} y1="10" x2={hkSvgW / 2} y2={hkSvgH - 10} stroke="#cbd5e1" strokeWidth="2" />
-                    <line x1="10" y1={hkSvgH / 2} x2={hkSvgW - 10} y2={hkSvgH / 2} stroke="#cbd5e1" strokeWidth="2" />
-                    <circle cx={dotX} cy={dotY} r="7" fill="#111827" opacity="0.9" />
-                    <text x={dotX + 10} y={dotY - 10} fontSize="12" fill="#0f172a" fontWeight="900">
-                      ({fmt(rulesH, 1)}, {fmt(rulesK, 1)})
-                    </text>
-                  </svg>
-
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        touchRules("transform");
-                        setRulesH(0);
-                        setRulesK(0);
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Denominator B</div>
+                    <input
+                      type="range"
+                      min={2}
+                      max={12}
+                      step={1}
+                      value={fracDenB}
+                      onChange={(e) => {
+                        touchRules("fractions");
+                        setFracDenB(Number(e.target.value));
                       }}
-                    >
-                      Reset (0, 0)
-                    </Btn>
+                      style={{ width: "100%" }}
+                      aria-label="Fraction denominator B"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
+                  <div>LCM({fracDenA}, {fracDenB}) = <b>{fracLcm}</b></div>
+                  <div>
+                    Multiply both sides by {fracLcm}: <b>{fmtIntish(fracA, 0)}x + {fmtIntish(fracB, 0)} = {fmtIntish(fracRhs, 0)}</b>
+                  </div>
+                  <div style={{ marginTop: 6, fontWeight: 900, color: "#0f172a" }}>
+                    x = {fmtIntish(fracX, 2)}
                   </div>
                 </div>
               </div>
@@ -1850,12 +1788,12 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
 
   return (
     <PageWrap>
-      <HeaderBar title="SAT Interactive Lesson: Functions & Decimals" />
+      <HeaderBar title="SAT Interactive Lesson: Fundamentals" />
       <Card style={headerCardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 13, color: "#64748b" }}>Hard - Moving + clickable practice</div>
-            <h2 style={{ marginTop: 6, marginBottom: 0 }}>Functions & Decimals</h2>
+            <h2 style={{ marginTop: 6, marginBottom: 0 }}>Fundamentals</h2>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Btn variant="secondary" onClick={resetAll}>Reset</Btn>

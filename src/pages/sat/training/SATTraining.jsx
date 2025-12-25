@@ -35,7 +35,7 @@ const BANK_LABELS = {
 };
 
 const SAT_INTERACTIVE_LESSONS = [
-  { id: "func_decimals", title: "Functions & Decimals", route: "sat-lesson-functions-decimals" },
+  { id: "func_decimals", title: "Fundamentals", route: "sat-lesson-functions-decimals" },
   { id: "polynomials", title: "Polynomials", route: "sat-lesson-polynomials" },
   { id: "solving_equations", title: "Solving Equations", route: "sat-lesson-solving-equations" },
   { id: "quadratics", title: "Quadratic Equations", route: "sat-lesson-quadratic-equations" },
@@ -182,7 +182,7 @@ export default function SATTraining({ onNavigate }) {
     {
       topic: "Math",
       items: [
-        { id: "m_func_decimals_lesson", title: "Functions & Decimals (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-functions-decimals") },
+        { id: "m_func_decimals_lesson", title: "Fundamentals (Interactive Lesson)", desc: "Order of ops, FOIL, LCM/GCF, and solving fractions.", action: () => onNavigate("sat-lesson-functions-decimals") },
         { id: "m_polynomials_lesson", title: "Polynomials (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-polynomials") },
         { id: "m_solving_equations_lesson", title: "Solving Equations (Interactive Lesson)", desc: "Balance idea + inverse ops + practice.", action: () => onNavigate("sat-lesson-solving-equations") },
         { id: "m_quadratic_eq_lesson", title: "Quadratic Equations (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-quadratic-equations") },

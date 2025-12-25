@@ -7,7 +7,6 @@ import UserMenu from "../../components/UserMenu.jsx";
 import Btn from "../../components/Btn.jsx";
 import { LANGS } from "../../i18n/strings.js";
 import { supabase } from "../../lib/supabase.js";
-import { hashPassword } from "../../lib/hash.js";
 
 const COPY = {
   EN: {
@@ -354,16 +353,14 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       alert("Password must be at least 6 characters.");
       return;
     }
-    const table = import.meta.env.VITE_USERS_TABLE || "profiles";
     setSavingPassword(true);
     setSuccessMessage("");
     try {
-      const hashed = await hashPassword(trimmed);
-      const { error } = await supabase
-        .from(table)
-        .update({ password_hash: hashed })
-        .eq("id", selectedUser.id);
+      const { data, error } = await supabase.functions.invoke("reset-user-password", {
+        body: { userId: selectedUser.id, newPassword: trimmed },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setPasswordDraft("");
       setSuccessMessage(copy.passwordSaved);
     } catch (err) {

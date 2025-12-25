@@ -382,6 +382,8 @@ export default function WordProblemsInteractive({ onNavigate }) {
         borderRadius: 14,
         padding: 14,
         background: "#ffffff",
+        boxSizing: "border-box",
+        width: "100%",
         minWidth: "100%",
         scrollSnapAlign: "center",
         flex: "0 0 100%",
