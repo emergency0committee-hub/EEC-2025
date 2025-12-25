@@ -359,7 +359,22 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       const { data, error } = await supabase.functions.invoke("reset-user-password", {
         body: { userId: selectedUser.id, newPassword: trimmed },
       });
-      if (error) throw error;
+      if (error) {
+        let message = error.message || copy.error;
+        if (error.context) {
+          try {
+            const body = await error.context.json();
+            if (body?.error) message = body.error;
+            else if (body?.message) message = body.message;
+          } catch {
+            try {
+              const text = await error.context.text();
+              if (text) message = text;
+            } catch {}
+          }
+        }
+        throw new Error(message);
+      }
       if (data?.error) throw new Error(data.error);
       setPasswordDraft("");
       setSuccessMessage(copy.passwordSaved);
