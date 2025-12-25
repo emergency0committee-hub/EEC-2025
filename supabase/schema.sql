@@ -67,6 +67,64 @@ do $$ begin
   with check ( auth.uid() = id );
 exception when duplicate_object then null; end $$;
 
+-- Auto-create profiles on new Auth users (role clamped to student/educator)
+create or replace function public.handle_auth_user_created_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  meta jsonb;
+  raw_role text;
+  resolved_role text;
+  resolved_username text;
+  resolved_name text;
+  composed_name text;
+begin
+  meta := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+
+  raw_role := lower(coalesce(meta->>'accountType', meta->>'role', ''));
+  resolved_role := case
+    when raw_role = 'educator' then 'educator'
+    when raw_role = 'student' then 'student'
+    else 'student'
+  end;
+
+  resolved_username := nullif(btrim(meta->>'username'), '');
+  if resolved_username is null then
+    resolved_username := nullif(split_part(coalesce(new.email, ''), '@', 1), '');
+  end if;
+
+  resolved_name := nullif(btrim(meta->>'name'), '');
+  if resolved_name is null then
+    composed_name := btrim(concat_ws(
+      ' ',
+      nullif(btrim(meta->>'first_name'), ''),
+      nullif(btrim(meta->>'last_name'), '')
+    ));
+    resolved_name := nullif(composed_name, '');
+  end if;
+
+  insert into public.profiles (id, email, username, name, role)
+  values (
+    new.id,
+    new.email,
+    resolved_username,
+    coalesce(resolved_name, resolved_username, new.email),
+    resolved_role
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_auth_user_created_profile();
+
 -- Career Guidance question bank (used by the Career Guidance test + bank manager)
 -- Note: If you already created this table without `updated_at`, run the `alter table` below.
 create table if not exists public.cg_career_questions (
@@ -103,3 +161,99 @@ drop trigger if exists trg_cg_career_questions_updated_at on public.cg_career_qu
 create trigger trg_cg_career_questions_updated_at
 before update on public.cg_career_questions for each row
 execute function public.cg_career_questions_set_updated_at();
+
+-- SAT Reading Competition question bank (RW-only, used by staff-facing bank tab + RW-only SAT mode)
+create table if not exists public.cg_sat_reading_competition_questions (
+  id uuid not null default gen_random_uuid (),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  subject text not null default 'ENGLISH',
+  difficulty text null,
+  skill text null,
+  question_type text not null default 'mcq',
+  question text not null,
+  passage text null,
+  answer_a text null,
+  answer_b text null,
+  answer_c text null,
+  answer_d text null,
+  correct text null,
+  unit text null,
+  lesson text null,
+  constraint cg_sat_reading_competition_questions_pkey primary key (id),
+  constraint cg_sat_reading_competition_questions_subject_check check (subject = 'ENGLISH')
+);
+
+create index if not exists cg_sat_reading_competition_questions_created_at_idx
+  on public.cg_sat_reading_competition_questions (created_at);
+
+create or replace function public.cg_sat_reading_competition_questions_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_sat_reading_competition_questions_updated_at on public.cg_sat_reading_competition_questions;
+create trigger trg_cg_sat_reading_competition_questions_updated_at
+before update on public.cg_sat_reading_competition_questions for each row
+execute function public.cg_sat_reading_competition_questions_set_updated_at();
+
+-- Bank Manager: toggle which banks are visible to staff
+create table if not exists public.cg_bank_tab_visibility (
+  bank_id text primary key,
+  staff_visible boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.cg_bank_tab_visibility_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_bank_tab_visibility_updated_at on public.cg_bank_tab_visibility;
+create trigger trg_cg_bank_tab_visibility_updated_at
+before update on public.cg_bank_tab_visibility for each row
+execute function public.cg_bank_tab_visibility_set_updated_at();
+
+insert into public.cg_bank_tab_visibility (bank_id, staff_visible)
+values
+  ('math', true),
+  ('english', true),
+  ('tests', true),
+  ('diagnostic', false),
+  ('reading_competition', true),
+  ('career', false),
+  ('resources', true)
+on conflict (bank_id) do nothing;
+
+-- SAT Training: live interactive class sessions (not quizzes/tests)
+create table if not exists public.cg_class_live_sessions (
+  class_name text primary key,
+  is_active boolean not null default false,
+  teacher_email text null,
+  title text null,
+  url text null,
+  state jsonb null,
+  started_at timestamptz not null default now(),
+  ended_at timestamptz null,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.cg_class_live_sessions_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_class_live_sessions_updated_at on public.cg_class_live_sessions;
+create trigger trg_cg_class_live_sessions_updated_at
+before update on public.cg_class_live_sessions for each row
+execute function public.cg_class_live_sessions_set_updated_at();

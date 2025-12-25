@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import Btn from "../../../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
 import { supabase } from "../../../lib/supabase.js";
+import { routeHref } from "../../../lib/routes.js";
 import { fetchQuestionBankSample, fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
 import {
   BANKS,
@@ -18,6 +19,7 @@ import CheckingAccessCard from "./components/CheckingAccessCard.jsx";
 import AssignmentGateCard from "./components/AssignmentGateCard.jsx";
 import ClassSubmissionModal from "./components/ClassSubmissionModal.jsx";
 import StudentResourceCard from "./components/StudentResourceCard.jsx";
+import LiveSessionCard from "./components/LiveSessionCard.jsx";
 import AdminTabsPanel from "./components/AdminTabsPanel.jsx";
 import StudentTabsPanel from "./components/StudentTabsPanel.jsx";
 
@@ -31,6 +33,14 @@ const BANK_LABELS = {
   english: "English Bank",
   tests: "Test Bank",
 };
+
+const SAT_INTERACTIVE_LESSONS = [
+  { id: "func_decimals", title: "Functions & Decimals", route: "sat-lesson-functions-decimals" },
+  { id: "polynomials", title: "Polynomials", route: "sat-lesson-polynomials" },
+  { id: "solving_equations", title: "Solving Equations", route: "sat-lesson-solving-equations" },
+  { id: "quadratics", title: "Quadratic Equations", route: "sat-lesson-quadratic-equations" },
+  { id: "word_problems", title: "Word Problems", route: "sat-lesson-word-problems" },
+];
 const getTestSectionQuestionCount = (subject) =>
   String(subject || "")
     .trim()
@@ -93,6 +103,7 @@ const RESOURCE_BUCKET =
   import.meta.env.VITE_ASSIGNMENT_MEDIA_BUCKET ||
   "assignment-media";
 const RESOURCE_LIBRARY_TABLE = import.meta.env.VITE_RESOURCE_LIBRARY_TABLE || "cg_resource_library";
+const LIVE_SESSION_TABLE = import.meta.env.VITE_LIVE_SESSION_TABLE || "cg_class_live_sessions";
 
 const createDefaultAutoAssign = (bankId = "math") => {
   const bank = resolveBankConfig(bankId);
@@ -129,7 +140,7 @@ const isMissingResourceError = (error) => {
   if (!error) return false;
   const code = String(error.code || "").toUpperCase();
   const message = String(error.message || "");
-  if (code === "PGRST205" || code === "PGRST202") return true;
+  if (code === "PGRST205" || code === "PGRST202" || code === "42P01") return true;
   return /does not exist/i.test(message) || /schema cache/i.test(message) || /not found/i.test(message);
 };
 const warnMissingSource = (key, error) => {
@@ -171,6 +182,11 @@ export default function SATTraining({ onNavigate }) {
     {
       topic: "Math",
       items: [
+        { id: "m_func_decimals_lesson", title: "Functions & Decimals (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-functions-decimals") },
+        { id: "m_polynomials_lesson", title: "Polynomials (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-polynomials") },
+        { id: "m_solving_equations_lesson", title: "Solving Equations (Interactive Lesson)", desc: "Balance idea + inverse ops + practice.", action: () => onNavigate("sat-lesson-solving-equations") },
+        { id: "m_quadratic_eq_lesson", title: "Quadratic Equations (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-quadratic-equations") },
+        { id: "m_word_problems_lesson", title: "Word Problems (Interactive Lesson)", desc: "Interactive rules + moving demos + practice.", action: () => onNavigate("sat-lesson-word-problems") },
         { id: "m_algebra", title: "Algebra", desc: "Linear equations, functions, and systems.", action: () => onNavigate("sat-exam", { practice: { section: "MATH", unit: "algebra" } }) },
         { id: "m_psda", title: "Problem Solving & Data Analysis", desc: "Ratios, percentages, probability, and data.", action: () => onNavigate("sat-exam", { practice: { section: "MATH", unit: "psda" } }) },
         { id: "m_adv", title: "Advanced Math", desc: "Quadratics, exponentials, and polynomials.", action: () => onNavigate("sat-exam", { practice: { section: "MATH", unit: "adv_math" } }) },
@@ -206,6 +222,7 @@ export default function SATTraining({ onNavigate }) {
   const [bulkSearch, setBulkSearch] = useState("");
   const [knownEmails, setKnownEmails] = useState([]);
   const [loadingEmails, setLoadingEmails] = useState(false);
+  const [peopleAddBusy, setPeopleAddBusy] = useState(false);
 
   const fmtDate = (iso, time = false) => {
     if (!iso) return "G";
@@ -238,7 +255,47 @@ export default function SATTraining({ onNavigate }) {
   const [studentAttempts, setStudentAttempts] = useState({});
   const [studentChatRefresh, setStudentChatRefresh] = useState(0);
   const [adminChatRefresh, setAdminChatRefresh] = useState(0);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveSession, setLiveSession] = useState(null);
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveTableMissing, setLiveTableMissing] = useState(false);
   const resourceKind = (res) => String(res?.payload?.kindOverride || res?.kind || "classwork").toLowerCase();
+
+  const loadLiveSession = useCallback(async (className, { silent = false } = {}) => {
+    const cls = String(className || "").trim();
+    if (!cls) {
+      setLiveSession(null);
+      setLiveTableMissing(false);
+      return;
+    }
+    if (!silent) {
+      setLiveSession(null);
+      setLiveLoading(true);
+    }
+    try {
+      const { data, error } = await supabase
+        .from(LIVE_SESSION_TABLE)
+        .select("*")
+        .eq("class_name", cls)
+        .maybeSingle();
+      if (error) {
+        if (isMissingResourceError(error)) {
+          warnMissingSource(LIVE_SESSION_TABLE, error);
+          setLiveSession(null);
+          setLiveTableMissing(true);
+          return;
+        }
+        throw error;
+      }
+      setLiveSession(data || null);
+      setLiveTableMissing(false);
+    } catch (e) {
+      console.warn("load live session", e);
+      setLiveSession(null);
+    } finally {
+      if (!silent) setLiveLoading(false);
+    }
+  }, []);
 
   const groupedStudentResources = useMemo(() => {
     const groups = {
@@ -647,6 +704,9 @@ export default function SATTraining({ onNavigate }) {
       setBulkClassName("");
       setBulkModalOpen(false);
       await loadClasses();
+      if (selectedClass && className === selectedClass) {
+        await refreshClassData();
+      }
       alert(`Added ${emails.length} student${emails.length === 1 ? "" : "s"} to ${className}.`);
     } catch (e) {
       console.error(e);
@@ -816,6 +876,20 @@ export default function SATTraining({ onNavigate }) {
   };
 
   const [resources, setResources] = useState([]);
+  const liveLessonOptions = useMemo(() => {
+    const items = [];
+    (resources || []).forEach((resource) => {
+      if (!resource) return;
+      if (resourceKind(resource) !== "lesson") return;
+      const id = resource.id == null ? "" : String(resource.id);
+      if (!id) return;
+      const url = String(resource.url || resource?.payload?.url || "").trim();
+      const title = String(resource.title || resource?.payload?.title || "").trim();
+      items.push({ id, title, url });
+    });
+    items.sort((a, b) => (a.title || a.url || a.id).localeCompare(b.title || b.url || b.id));
+    return items;
+  }, [resources]);
   const bankCatalogRef = useRef({});
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [catalogLoadingBank, setCatalogLoadingBank] = useState(null);
@@ -1730,6 +1804,17 @@ export default function SATTraining({ onNavigate }) {
     refreshClassData();
   }, [refreshClassData]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    const cls = String(selectedClass || "").trim();
+    if (!cls) {
+      setLiveSession(null);
+      setLiveTableMissing(false);
+      return;
+    }
+    loadLiveSession(cls);
+  }, [isAdmin, selectedClass, loadLiveSession]);
+
   const deleteResource = async (row) => {
     if (!row) return;
     const ok = window.confirm(`Delete resource "${row.title || ''}"?`);
@@ -1830,13 +1915,58 @@ export default function SATTraining({ onNavigate }) {
     const students = classEmails.map((email) => ({
       role: "Student",
       name: resolveDisplayName(email),
+      email,
     }));
-    const list = [{ role: "Teacher", name: teacherName }, ...students];
+    const list = [{ role: "Teacher", name: teacherName, email: userEmail }, ...students];
     return list.length ? list : [
       { role: "Teacher", name: "Practice Bot" },
       { role: "Student", name: "You" },
     ];
   }, [classEmails, userEmail, resolveDisplayName]);
+
+  const openBulkAddForSelectedClass = useCallback(() => {
+    if (!selectedClass) {
+      alert("Select a class first.");
+      return;
+    }
+    setBulkClassName(selectedClass);
+    setBulkEmailsText("");
+    setBulkSelectedEmails([]);
+    setBulkSearch("");
+    setBulkModalOpen(true);
+  }, [selectedClass]);
+
+  const addStudentToSelectedClass = useCallback(
+    async (email) => {
+      if (!isAdmin) return;
+      const className = String(selectedClass || "").trim();
+      const studentEmail = String(email || "").trim();
+      if (!className) throw new Error("Select a class first.");
+      if (!studentEmail || !/\S+@\S+\.\S+/.test(studentEmail)) {
+        throw new Error("Enter a valid student email.");
+      }
+      setPeopleAddBusy(true);
+      try {
+        const { data: me } = await supabase.auth.getUser();
+        const adminEmail = me?.user?.email || null;
+        const table = import.meta.env.VITE_CLASS_ASSIGN_TABLE || "cg_class_assignments";
+        const payload = { student_email: studentEmail, class_name: className, assigned_by: adminEmail };
+        let { error } = await supabase.from(table).upsert(payload, { onConflict: CLASS_ASSIGN_ON_CONFLICT });
+        if (needsLegacyConflictFallback(error)) {
+          try {
+            await supabase.from(table).delete().eq("student_email", studentEmail).eq("class_name", className);
+          } catch {}
+          ({ error } = await supabase.from(table).insert(payload));
+        }
+        if (error) throw error;
+        await loadClasses();
+        await refreshClassData();
+      } finally {
+        setPeopleAddBusy(false);
+      }
+    },
+    [isAdmin, selectedClass, loadClasses, refreshClassData]
+  );
 
   function decodeResourceQuestions(r) {
     return getResourceQuestions(r);
@@ -1855,7 +1985,186 @@ export default function SATTraining({ onNavigate }) {
     />
   );
 
-  const renderPeopleTab = () => <PeopleCard people={people} onNavigateHome={() => onNavigate("home")} />;
+  const renderPeopleTab = () => (
+    <PeopleCard
+      people={people}
+      onNavigateHome={() => onNavigate("home")}
+      className={selectedClass}
+      canManage={Boolean(selectedClass)}
+      knownEmails={knownEmails}
+      onOpenBulkAdd={openBulkAddForSelectedClass}
+      onAddStudent={addStudentToSelectedClass}
+      addBusy={peopleAddBusy}
+    />
+  );
+
+  const startLiveSession = useCallback(
+    async ({ title, url, resourceId } = {}) => {
+      if (!isAdmin) return;
+      const className = String(selectedClass || "").trim();
+      if (!className) {
+        alert("Select a class first.");
+        return;
+      }
+      setLiveBusy(true);
+      try {
+        setLiveTableMissing(false);
+        const { data: me } = await supabase.auth.getUser();
+        const teacherEmail = me?.user?.email || userEmail || null;
+        const payload = {
+          class_name: className,
+          is_active: true,
+          teacher_email: teacherEmail,
+          title: String(title || "").trim() || null,
+          url: String(url || "").trim() || null,
+          state: resourceId ? { resourceId: String(resourceId) } : null,
+          started_at: new Date().toISOString(),
+          ended_at: null,
+        };
+        const { error } = await supabase.from(LIVE_SESSION_TABLE).upsert(payload, { onConflict: "class_name" });
+        if (error) throw error;
+        await loadLiveSession(className, { silent: true });
+      } catch (error) {
+        console.error(error);
+        if (isMissingResourceError(error)) {
+          warnMissingSource(LIVE_SESSION_TABLE, error);
+          setLiveTableMissing(true);
+          alert(`Live sessions are not configured yet.\nMissing table: ${LIVE_SESSION_TABLE}\n\nRun the SQL in supabase/schema.sql to create it.`);
+          return;
+        }
+        alert(error?.message || "Failed to start live session.");
+      } finally {
+        setLiveBusy(false);
+      }
+    },
+    [isAdmin, selectedClass, userEmail, loadLiveSession]
+  );
+
+  const updateLiveSession = useCallback(
+    async ({ title, url, resourceId } = {}) => {
+      if (!isAdmin) return;
+      const className = String(selectedClass || "").trim();
+      if (!className) {
+        alert("Select a class first.");
+        return;
+      }
+      setLiveBusy(true);
+      try {
+        setLiveTableMissing(false);
+        const { data: me } = await supabase.auth.getUser();
+        const teacherEmail = me?.user?.email || userEmail || null;
+        const existingState = liveSession?.state && typeof liveSession.state === "object" ? liveSession.state : null;
+        const payload = {
+          class_name: className,
+          is_active: true,
+          teacher_email: teacherEmail,
+          title: String(title || "").trim() || null,
+          url: String(url || "").trim() || null,
+          state: resourceId ? { resourceId: String(resourceId) } : existingState,
+          ended_at: null,
+        };
+        const { error } = await supabase.from(LIVE_SESSION_TABLE).upsert(payload, { onConflict: "class_name" });
+        if (error) throw error;
+        await loadLiveSession(className, { silent: true });
+      } catch (error) {
+        console.error(error);
+        if (isMissingResourceError(error)) {
+          warnMissingSource(LIVE_SESSION_TABLE, error);
+          setLiveTableMissing(true);
+          alert(`Live sessions are not configured yet.\nMissing table: ${LIVE_SESSION_TABLE}\n\nRun the SQL in supabase/schema.sql to create it.`);
+          return;
+        }
+        alert(error?.message || "Failed to update live session.");
+      } finally {
+        setLiveBusy(false);
+      }
+    },
+    [isAdmin, selectedClass, userEmail, liveSession, loadLiveSession]
+  );
+
+  const endLiveSession = useCallback(async () => {
+    if (!isAdmin) return;
+    const className = String(selectedClass || "").trim();
+    if (!className) return;
+    setLiveBusy(true);
+    try {
+      setLiveTableMissing(false);
+      const payload = {
+        class_name: className,
+        is_active: false,
+        ended_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from(LIVE_SESSION_TABLE).upsert(payload, { onConflict: "class_name" });
+      if (error) throw error;
+      await loadLiveSession(className, { silent: true });
+    } catch (error) {
+      console.error(error);
+      if (isMissingResourceError(error)) {
+        warnMissingSource(LIVE_SESSION_TABLE, error);
+        setLiveTableMissing(true);
+        alert(`Live sessions are not configured yet.\nMissing table: ${LIVE_SESSION_TABLE}\n\nRun the SQL in supabase/schema.sql to create it.`);
+        return;
+      }
+      alert(error?.message || "Failed to end live session.");
+    } finally {
+      setLiveBusy(false);
+    }
+  }, [isAdmin, selectedClass, loadLiveSession]);
+
+  const renderAdminLiveTab = () => {
+    if (liveTableMissing) {
+      return (
+        <Card>
+          <h3 style={{ marginTop: 0 }}>Live Session</h3>
+          <div style={{ color: "#b91c1c", fontWeight: 700 }}>Live sessions are not configured yet.</div>
+          <div style={{ marginTop: 8, fontSize: 13, color: "#6b7280" }}>
+            Missing table: <b>{LIVE_SESSION_TABLE}</b>. Run the SQL in <b>supabase/schema.sql</b> and refresh.
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+          </div>
+        </Card>
+      );
+    }
+    return (
+      <LiveSessionCard
+        className={selectedClass}
+        session={liveSession}
+        loading={liveLoading}
+        canManage={Boolean(selectedClass)}
+        lessonOptions={liveLessonOptions}
+        busy={liveBusy}
+        onStart={startLiveSession}
+        onUpdate={updateLiveSession}
+        onEnd={endLiveSession}
+        onNavigateHome={() => onNavigate("home")}
+      />
+    );
+  };
+
+  const renderStudentLiveTab = () => {
+    if (liveTableMissing) {
+      return (
+        <Card>
+          <h3 style={{ marginTop: 0 }}>Live Session</h3>
+          <div style={{ color: "#6b7280" }}>Live sessions are unavailable right now.</div>
+          <div style={{ marginTop: 14 }}>
+            <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
+          </div>
+        </Card>
+      );
+    }
+    return (
+      <LiveSessionCard
+        className={studentClass}
+        session={liveSession}
+        loading={liveLoading}
+        onNavigateHome={() => onNavigate("home")}
+      />
+    );
+  };
+
+  const liveActive = Boolean(liveSession?.is_active);
 
   const adminClassListProps = {
     classes,
@@ -2014,6 +2323,21 @@ export default function SATTraining({ onNavigate }) {
     })();
   }, []);
 
+  useEffect(() => {
+    if (isAdmin) return;
+    const cls = String(studentClass || "").trim();
+    if (!cls) {
+      setLiveSession(null);
+      setLiveTableMissing(false);
+      return;
+    }
+    loadLiveSession(cls);
+    const interval = window.setInterval(() => {
+      loadLiveSession(cls, { silent: true });
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [isAdmin, studentClass, loadLiveSession]);
+
   const filteredKnown = useMemo(() => {
     const term = String(bulkSearch || "").trim().toLowerCase();
     if (!term) return knownEmails;
@@ -2023,6 +2347,26 @@ export default function SATTraining({ onNavigate }) {
       return email.includes(term) || name.includes(term);
     });
   }, [knownEmails, bulkSearch]);
+
+  const copyText = async (text, fallbackLabel = "Copy this text:") => {
+    const value = String(text || "").trim();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      alert("Copied.");
+    } catch {
+      window.prompt(fallbackLabel, value);
+    }
+  };
+
+  const buildLessonUrl = (lessonRoute) => {
+    const href = routeHref(lessonRoute);
+    try {
+      return new URL(href, window.location.origin).toString();
+    } catch {
+      return href;
+    }
+  };
 
   if (checking) {
     return (
@@ -2050,19 +2394,73 @@ export default function SATTraining({ onNavigate }) {
     return (
       <PageWrap>
         <HeaderBar title="SAT Training" right={null} />
+        {!selectedClass && (
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+              <div>
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>Interactive Lessons (Admin)</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: "#64748b" }}>
+                  Use these routes/links to share lessons with students (or paste into a live session).
+                </div>
+              </div>
+              <Btn variant="secondary" onClick={() => copyText(SAT_INTERACTIVE_LESSONS.map((l) => buildLessonUrl(l.route)).join("\n"), "Copy lesson links:")}>
+                Copy all links
+              </Btn>
+            </div>
+
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              {SAT_INTERACTIVE_LESSONS.map((lesson) => {
+                const href = routeHref(lesson.route);
+                return (
+                  <div
+                    key={lesson.id}
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 12,
+                      padding: 12,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <div style={{ minWidth: 240 }}>
+                      <div style={{ fontWeight: 900, color: "#0f172a" }}>{lesson.title}</div>
+                      <div style={{ marginTop: 6, fontSize: 12, color: "#334155", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                        {lesson.route}
+                      </div>
+                      <div style={{ marginTop: 2, fontSize: 12, color: "#64748b", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+                        {href}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <Btn variant="secondary" onClick={() => onNavigate(lesson.route)}>Open</Btn>
+                      <Btn variant="secondary" onClick={() => copyText(lesson.route, "Copy route:")}>Copy route</Btn>
+                      <Btn variant="secondary" onClick={() => copyText(buildLessonUrl(lesson.route), "Copy lesson link:")}>Copy link</Btn>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
         <AdminTabsPanel
-          selectedClass={selectedClass}
-          adminViewTab={adminViewTab}
-          onChangeTab={setAdminViewTab}
-          adminChatRefresh={adminChatRefresh}
-          onRefreshStream={() => setAdminChatRefresh((key) => key + 1)}
-          userEmail={userEmail}
-          renderPeopleTab={renderPeopleTab}
-          classworkPanelProps={{
-            classListProps: adminClassListProps,
-            classDetailProps: adminClassDetailProps,
-          }}
-        />
+            selectedClass={selectedClass}
+            adminViewTab={adminViewTab}
+            onChangeTab={setAdminViewTab}
+            adminChatRefresh={adminChatRefresh}
+            onRefreshStream={() => setAdminChatRefresh((key) => key + 1)}
+            userEmail={userEmail}
+            renderLiveTab={renderAdminLiveTab}
+            renderPeopleTab={renderPeopleTab}
+            classworkPanelProps={{
+              classListProps: adminClassListProps,
+              classDetailProps: adminClassDetailProps,
+            }}
+          />
         {viewClassLog && (
           <ClassSubmissionModal
             log={viewClassLog}
@@ -2267,6 +2665,8 @@ export default function SATTraining({ onNavigate }) {
         onRefreshChat={() => setStudentChatRefresh((key) => key + 1)}
         userEmail={userEmail}
         onNavigateHome={() => onNavigate("home")}
+        liveActive={liveActive}
+        renderLiveTab={renderStudentLiveTab}
         studentResLoading={studentResLoading}
         resourceGroupOrder={resourceGroupOrder}
         groupedStudentResources={groupedStudentResources}
@@ -2288,7 +2688,3 @@ export default function SATTraining({ onNavigate }) {
     </PageWrap>
   );
 }
-
-
-
-

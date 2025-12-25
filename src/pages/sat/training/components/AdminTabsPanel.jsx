@@ -5,6 +5,7 @@ import AdminClassworkPanel from "./AdminClassworkPanel.jsx";
 
 const TAB_LABELS = [
   { id: "stream", label: "Stream" },
+  { id: "live", label: "Live Session" },
   { id: "classwork", label: "Classwork" },
   { id: "people", label: "People" },
 ];
@@ -16,6 +17,7 @@ export default function AdminTabsPanel({
   adminChatRefresh,
   onRefreshStream,
   userEmail,
+  renderLiveTab,
   renderPeopleTab,
   classworkPanelProps,
 }) {
@@ -54,6 +56,8 @@ export default function AdminTabsPanel({
         </div>
       )}
 
+      {adminViewTab === "live" && renderLiveTab && renderLiveTab()}
+
       {adminViewTab === "people" && renderPeopleTab()}
 
       {adminViewTab === "classwork" && (
@@ -69,11 +73,12 @@ export default function AdminTabsPanel({
 
 AdminTabsPanel.propTypes = {
   selectedClass: PropTypes.string,
-  adminViewTab: PropTypes.oneOf(["stream", "classwork", "people"]).isRequired,
+  adminViewTab: PropTypes.oneOf(["stream", "live", "classwork", "people"]).isRequired,
   onChangeTab: PropTypes.func.isRequired,
   adminChatRefresh: PropTypes.number.isRequired,
   onRefreshStream: PropTypes.func.isRequired,
   userEmail: PropTypes.string.isRequired,
+  renderLiveTab: PropTypes.func.isRequired,
   renderPeopleTab: PropTypes.func.isRequired,
   classworkPanelProps: PropTypes.shape({
     classListProps: PropTypes.object.isRequired,

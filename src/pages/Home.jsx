@@ -16,7 +16,7 @@ const HOME_CARDS = {
       cta: "Open",
     },
     satDiagnostic: {
-      title: "SAT Diagnostic Test",
+      title: "SAT Testing",
       desc: "Simulates the Digital SAT with timed modules and a full results report.",
       cta: "Open",
     },
@@ -50,7 +50,7 @@ const HOME_CARDS = {
       cta: "Ouvrir",
     },
     satDiagnostic: {
-      title: "Test diagnostique SAT",
+      title: "Test SAT",
       desc: "Simule le SAT num\u00e9rique avec des modules chronom\u00e9tr\u00e9s et un rapport complet.",
       cta: "Ouvrir",
     },
@@ -90,12 +90,35 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
 
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingResult, setCheckingResult] = useState(false);
+  const [satTestingPickerOpen, setSatTestingPickerOpen] = useState(false);
   const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
 
   const t = STR[lang] || STR.EN;
   const home = HOME_CARDS[lang] || HOME_CARDS.EN;
 
   const navTo = (nextRoute, data = null) => (event) => onNavigate(nextRoute, data, event);
+
+  const SAT_TESTING_COPY = {
+    EN: {
+      title: "SAT Testing",
+      subtitle: "Choose an option to continue.",
+      diagnosticTitle: "Digital SAT Diagnostic Test",
+      diagnosticDesc: "Timed, full-length diagnostic with Reading & Writing + Math.",
+      readingTitle: "SAT Reading Competition",
+      readingDesc: "Reading & Writing only (competition mode).",
+      cancel: "Cancel",
+    },
+    FR: {
+      title: "Test SAT",
+      subtitle: "Choisissez une option pour continuer.",
+      diagnosticTitle: "Diagnostic SAT num\u00e9rique",
+      diagnosticDesc: "Diagnostic chronom\u00e9tr\u00e9 avec Lecture & \u00c9criture + Math\u00e9matiques.",
+      readingTitle: "Comp\u00e9tition de lecture SAT",
+      readingDesc: "Lecture & \u00c9criture uniquement (mode comp\u00e9tition).",
+      cancel: "Annuler",
+    },
+  };
+  const satPickerCopy = SAT_TESTING_COPY[lang] || SAT_TESTING_COPY.EN;
 
   const lockedLabelMap = {
     EN: { label: "Request Access", message: "Limited to approved educators." },
@@ -171,18 +194,42 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         .select("*")
         .eq("user_email", currentUser.email)
         .order("ts", { ascending: false })
-        .limit(1)
-        .single();
-      if (error || !data) {
+        .limit(25);
+      if (error || !data || !Array.isArray(data)) {
         return onNavigate("sat", null, event);
       }
-      onNavigate("sat-results", { submission: data });
+      const latestDiagnostic = data.find((row) => {
+        const type =
+          (row?.participant?.test_type || row?.participant?.testType || row?.participant?.sat_test_type || "")
+            .toString()
+            .trim()
+            .toLowerCase();
+        return !type || type === "diagnostic";
+      });
+      if (!latestDiagnostic) {
+        return onNavigate("sat", null, event);
+      }
+      onNavigate("sat-results", { submission: latestDiagnostic });
     } catch (e) {
       console.warn("Failed to check existing SAT result", e);
       onNavigate("sat", null, event);
     } finally {
       setCheckingResult(false);
     }
+  };
+
+  const handleSatReadingCompetitionClick = (event) => {
+    event?.preventDefault?.();
+    setSatTestingPickerOpen(false);
+    onNavigate(
+      "sat-exam",
+      {
+        examSections: ["RW"],
+        testType: "reading_competition",
+        contextTitle: satPickerCopy.readingTitle,
+      },
+      event
+    );
   };
 
   return (
@@ -225,6 +272,74 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         </div>
       </Card>
 
+      {satTestingPickerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={satPickerCopy.title}
+          onClick={() => setSatTestingPickerOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 60,
+            background: "rgba(15, 23, 42, 0.45)",
+            padding: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 92vw)" }}>
+            <Card style={{ padding: 20 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 6, color: "#111827" }}>{satPickerCopy.title}</h3>
+              <p style={{ marginTop: 0, color: "#6b7280" }}>{satPickerCopy.subtitle}</p>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setSatTestingPickerOpen(false);
+                    handleSatDiagClick(e);
+                  }}
+                  style={{
+                    textAlign: "left",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 12,
+                    padding: "14px 16px",
+                    background: "#ffffff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: "#111827" }}>{satPickerCopy.diagnosticTitle}</div>
+                  <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>{satPickerCopy.diagnosticDesc}</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSatReadingCompetitionClick}
+                  style={{
+                    textAlign: "left",
+                    border: "1px solid #d1d5db",
+                    borderRadius: 12,
+                    padding: "14px 16px",
+                    background: "#ffffff",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: "#111827" }}>{satPickerCopy.readingTitle}</div>
+                  <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>{satPickerCopy.readingDesc}</div>
+                </button>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+                <Btn variant="secondary" onClick={() => setSatTestingPickerOpen(false)}>
+                  {satPickerCopy.cancel}
+                </Btn>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           display: "grid",
@@ -249,7 +364,10 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             title: home.satDiagnostic.title,
             desc: home.satDiagnostic.desc,
             cta: home.satDiagnostic.cta,
-            onClick: handleSatDiagClick,
+            onClick: (event) => {
+              event?.preventDefault?.();
+              setSatTestingPickerOpen(true);
+            },
             variant: "primary",
             extra: checkingResult ? (
               <small style={{ color: "#9ca3af", fontSize: 12 }}>Checking for existing result...</small>
@@ -324,6 +442,4 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
     </PageWrap>
   );
 }
-
-
 

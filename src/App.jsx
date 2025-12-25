@@ -22,6 +22,11 @@ import SATIntro from "./pages/sat/SATIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
 import SATAssignment from "./pages/sat/SATAssignment.jsx";
 import SATTraining from "./pages/sat/training/SATTraining.jsx";
+import FunctionsAndDecimalsInteractive from "./pages/sat/lessons/FunctionsAndDecimalsInteractive.jsx";
+import PolynomialsInteractive from "./pages/sat/lessons/PolynomialsInteractive.jsx";
+import SolvingEquationsInteractive from "./pages/sat/lessons/SolvingEquationsInteractive.jsx";
+import QuadraticEquationsInteractive from "./pages/sat/lessons/QuadraticEquationsInteractive.jsx";
+import WordProblemsInteractive from "./pages/sat/lessons/WordProblemsInteractive.jsx";
 import SchoolTraining from "./pages/SchoolTraining.jsx";
 import OccupationScaleFull from "./pages/results/OccupationScaleFull.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
@@ -204,6 +209,7 @@ export default function App() {
         break;
       case "sat-exam":
         pageTitle =
+          resultsPayload?.contextTitle ||
           resultsPayload?.practice?.title ||
           (resultsPayload?.practice?.kind
             ? `SAT ${String(resultsPayload.practice.kind).toUpperCase()}`
@@ -433,6 +439,19 @@ const currentUser = (() => {
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
+  if (route === "sat-lesson-functions-decimals") return <FunctionsAndDecimalsInteractive onNavigate={onNavigate} />;
+  if (["sat-lesson-polynomials", "sat-lesson-polynomial", "sat-lesson-polynomail", "sat-lesson-polynomails"].includes(route)) {
+    return <PolynomialsInteractive onNavigate={onNavigate} />;
+  }
+  if (["sat-lesson-solving-equations", "sat-lesson-solving-equation", "sat-lesson-solve-equations", "sat-lesson-solve-equation"].includes(route)) {
+    return <SolvingEquationsInteractive onNavigate={onNavigate} />;
+  }
+  if (["sat-lesson-quadratic-equations", "sat-lesson-quadratic-equation", "sat-lesson-quadratics", "sat-lesson-quadratic"].includes(route)) {
+    return <QuadraticEquationsInteractive onNavigate={onNavigate} />;
+  }
+  if (["sat-lesson-word-problems", "sat-lesson-word-problem", "sat-lesson-wordproblem", "sat-lesson-wordproblems"].includes(route)) {
+    return <WordProblemsInteractive onNavigate={onNavigate} />;
+  }
   if (route === "school-training") return <SchoolTraining onNavigate={onNavigate} />;
   if (route === "ai-educator") {
     if (!canAccessAIEducator) {

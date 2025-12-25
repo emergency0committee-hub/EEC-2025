@@ -36,6 +36,17 @@ const MAX_TABLE_COLS = 6;
 const FILTERS_PAGE_SIZE = 5;
 const RESOURCE_BUCKET = import.meta.env.VITE_CLASS_RESOURCE_BUCKET || "assignment-media";
 const RESOURCE_LIBRARY_TABLE = import.meta.env.VITE_RESOURCE_LIBRARY_TABLE || "cg_resource_library";
+const BANK_VISIBILITY_TABLE = import.meta.env.VITE_BANK_VISIBILITY_TABLE || "cg_bank_tab_visibility";
+
+const DEFAULT_STAFF_TAB_VISIBILITY = {
+  math: true,
+  english: true,
+  tests: true,
+  diagnostic: false,
+  reading_competition: true,
+  career: false,
+  resources: true,
+};
 
 const SKILL_OPTIONS = [
   "Linear Equations and Inequalities",
@@ -131,6 +142,7 @@ const BANK_TAB_META = {
   english: { accent: "#ea580c" },
   tests: { accent: "#16a34a" },
   diagnostic: { accent: "#0ea5e9" },
+  reading_competition: { accent: "#f59e0b" },
   career: { accent: "#a855f7" },
   resources: { accent: "#10b981" },
 };
@@ -155,6 +167,11 @@ const BANK_TAB_DESCRIPTIONS = {
     EN: "Catalog of diagnostic test questions by difficulty.",
     AR: "بنك أسئلة للاختبارات التشخيصية مرتب حسب الصعوبة.",
     FR: "Banque d'items pour tests de diagnostic classés par difficulté.",
+  },
+  reading_competition: {
+    EN: "SAT Reading Competition questions (Reading & Writing only).",
+    AR: "أسئلة مسابقة القراءة SAT (القراءة والكتابة فقط).",
+    FR: "Questions de compétition de lecture SAT (lecture et écriture uniquement).",
   },
   career: {
     EN: "Career guidance scenarios and counseling prompts.",
@@ -238,6 +255,7 @@ const COPY = {
     tabEnglish: "English Bank",
     tabTests: "Test Bank",
     tabDiagnostic: "Diagnostic Bank",
+    tabReadingCompetition: "Reading Competition",
     tabCareer: "Career Guidance",
     tabResources: "Resources Bank",
     tableBuilderTitle: "Table Builder",
@@ -345,6 +363,7 @@ const COPY = {
     tabEnglish: "??? ????? ??????????",
     tabTests: "??? ??????????",
     tabDiagnostic: "بنك التشخيص",
+    tabReadingCompetition: "مسابقة القراءة",
     tabCareer: "بنك الإرشاد المهني",
     tableBuilderTitle: "???? ???????",
     tableBuilderInstructions: "???? ??? ?????? ???????? ????? ??????? ?? ???? ?????? ?? ?????? ?? ???????.",
@@ -451,6 +470,7 @@ const COPY = {
     tabEnglish: "Banque Anglais",
     tabTests: "Banque Tests",
     tabDiagnostic: "Banque Diagnostic",
+    tabReadingCompetition: "Compétition de lecture",
     tabCareer: "Banque Orientation",
     tableBuilderTitle: "Créateur de tableau",
     tableBuilderInstructions: "Configurez les lignes et colonnes, remplissez les cellules puis insérez le tableau dans la question ou la réponse.",
@@ -666,18 +686,96 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   })();
   const isStaff = storedRole === "staff";
 
+  const isMissingTableError = useCallback((error) => {
+    if (!error) return false;
+    const code = String(error.code || "").toUpperCase();
+    const message = String(error.message || "");
+    if (code === "PGRST205" || code === "42P01") return true;
+    return /does not exist/i.test(message) || /schema cache/i.test(message) || /not found/i.test(message);
+  }, []);
+
+  const [staffTabVisibility, setStaffTabVisibility] = useState(null); // { [bankId]: boolean }
+  const [staffTabSaving, setStaffTabSaving] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.from(BANK_VISIBILITY_TABLE).select("bank_id,staff_visible");
+        if (error) throw error;
+        const map = {};
+        (data || []).forEach((row) => {
+          const bankId = String(row?.bank_id || "").trim();
+          if (!bankId) return;
+          map[bankId] = Boolean(row?.staff_visible);
+        });
+        if (!cancelled) setStaffTabVisibility(map);
+      } catch (err) {
+        console.warn("bank visibility load failed", err);
+        if (!cancelled) setStaffTabVisibility({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isMissingTableError]);
+
+  const staffCanViewBank = useCallback(
+    (bankId) => {
+      const id = String(bankId || "").trim();
+      if (!id) return true;
+      const explicit =
+        staffTabVisibility && Object.prototype.hasOwnProperty.call(staffTabVisibility, id) ? staffTabVisibility[id] : null;
+      if (typeof explicit === "boolean") return explicit;
+      if (Object.prototype.hasOwnProperty.call(DEFAULT_STAFF_TAB_VISIBILITY, id)) return DEFAULT_STAFF_TAB_VISIBILITY[id];
+      return true;
+    },
+    [staffTabVisibility]
+  );
+
+  const toggleStaffBankVisibility = useCallback(
+    async (bankId) => {
+      if (!isAdmin) return;
+      const id = String(bankId || "").trim();
+      if (!id) return;
+      if (staffTabSaving) return;
+      const prevValue = staffCanViewBank(id);
+      const nextValue = !prevValue;
+      setStaffTabVisibility((prev) => ({ ...(prev || {}), [id]: nextValue }));
+      try {
+        setStaffTabSaving(id);
+        const { error } = await supabase
+          .from(BANK_VISIBILITY_TABLE)
+          .upsert([{ bank_id: id, staff_visible: nextValue }], { onConflict: "bank_id" });
+        if (error) throw error;
+      } catch (err) {
+        console.error("bank visibility save failed", err);
+        setStaffTabVisibility((prev) => ({ ...(prev || {}), [id]: prevValue }));
+        if (isMissingTableError(err)) {
+          alert(
+            `Supabase schema fix needed:\n\nMissing table "${BANK_VISIBILITY_TABLE}".\n\nRun in Supabase SQL editor:\n\ncreate table if not exists public.cg_bank_tab_visibility (\n  bank_id text primary key,\n  staff_visible boolean not null default true,\n  created_at timestamptz not null default now(),\n  updated_at timestamptz not null default now()\n);\n\ncreate or replace function public.cg_bank_tab_visibility_set_updated_at()\nreturns trigger as $$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$$ language plpgsql;\n\ndrop trigger if exists trg_cg_bank_tab_visibility_updated_at on public.cg_bank_tab_visibility;\ncreate trigger trg_cg_bank_tab_visibility_updated_at\nbefore update on public.cg_bank_tab_visibility\nfor each row execute function public.cg_bank_tab_visibility_set_updated_at();\n\ninsert into public.cg_bank_tab_visibility (bank_id, staff_visible)\nvalues\n  ('math', true),\n  ('english', true),\n  ('tests', true),\n  ('diagnostic', false),\n  ('reading_competition', true),\n  ('career', false),\n  ('resources', true)\non conflict (bank_id) do nothing;\n\n(Also added to supabase/schema.sql)`,
+          );
+        } else {
+          alert(err?.message || "Failed to update staff visibility.");
+        }
+      } finally {
+        setStaffTabSaving("");
+      }
+    },
+    [isAdmin, isMissingTableError, staffCanViewBank, staffTabSaving]
+  );
+
   const [activeBank, setActiveBank] = useState("math");
   const visibleBanks = useMemo(
     () =>
       [
         ...Object.values(BANKS).filter((cfg) => {
-          if (cfg.id === "diagnostic") return isAdmin;
-          if (cfg.id === "career") return isAdmin || isStaff;
-          return true;
+          if (isAdmin) return true;
+          return staffCanViewBank(cfg.id);
         }),
-        { id: "resources", labelKey: "tabResources" },
+        ...(isAdmin || staffCanViewBank("resources") ? [{ id: "resources", labelKey: "tabResources" }] : []),
       ],
-    [isAdmin, isStaff]
+    [isAdmin, staffCanViewBank]
   );
   const visibleBankIds = useMemo(() => visibleBanks.map((cfg) => cfg.id), [visibleBanks]);
   const bank = BANKS[activeBank] || BANKS.math;
@@ -939,7 +1037,21 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
                 { column: "sort_index", ascending: true },
               ]
             : [{ column: "created_at", ascending: false }];
-        const data = await listAssignmentQuestions({ table: bank.table, order });
+        let data;
+        if (bank.id === "reading_competition") {
+          const limit = Number(import.meta.env.VITE_SAT_RW_LIMIT || 500);
+          let query = supabase.from(bank.table).select("*").ilike("subject", "english");
+          (Array.isArray(order) ? order : []).forEach((rule) => {
+            if (!rule?.column) return;
+            query = query.order(rule.column, { ascending: Boolean(rule.ascending) });
+          });
+          query = query.limit(limit);
+          const { data: rows, error } = await query;
+          if (error) throw error;
+          data = rows || [];
+        } else {
+          data = await listAssignmentQuestions({ table: bank.table, order });
+        }
         if (!ignore) setQuestions(data);
       } catch (err) {
         console.error("assignment question list", err);
@@ -957,6 +1069,10 @@ export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) 
   const filteredQuestions = useMemo(() => {
     if (bank.id === "career") return questions;
     return questions.filter((q) => {
+      if (bank.id === "reading_competition") {
+        const normalizedSubject = normalizeSubjectValue(q?.subject || "");
+        if (normalizedSubject !== "english") return false;
+      }
       const matchType = !filters.type || filters.type === "all" ? true : normalizeQType(q) === filters.type;
       return matchType;
     });
@@ -1617,6 +1733,8 @@ const validate = () => {
             cfg.id === "resources"
               ? "Upload reusable files (PDF/PPT/links) for classes."
               : bankTabDescription(cfg.id, lang);
+          const staffVisible = staffCanViewBank(cfg.id);
+          const visibilityDisabled = Boolean(staffTabSaving);
           return (
             <button
               key={cfg.id}
@@ -1624,6 +1742,28 @@ const validate = () => {
               onClick={() => setActiveBank(cfg.id)}
               style={bankTabStyle(active, meta.accent)}
             >
+              {isAdmin && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  title={staffVisible ? "Visible to staff" : "Hidden from staff"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggleStaffBankVisibility(cfg.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      toggleStaffBankVisibility(cfg.id);
+                    }
+                  }}
+                  style={staffVisibilityPillStyle(active, meta.accent, staffVisible, visibilityDisabled)}
+                >
+                  <span aria-hidden="true">{staffVisible ? "✓" : "×"}</span>
+                  <span>Staff</span>
+                </span>
+              )}
               <span style={bankTabIconWrapperStyle(active, meta.accent)}>{getBankTabIcon(cfg.id)}</span>
               <span style={{ display: "grid", gap: 4, textAlign: "left" }}>
                 <span style={{ fontWeight: 700, fontSize: 15 }}>{label}</span>
@@ -3187,6 +3327,7 @@ const actionButtonStyle = {
 };
 
 const bankTabStyle = (active, accent = "#2563eb") => ({
+  position: "relative",
   padding: "14px 18px",
   borderRadius: 18,
   border: active ? `1px solid ${accent}` : "1px solid #e5e7eb",
@@ -3204,6 +3345,25 @@ const bankTabStyle = (active, accent = "#2563eb") => ({
   minWidth: 260,
   textAlign: "left",
   lineHeight: 1.35,
+});
+
+const staffVisibilityPillStyle = (active, accent, enabled, disabled) => ({
+  position: "absolute",
+  top: 10,
+  right: 10,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: active ? "1px solid rgba(255,255,255,0.35)" : "1px solid #e5e7eb",
+  background: active ? "rgba(255,255,255,0.16)" : enabled ? `${accent}14` : "#f3f4f6",
+  color: active ? "#ffffff" : enabled ? accent : "#6b7280",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: disabled ? "not-allowed" : "pointer",
+  opacity: disabled ? 0.75 : 1,
+  userSelect: "none",
 });
 
 const bankTabIconWrapperStyle = (active, accent) => ({

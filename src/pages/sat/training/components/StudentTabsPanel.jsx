@@ -9,6 +9,7 @@ import PeopleCard from "./PeopleCard.jsx";
 
 const STUDENT_TABS = [
   { id: "stream", label: "Stream" },
+  { id: "live", label: "Live" },
   { id: "classwork", label: "Classwork" },
   { id: "lessons", label: "Resources" },
   { id: "people", label: "People" },
@@ -23,6 +24,8 @@ export default function StudentTabsPanel({
   onRefreshChat,
   userEmail,
   onNavigateHome,
+  liveActive,
+  renderLiveTab,
   studentResLoading,
   resourceGroupOrder,
   groupedStudentResources,
@@ -85,15 +88,34 @@ export default function StudentTabsPanel({
                 borderRadius: 999,
                 padding: "8px 14px",
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
               }}
             >
-              {label}
+              <span>{label}</span>
+              {id === "live" && liveActive && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: "#dc2626",
+                    color: "#fff",
+                  }}
+                >
+                  LIVE
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
       {tab === "stream" && renderStreamTab()}
+
+      {tab === "live" && renderLiveTab && renderLiveTab()}
 
       {tab === "classwork" && (
         <StudentClassworkPanel
@@ -122,10 +144,16 @@ StudentTabsPanel.propTypes = {
   onRefreshChat: PropTypes.func.isRequired,
   userEmail: PropTypes.string.isRequired,
   onNavigateHome: PropTypes.func.isRequired,
+  liveActive: PropTypes.bool,
+  renderLiveTab: PropTypes.func.isRequired,
   studentResLoading: PropTypes.bool.isRequired,
   resourceGroupOrder: PropTypes.array.isRequired,
   groupedStudentResources: PropTypes.object.isRequired,
   hasAnyStudentResource: PropTypes.bool.isRequired,
   renderResourceCard: PropTypes.func.isRequired,
   people: PropTypes.array.isRequired,
+};
+
+StudentTabsPanel.defaultProps = {
+  liveActive: false,
 };

@@ -154,14 +154,14 @@ const isMissingTableError = (error) => {
   return /does not exist/i.test(message) || /schema cache/i.test(message) || /not found/i.test(message);
 };
 
-async function loadRWFromSupabase(subject = "ENGLISH", targetCount = DEFAULT_RW_TOTAL) {
-  const table = import.meta.env.VITE_SAT_RW_TABLE || "cg_sat_diagnostic_questions";
+async function loadRWFromSupabase(subject = "ENGLISH", targetCount = DEFAULT_RW_TOTAL, { table } = {}) {
+  const resolvedTable = table || import.meta.env.VITE_SAT_RW_TABLE || "cg_sat_diagnostic_questions";
   const limit = Number(import.meta.env.VITE_SAT_RW_LIMIT || 500);
   try {
-    const { data, error } = await supabase.from(table).select("*").eq("subject", subject).limit(limit);
+    const { data, error } = await supabase.from(resolvedTable).select("*").eq("subject", subject).limit(limit);
     if (error) {
-      if (isMissingTableError(error) && shouldWarnMissing(table)) {
-        console.warn(`SAT questions: "${table}" not available`, error.message || error);
+      if (isMissingTableError(error) && shouldWarnMissing(resolvedTable)) {
+        console.warn(`SAT questions: "${resolvedTable}" not available`, error.message || error);
         return null;
       }
       throw error;
@@ -178,8 +178,8 @@ async function loadRWFromSupabase(subject = "ENGLISH", targetCount = DEFAULT_RW_
     const modules = splitIntoModules(selected, moduleCount, perModule);
     return modules;
   } catch (err) {
-    if (isMissingTableError(err) && shouldWarnMissing(table)) {
-      console.warn(`SAT questions: "${table}" not available`, err.message || err);
+    if (isMissingTableError(err) && shouldWarnMissing(resolvedTable)) {
+      console.warn(`SAT questions: "${resolvedTable}" not available`, err.message || err);
       return null;
     }
     throw err;
@@ -237,9 +237,9 @@ async function loadRWFromCSV() {
 }
 
 // Load RW Modules from Supabase first, CSV fallback
-export async function loadRWModules() {
+export async function loadRWModules({ table } = {}) {
   try {
-    const supabaseModules = await loadRWFromSupabase("ENGLISH", DEFAULT_RW_TOTAL);
+    const supabaseModules = await loadRWFromSupabase("ENGLISH", DEFAULT_RW_TOTAL, { table });
     if (
       supabaseModules &&
       supabaseModules.length &&
@@ -293,9 +293,9 @@ export const MATH_MODULES = [
   ],
 ];
 
-export async function loadMathModules() {
+export async function loadMathModules({ table } = {}) {
   try {
-    const supabaseModules = await loadRWFromSupabase("MATH", DEFAULT_MATH_TOTAL);
+    const supabaseModules = await loadRWFromSupabase("MATH", DEFAULT_MATH_TOTAL, { table });
     if (
       supabaseModules &&
       supabaseModules.length &&

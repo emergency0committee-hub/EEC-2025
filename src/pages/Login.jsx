@@ -3,9 +3,8 @@ import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
-import { LANGS } from "../i18n/strings.js";
+import { LANGS_EN as LANGS } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
-import PhoneInput from "../components/PhoneInput.jsx";
 
 const ROLE_OPTIONS = {
   EN: [
@@ -18,18 +17,6 @@ const ROLE_OPTIONS = {
       value: "educator",
       label: "Educator",
       description: "Create classes, assign quizzes, and review student performance.",
-    },
-  ],
-  AR: [
-    {
-      value: "student",
-      label: "\u0637\u0627\u0644\u0628",
-      description: "\u0627\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 \u0627\u0644\u0627\u062e\u062a\u0628\u0627\u0631\u0627\u062a \u0627\u0644\u062a\u062f\u0631\u064a\u0628\u064a\u0629 \u0648\u0627\u0644\u0645\u0648\u0627\u062f \u0627\u0644\u0635\u0641\u064a\u0629 \u0648\u062a\u062a\u0628\u0639 \u0646\u062a\u0627\u0626\u062c\u0643.",
-    },
-    {
-      value: "educator",
-      label: "\u0645\u0639\u0644\u0645",
-      description: "\u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u0635\u0641\u0648\u0641 \u0648\u062a\u0643\u0644\u064a\u0641 \u0627\u0644\u0648\u0627\u062c\u0628\u0627\u062a \u0648\u0645\u0631\u0627\u062c\u0639\u0629 \u0623\u062f\u0627\u0621 \u0627\u0644\u0637\u0644\u0627\u0628.",
     },
   ],
   FR: [
@@ -45,6 +32,25 @@ const ROLE_OPTIONS = {
     },
   ],
 };
+
+const SIGNUP_SCHOOL_OPTIONS = [
+  { value: "", label: "Select school" },
+  { value: "Al - Jinan International School", label: "Al - Jinan International School" },
+  { value: "Azm school", label: "Azm school" },
+  { value: "Canada Educational Center", label: "Canada Educational Center" },
+  { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
+  { value: "EEC", label: "EEC" },
+  { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
+  { value: "Saints Coeurs - Andket", label: "Saints Coeurs - Andket" },
+  { value: "Sir El Dinniyeh Secondary Public School", label: "Sir El Dinniyeh Secondary Public School" },
+];
+
+const SIGNUP_GRADE_OPTIONS = [
+  { value: "", label: "Select grade" },
+  { value: "Grade 10", label: "Grade 10" },
+  { value: "Grade 11", label: "Grade 11" },
+  { value: "Grade 12", label: "Grade 12" },
+];
 
 const LOGIN_COPY = {
   EN: {
@@ -82,7 +88,12 @@ const LOGIN_COPY = {
     schoolRequired: "School is required",
     classRequired: "Class is required",
     certificationRequired: "Certification is required",
+    phoneRequired: "Phone number is required",
     phoneInvalid: "Please enter a valid phone number",
+    firstName: "First Name",
+    enterFirstName: "e.g., Amina",
+    lastName: "Last Name",
+    enterLastName: "e.g., Khalil",
     fullName: "Full Name",
     enterFullName: "e.g., Amina Khalil",
     email: "Email",
@@ -102,6 +113,8 @@ const LOGIN_COPY = {
     emailInvalid: "Please enter a valid email",
     passwordRequired: "Password is required",
     passwordTooShort: "Password must be at least 6 characters",
+    firstNameRequired: "First name is required",
+    lastNameRequired: "Last name is required",
     nameRequired: "Full name is required",
     confirmPasswordRequired: "Please confirm your password",
     passwordsDontMatch: "Passwords do not match",
@@ -146,7 +159,12 @@ const LOGIN_COPY = {
     schoolRequired: "\u0627\u0633\u0645 \u0627\u0644\u0645\u062f\u0631\u0633\u0629 \u0645\u0637\u0644\u0648\u0628",
     classRequired: "\u0627\u0633\u0645 \u0627\u0644\u0635\u0641 \u0645\u0637\u0644\u0648\u0628",
     certificationRequired: "\u0627\u0644\u0645\u0624\u0647\u0644 \u0627\u0644\u062c\u0627\u0645\u0639\u064a \u0645\u0637\u0644\u0648\u0628",
+    phoneRequired: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641 \u0645\u0637\u0644\u0648\u0628",
     phoneInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0631\u0642\u0645 \u0647\u0627\u062a\u0641 \u0635\u0627\u0644\u062d",
+    firstName: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0623\u0648\u0644",
+    enterFirstName: "\u0645\u062b\u0627\u0644: \u0622\u0645\u0646\u0629",
+    lastName: "\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0626\u0644\u0629",
+    enterLastName: "\u0645\u062b\u0627\u0644: \u062e\u0644\u064a\u0644",
     fullName: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644",
     enterFullName: "\u0645\u062b\u0627\u0644: \u0622\u0645\u0646\u0629 \u062e\u0644\u064a\u0644",
     email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
@@ -166,6 +184,8 @@ const LOGIN_COPY = {
     emailInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0628\u0631\u064a\u062f \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0635\u0627\u0644\u062d",
     passwordRequired: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0645\u0637\u0644\u0648\u0628\u0629",
     passwordTooShort: "\u064a\u062c\u0628 \u0623\u0644\u0627 \u062a\u0642\u0644 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0639\u0646 6 \u0623\u062d\u0631\u0641",
+    firstNameRequired: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0623\u0648\u0644 \u0645\u0637\u0644\u0648\u0628",
+    lastNameRequired: "\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0626\u0644\u0629 \u0645\u0637\u0644\u0648\u0628",
     nameRequired: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644 \u0645\u0637\u0644\u0648\u0628",
     confirmPasswordRequired: "\u064a\u0631\u062c\u0649 \u062a\u0623\u0643\u064a\u062f \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
     passwordsDontMatch: "\u0643\u0644\u0645\u062a\u0627 \u0627\u0644\u0645\u0631\u0648\u0631 \u063a\u064a\u0631 \u0645\u062a\u0637\u0627\u0628\u0642\u062a\u064a\u0646",
@@ -210,7 +230,12 @@ const LOGIN_COPY = {
     schoolRequired: "L'\xe9tablissement est obligatoire",
     classRequired: "La classe est obligatoire",
     certificationRequired: "La certification universitaire est obligatoire",
+    phoneRequired: "Le num\xe9ro de t\xe9l\xe9phone est obligatoire",
     phoneInvalid: "Veuillez saisir un num\xe9ro de t\xe9l\xe9phone valide",
+    firstName: "Pr\xe9nom",
+    enterFirstName: "ex. Amina",
+    lastName: "Nom de famille",
+    enterLastName: "ex. Khalil",
     fullName: "Nom complet",
     enterFullName: "ex. Amina Khalil",
     email: "E-mail",
@@ -230,6 +255,8 @@ const LOGIN_COPY = {
     emailInvalid: "Veuillez saisir une adresse e-mail valide",
     passwordRequired: "Le mot de passe est obligatoire",
     passwordTooShort: "Le mot de passe doit contenir au moins 6 caract\xe8res",
+    firstNameRequired: "Le pr\xe9nom est obligatoire",
+    lastNameRequired: "Le nom de famille est obligatoire",
     nameRequired: "Le nom complet est obligatoire",
     confirmPasswordRequired: "Veuillez confirmer votre mot de passe",
     passwordsDontMatch: "Les mots de passe ne correspondent pas",
@@ -237,7 +264,7 @@ const LOGIN_COPY = {
     hidePassword: "Masquer le mot de passe",
     showConfirmPassword: "Afficher la confirmation du mot de passe",
     hideConfirmPassword: "Masquer la confirmation du mot de passe",
-    confirmEmailNotice: "Vérifiez votre e-mail pour confirmer votre compte, puis connectez-vous.",
+    confirmEmailNotice: "V\xe9rifiez votre e-mail pour confirmer votre compte, puis connectez-vous.",
   },
 };
 
@@ -279,9 +306,9 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     username: "",     // username (for sign-up)
     password: "",
     confirmPassword: "",
-    name: "",
+    firstName: "",
+    lastName: "",
     phone: "",        // phone (for sign-up, stored in auth metadata)
-    region: "",
     school: "",
     className: "",
     certification: "",
@@ -299,6 +326,14 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         ? copy.studentRole
         : "";
   const fieldStyle = isRTL ? { direction: "rtl", textAlign: "right" } : undefined;
+  const selectBaseStyle = {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid #d1d5db",
+    fontSize: 14,
+    background: "#ffffff",
+  };
   const errorStyle = {
     color: "#dc2626",
     fontSize: 14,
@@ -415,35 +450,6 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     [canUseCredentials]
   );
 
-  // Minimal flag placeholder (solid color) + dialing code mapping
-  function FlagSVG({ r }) {
-    const fill = (
-      r === "US" ? "#b91c1c" :
-      r === "CA" ? "#dc2626" :
-      r === "UK" ? "#1e3a8a" :
-      r === "EG" ? "#111827" :
-      r === "SA" ? "#16a34a" :
-      r === "AE" ? "#0ea5e9" :
-      r === "JO" ? "#ef4444" :
-      r === "LB" ? "#ef4444" : "#9ca3af"
-    );
-    return (
-      <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden>
-        <rect x="0" y="0" width="16" height="12" rx="2" fill={fill} />
-      </svg>
-    );
-  }
-
-  const dialCode = (r) => (
-    r === "US" || r === "CA" ? "+1" :
-    r === "UK" ? "+44" :
-    r === "EG" ? "+20" :
-    r === "SA" ? "+966" :
-    r === "AE" ? "+971" :
-    r === "JO" ? "+962" :
-    r === "LB" ? "+961" : "+"
-  );
-
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
@@ -455,9 +461,9 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     const email = formData.email.trim();
     const password = formData.password;
     const confirmPassword = formData.confirmPassword;
-    const name = formData.name.trim();
+    const firstName = (formData.firstName || "").trim();
+    const lastName = (formData.lastName || "").trim();
     const phone = (formData.phone || "").trim();
-    const region = (formData.region || "").trim();
     const username = formData.username.trim();
     const school = formData.school.trim();
     const className = formData.className.trim();
@@ -476,13 +482,14 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
       }
     }
 
-    // Sign-up requires email, username, password, confirm, name
+    // Sign-up requires email, username, password, confirm, first/last name
     if (isSignUp) {
       if (!email) newErrors.email = copy.emailRequired;
       else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = copy.emailInvalid;
       if (!username) newErrors.username = copy.usernameRequired;
       else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
-      if (phone && phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
+      if (!phone) newErrors.phone = copy.phoneRequired;
+      else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
       if (!["student", "educator"].includes(accountType)) newErrors.accountType = copy.accountTypeRequired;
       if (!school) newErrors.school = copy.schoolRequired;
       if (accountType === "student") {
@@ -495,7 +502,8 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     if (!password) newErrors.password = copy.passwordRequired;
     else if (password.length < 6) newErrors.password = copy.passwordTooShort;
     if (isSignUp) {
-      if (!name) newErrors.name = copy.nameRequired;
+      if (!firstName) newErrors.firstName = copy.firstNameRequired;
+      if (!lastName) newErrors.lastName = copy.lastNameRequired;
       if (!confirmPassword) newErrors.confirmPassword = copy.confirmPasswordRequired;
       else if (password !== confirmPassword) newErrors.confirmPassword = copy.passwordsDontMatch;
     }
@@ -517,9 +525,10 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     const email = formData.email.trim();
     const username = formData.username.trim();
     const phone = (formData.phone || "").trim();
-    const region = (formData.region || "").trim();
     const password = formData.password;
-    const name = formData.name.trim();
+    const firstName = (formData.firstName || "").trim();
+    const lastName = (formData.lastName || "").trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
     const accountTypeSelection = (formData.accountType || "").toLowerCase();
     const normalizedAccountType = accountTypeSelection === "educator" ? "educator" : "student";
     const school = formData.school.trim();
@@ -534,10 +543,11 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           password,
           options: {
             data: {
-              name: (username || name),
+              name: fullName || username,
+              first_name: firstName || undefined,
+              last_name: lastName || undefined,
               username,
               phone,
-              region,
               school,
               class: normalizedAccountType === "student" ? className : "",
               className: normalizedAccountType === "student" ? className : "",
@@ -559,12 +569,33 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         }
         // Upsert profile with default role
         let role = email.toLowerCase() === "anasitani186@gmail.com" ? "admin" : normalizedAccountType;
-        await supabase.from("profiles").upsert({ id: user.id, email, username, name: (username || name), role });
-        const current = { email, username, name: (username || name), role };
+        const profileRow = {
+          id: user.id,
+          email,
+          username,
+          name: fullName || username,
+          role,
+          school: school || null,
+          class_name: normalizedAccountType === "student" ? (className || null) : null,
+          phone: phone || null,
+          ai_access: false,
+        };
+        await supabase.from("profiles").upsert(profileRow);
+        const current = {
+          id: user.id,
+          email,
+          username,
+          name: profileRow.name,
+          role,
+          school: profileRow.school || "",
+          class_name: profileRow.class_name || "",
+          phone: profileRow.phone || "",
+          ai_access: false,
+        };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
         if (role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
         isAdminUser = role === "admin";
-        await storeCredential(email, password, username || name || email);
+        await storeCredential(email, password, username || fullName || email);
       } else {
         // Supabase Auth: sign in using email/password (lookup by username if needed)
         let signInEmail = loginId;
@@ -589,23 +620,68 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
         let profile = null;
         const { data: profRows } = await supabase.from("profiles").select("*").eq("id", user.id).limit(1);
         profile = profRows && profRows[0];
-        if (!profile) {
-          const metaType = (user.user_metadata?.accountType || user.user_metadata?.role || "").toLowerCase();
-          let inferredRole = metaType === "educator" ? "educator" : "student";
-          if (user.email?.toLowerCase() === "anasitani186@gmail.com") inferredRole = "admin";
-          const uname = user.user_metadata?.username || (user.email ? user.email.split("@")[0] : "");
-          const nm = user.user_metadata?.name || "";
-          await supabase.from("profiles").insert({ id: user.id, email: user.email, username: uname, name: nm || uname, role: inferredRole });
-          profile = { email: user.email, username: uname, name: nm || uname, role: inferredRole };
+        const metaType = (user.user_metadata?.accountType || user.user_metadata?.role || "").toLowerCase();
+        const metaRole = metaType === "educator" ? "educator" : metaType === "student" ? "student" : "";
+        const isAdminEmail = user.email?.toLowerCase() === "anasitani186@gmail.com";
+
+        if (profile) {
+          const currentRole = (profile.role || "").toLowerCase();
+          const shouldBackfill = isAdminEmail || !currentRole || currentRole === "user";
+          if (shouldBackfill) {
+            const desiredRole = isAdminEmail ? "admin" : metaRole || "student";
+            if (desiredRole && desiredRole !== profile.role) {
+              const { error: roleUpdateError } = await supabase
+                .from("profiles")
+                .update({ role: desiredRole })
+                .eq("id", user.id);
+              if (!roleUpdateError) profile = { ...profile, role: desiredRole };
+            }
+          }
         }
-        const current = { email: profile.email, username: profile.username, name: profile.name, role: profile.role };
+
+        if (!profile) {
+          let inferredRole = metaRole === "educator" ? "educator" : "student";
+          if (isAdminEmail) inferredRole = "admin";
+          const meta = user.user_metadata || {};
+          const uname = meta.username || (user.email ? user.email.split("@")[0] : "");
+          const inferredName =
+            meta.name ||
+            [meta.first_name || meta.firstName, meta.last_name || meta.lastName].filter(Boolean).join(" ").trim();
+          const fallbackSchool = meta.school || meta.organization || null;
+          const fallbackClass = meta.className || meta.class || null;
+          const fallbackPhone = meta.phone || meta.phoneNumber || null;
+          const insertRow = {
+            id: user.id,
+            email: user.email,
+            username: uname,
+            name: inferredName || uname,
+            role: inferredRole,
+            ai_access: false,
+            school: fallbackSchool,
+            class_name: fallbackClass,
+            phone: fallbackPhone,
+          };
+          await supabase.from("profiles").insert(insertRow);
+          profile = { ...insertRow };
+        }
+        const current = {
+          id: user.id,
+          email: profile.email,
+          username: profile.username,
+          name: profile.name,
+          role: profile.role,
+          ai_access: profile.ai_access ?? false,
+          school: profile.school || "",
+          class_name: profile.class_name || "",
+          phone: profile.phone || "",
+        };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
         if (profile.role === "admin") try { localStorage.setItem("cg_admin_ok_v1", "1"); } catch {}
         isAdminUser = profile.role === "admin";
         await storeCredential(signInEmail, password, profile?.name || profile?.username || signInEmail);
       }
-      // Navigate based on role
-      onNavigate(isAdminUser ? "admin-dashboard" : "home");
+      // Navigate back to home for all users
+      onNavigate("home");
     } catch (err) {
       const msg = err?.message || String(err);
       setErrors((prev) => ({ ...prev, submit: msg }));
@@ -730,19 +806,44 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
 
             {isSignUp && (
               <>
-                <Field
-                  label={copy.fullName}
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder={copy.enterFullName}
-                  invalid={!!errors.name}
-                  autoComplete="name"
-                  name="name"
-                  style={fieldStyle}
-                />
-                {errors.name && (
-                  <p style={errorStyle}>{errors.name}</p>
-                )}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <Field
+                      label={copy.firstName}
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange("firstName", e.target.value)}
+                      placeholder={copy.enterFirstName}
+                      invalid={!!errors.firstName}
+                      autoComplete="given-name"
+                      name="firstName"
+                      style={fieldStyle}
+                    />
+                    {errors.firstName && (
+                      <p style={errorStyle}>{errors.firstName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Field
+                      label={copy.lastName}
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange("lastName", e.target.value)}
+                      placeholder={copy.enterLastName}
+                      invalid={!!errors.lastName}
+                      autoComplete="family-name"
+                      name="lastName"
+                      style={fieldStyle}
+                    />
+                    {errors.lastName && (
+                      <p style={errorStyle}>{errors.lastName}</p>
+                    )}
+                  </div>
+                </div>
                 <Field
                   label={copy.usernameLabel}
                   value={formData.username}
@@ -756,43 +857,56 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
                 {errors.username && (
                   <p style={errorStyle}>{errors.username}</p>
                 )}
-                <PhoneInput
-                  label={copy.phoneLabel}
-                  placeholder={copy.phonePlaceholder}
-                  region={formData.region}
-                  phone={formData.phone}
-                  dir={isRTL ? "rtl" : "ltr"}
-                  onChange={({ region, phone }) => {
-                    setFormData((s) => ({ ...s, region, phone }));
-                    if (errors.phone) setErrors((prev) => ({ ...prev, phone: "" }));
-                  }}
-                  error={errors.phone}
-                />
                 <Field
-                  label={copy.schoolLabel}
-                  value={formData.school}
-                  onChange={(e) => handleInputChange("school", e.target.value)}
-                  placeholder={copy.schoolPlaceholder}
-                  invalid={!!errors.school}
-                  autoComplete="organization"
-                  name="organization"
+                  label={copy.phoneLabel}
+                  value={formData.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  placeholder={copy.phonePlaceholder}
+                  invalid={!!errors.phone}
+                  autoComplete="tel"
+                  name="phone"
                   style={fieldStyle}
                 />
+                {errors.phone && (
+                  <p style={errorStyle}>{errors.phone}</p>
+                )}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                    {copy.schoolLabel}
+                  </label>
+                  <select
+                    value={formData.school}
+                    onChange={(e) => handleInputChange("school", e.target.value)}
+                    style={{ ...selectBaseStyle, ...(fieldStyle || {}), paddingRight: 30 }}
+                  >
+                    {SIGNUP_SCHOOL_OPTIONS.map((opt) => (
+                      <option key={opt.value || "blank"} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 {errors.school && (
                   <p style={errorStyle}>{errors.school}</p>
                 )}
                 {formData.accountType === "student" && (
                   <>
-                    <Field
-                      label={copy.classLabel}
-                      value={formData.className}
-                      onChange={(e) => handleInputChange("className", e.target.value)}
-                      placeholder={copy.classPlaceholder}
-                      invalid={!!errors.className}
-                      autoComplete="off"
-                      name="class"
-                      style={fieldStyle}
-                    />
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
+                        {copy.classLabel}
+                      </label>
+                      <select
+                        value={formData.className}
+                        onChange={(e) => handleInputChange("className", e.target.value)}
+                        style={{ ...selectBaseStyle, ...(fieldStyle || {}), paddingRight: 30 }}
+                      >
+                        {SIGNUP_GRADE_OPTIONS.map((opt) => (
+                          <option key={opt.value || "blank"} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     {errors.className && (
                       <p style={errorStyle}>{errors.className}</p>
                     )}
@@ -979,6 +1093,3 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     </PageWrap>
   );
 }
-
-
-

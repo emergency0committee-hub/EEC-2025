@@ -37,15 +37,28 @@ const compareAnswer = (expected, actual) => {
   return expectedList.includes(actualNorm);
 };
 
-export default function SATTestInterface({ onNavigate, practice = null, preview = false, mode = "exam" }) {
+export default function SATTestInterface({
+  onNavigate,
+  practice = null,
+  preview = false,
+  mode = "exam",
+  examSections = null,
+  contextTitle = null,
+  testType = null,
+}) {
   SATTestInterface.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     practice: PropTypes.object,
     preview: PropTypes.bool,
     mode: PropTypes.oneOf(["exam", "assignment", "practice"]),
+    examSections: PropTypes.arrayOf(PropTypes.string),
+    contextTitle: PropTypes.string,
+    testType: PropTypes.string,
   };
 
   const previewMode = Boolean(preview || practice?.preview);
+  const resolvedContextTitle = contextTitle || "SAT Diagnostic";
+  const resolvedTestType = (testType || "diagnostic").toString().trim().toLowerCase();
   const [tabExited, setTabExited] = useState(false);
 
   // Disable text selection/copy during the SAT test
@@ -119,11 +132,75 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   const [mathPool, setMathPool] = useState([]);
   const [mathSectionQuestions, setMathSectionQuestions] = useState([[], []]); // [section1, section2]
 
-  useEffect(() => { (async () => { const rw = await loadRWModules(); setRwMods(rw); })(); }, []);
-  useEffect(() => { (async () => { const math = await loadMathModules(); setMathMods(math); })(); }, []);
+  const normalizedExamSections = useMemo(() => {
+    if (!Array.isArray(examSections) || examSections.length === 0) return null;
+    return new Set(examSections.map((s) => String(s || "").trim().toUpperCase()).filter(Boolean));
+  }, [examSections]);
+
+  const includeRW =
+    !normalizedExamSections ||
+    normalizedExamSections.has("RW") ||
+    normalizedExamSections.has("ENGLISH") ||
+    normalizedExamSections.has("READING");
+
+  const includeMath = !normalizedExamSections || normalizedExamSections.has("MATH");
+
+  const readingCompetitionTable =
+    import.meta.env.VITE_SAT_READING_COMPETITION_TABLE ||
+    import.meta.env.VITE_SAT_RW_TABLE ||
+    import.meta.env.VITE_DIAGNOSTIC_BANK_TABLE ||
+    "cg_sat_diagnostic_questions";
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!includeRW) {
+      setRwMods([[], []]);
+      return () => {
+        cancelled = true;
+      };
+    }
+    (async () => {
+      try {
+        const tableOverride = resolvedTestType === "reading_competition" ? readingCompetitionTable : null;
+        const rw = await loadRWModules(tableOverride ? { table: tableOverride } : undefined);
+        if (!cancelled) setRwMods(rw);
+      } catch (err) {
+        console.warn("Failed to load RW modules", err);
+        if (!cancelled) setRwMods([[], []]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [includeRW, resolvedTestType, readingCompetitionTable]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!includeMath) {
+      setMathMods([[], []]);
+      setMathPool([]);
+      setMathSectionQuestions([[], []]);
+      return () => {
+        cancelled = true;
+      };
+    }
+    (async () => {
+      try {
+        const math = await loadMathModules();
+        if (!cancelled) setMathMods(math);
+      } catch (err) {
+        console.warn("Failed to load math modules", err);
+        if (!cancelled) setMathMods([[], []]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [includeMath]);
   useEffect(() => {
     // Load full diagnostic math pool (we need buckets by difficulty)
     (async () => {
+      if (!includeMath) return;
       try {
         const table = import.meta.env.VITE_DIAGNOSTIC_BANK_TABLE || "cg_sat_diagnostic_questions";
         const { data, error } = await supabase
@@ -169,7 +246,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         console.warn("Failed to load diagnostic math pool", err);
       }
     })();
-  }, []);
+  }, [includeMath]);
   const [loadedCustom, setLoadedCustom] = useState(null); // { questions, durationSec, title, meta, kind }
   const reviewOnly = Boolean(practice?.reviewOnly);
   const practiceDeadlineIso =
@@ -417,7 +494,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
       const meta = mergePracticeMeta(practice.kind || 'classwork', practice.meta, 15 * 60);
       return [{ key: 'prw', title: 'Reading & Writing Practice', durationSec: meta.durationSec, questions: (rwMods[0] || []).slice(0, 10), meta, kind: practice.kind || 'classwork' }];
     }
-    return [
+    const fullModules = [
       { key: "rw1", title: "Reading & Writing - Module 1", durationSec: 35 * 60, questions: rwMods[0] || [] },
       { key: "rw2", title: "Reading & Writing - Module 2", durationSec: 35 * 60, questions: rwMods[1] || [] },
       {
@@ -437,7 +514,18 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
           (mathMods[1] && mathMods[1].length ? mathMods[1] : (MATH_MODULES[1] || [])),
       },
     ];
-  }, [rwMods, practice, loadedCustom, mathSectionQuestions, mathMods]);
+    if (Array.isArray(examSections) && examSections.length) {
+      const normalized = new Set(examSections.map((s) => String(s || "").trim().toUpperCase()).filter(Boolean));
+      const includeRW = normalized.has("RW") || normalized.has("ENGLISH") || normalized.has("READING");
+      const includeMath = normalized.has("MATH");
+      const filtered = fullModules.filter((m) => {
+        const isRW = m.key.startsWith("rw");
+        return isRW ? includeRW : includeMath;
+      });
+      return filtered.length ? filtered : fullModules;
+    }
+    return fullModules;
+  }, [rwMods, practice, loadedCustom, mathSectionQuestions, mathMods, examSections]);
 
   const [modIdx, setModIdx] = useState(0);
   const mod = modules[modIdx];
@@ -641,9 +729,9 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
   if (!authLoading && !authUser) {
     return (
       <PageWrap>
-        <HeaderBar title="SAT Diagnostic" />
+        <HeaderBar title={resolvedContextTitle} />
         <Card>
-          <p style={{ color: "#6b7280" }}>Please sign in to take the diagnostic.</p>
+          <p style={{ color: "#6b7280" }}>Please sign in to start {resolvedContextTitle}.</p>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn variant="primary" onClick={() => onNavigate("login")}>Go to Login</Btn>
             <Btn variant="back" onClick={() => onNavigate("home")}>Back Home</Btn>
@@ -1074,6 +1162,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
           phone: profile?.phone || null,
           school: profile?.school || profile?.school_name || profile?.organization || profile?.org || profile?.company || null,
           class_name: profile?.class_name || null,
+          test_type: resolvedTestType,
           started_at: startedAtIso,
           finished_at: finishedAtIso,
         };
@@ -1155,7 +1244,7 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
         <Card>
           <h3 style={{ marginTop: 0 }}>{mod.title || "Next Section"}</h3>
           <p style={{ color: "#6b7280" }}>
-            Take a short break. When you are ready, begin the next section to continue the diagnostic.
+            Take a short break. When you are ready, begin the next section to continue.
           </p>
           <Btn variant="primary" onClick={() => setSectionActive(true)} style={{ marginTop: 12 }}>
             Begin {mod.title || "Next Section"}
@@ -1649,9 +1738,6 @@ export default function SATTestInterface({ onNavigate, practice = null, preview 
     </PageWrap>
   );
 }
-
-
-
 
 
 

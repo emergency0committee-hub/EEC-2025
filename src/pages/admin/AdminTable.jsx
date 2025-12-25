@@ -27,11 +27,15 @@ export default function AdminTable({
     return <p style={{ color: "#6b7280" }}>No submissions found.</p>;
   }
 
+  const MIN_COMPLETION_PCT = 0.8;
+  const MIN_DURATION_MINUTES_NEW = 20;
+  const MIN_DURATION_MINUTES_OLD = 30;
+
   const fmtDuration = (startIso, endIso) => {
     try {
       const s = startIso ? new Date(startIso).getTime() : NaN;
       const e = endIso ? new Date(endIso).getTime() : NaN;
-      if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return "—";
+      if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return "-";
       const sec = Math.round((e - s) / 1000);
       const mm = Math.floor(sec / 60).toString().padStart(2, "0");
       const ss = (sec % 60).toString().padStart(2, "0");
@@ -132,6 +136,90 @@ export default function AdminTable({
               sub.profile ||
               {};
             const participantFallback = sub.participant || {};
+
+            const totalQuestions = (() => {
+              const counts =
+                sub.pillar_counts ||
+                sub.pillarCounts ||
+                sub.pillar_count ||
+                sub.pillarCount ||
+                {};
+              const raw = counts?.totalQuestions ?? counts?.total_questions ?? null;
+              const parsed = Number(raw);
+              if (Number.isFinite(parsed) && parsed > 0) return parsed;
+              return 300;
+            })();
+
+            const answeredCount = (() => {
+              const numericCandidates = [
+                profileSource.answered_count,
+                participantFallback.answered_count,
+                participantFallback.answered,
+                sub.answered_count,
+                sub.answer_count,
+              ];
+              for (const candidate of numericCandidates) {
+                const parsed = Number(candidate);
+                if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+              }
+              const containers = [sub.answers, sub.answers_json, participantFallback.answers, profileSource.answers];
+              for (const container of containers) {
+                if (Array.isArray(container)) return container.length;
+                if (container && typeof container === "object") return Object.keys(container).length;
+                if (typeof container === "string") {
+                  const trimmed = container.trim();
+                  if (!trimmed) continue;
+                  try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) return parsed.length;
+                    if (parsed && typeof parsed === "object") return Object.keys(parsed).length;
+                  } catch {
+                    continue;
+                  }
+                }
+              }
+              return 0;
+            })();
+
+            const durationSeconds = (() => {
+              const directSecondsCandidates = [
+                sub.duration_sec,
+                sub.durationSeconds,
+                participantFallback.duration_sec,
+                participantFallback.durationSeconds,
+              ];
+              for (const candidate of directSecondsCandidates) {
+                const parsed = Number(candidate);
+                if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+              }
+              const directMinutesCandidates = [
+                sub.duration_minutes,
+                sub.durationMinutes,
+                participantFallback.duration_minutes,
+                participantFallback.durationMinutes,
+              ];
+              for (const candidate of directMinutesCandidates) {
+                const parsed = Number(candidate);
+                if (Number.isFinite(parsed) && parsed >= 0) return parsed * 60;
+              }
+              try {
+                const s = participantFallback.started_at ? new Date(participantFallback.started_at).getTime() : NaN;
+                const e = participantFallback.finished_at ? new Date(participantFallback.finished_at).getTime() : NaN;
+                if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) return null;
+                return Math.round((e - s) / 1000);
+              } catch {
+                return null;
+              }
+            })();
+
+            const answeredPct = totalQuestions > 0 ? answeredCount / totalQuestions : 0;
+            const durationMinutes =
+              typeof durationSeconds === "number" && Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
+            const minDurationMinutes = totalQuestions > 200 ? MIN_DURATION_MINUTES_OLD : MIN_DURATION_MINUTES_NEW;
+            const isIncomplete =
+              !sub?._demo &&
+              ((durationMinutes != null && durationMinutes < minDurationMinutes) || answeredPct < MIN_COMPLETION_PCT);
+
             const name =
               profileSource.name ||
               profileSource.full_name ||
@@ -156,27 +244,23 @@ export default function AdminTable({
               participantFallback.started_at,
               participantFallback.finished_at
             );
-            let answered = "-";
-            if (Number.isFinite(profileSource.answered_count))
-              answered = profileSource.answered_count;
-            else if (Number.isFinite(participantFallback.answered_count))
-              answered = participantFallback.answered_count;
-            else if (Number.isFinite(participantFallback.answered))
-              answered = participantFallback.answered;
-            else if (Number.isFinite(sub.answered_count)) answered = sub.answered_count;
-            else if (Number.isFinite(sub.answer_count)) answered = sub.answer_count;
-            else if (Array.isArray(sub.answers)) answered = sub.answers.length;
-            else if (Array.isArray(sub.answers_json)) answered = sub.answers_json.length;
-            else if (sub.answers && typeof sub.answers === "object") answered = Object.keys(sub.answers).length;
-            else if (sub.answers_json && typeof sub.answers_json === "object") answered = Object.keys(sub.answers_json).length;
+            const answeredDisplay = Number.isFinite(answeredCount) ? answeredCount : "-";
             return (
-              <tr key={sub.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                <td style={{ padding: 12 }}>{name}</td>
-                <td style={{ padding: 12 }}>{school}</td>
+              <tr
+                key={sub.id}
+                style={{
+                  borderBottom: "1px solid #e5e7eb",
+                  background: isIncomplete ? "#fef2f2" : "transparent",
+                }}
+              >
+                <td style={{ padding: 12, color: isIncomplete ? "#b91c1c" : undefined, fontWeight: isIncomplete ? 700 : undefined }}>
+                  {name}
+                </td>
+                <td style={{ padding: 12, color: isIncomplete ? "#b91c1c" : undefined }}>{school}</td>
                 <td style={{ padding: 12 }}>{dateStr}</td>
                 <td style={{ padding: 12 }}>{timeStr}</td>
                 <td style={{ padding: 12 }}>{duration}</td>
-                <td style={{ padding: 12 }}>{answered}</td>
+                <td style={{ padding: 12, color: isIncomplete ? "#b91c1c" : undefined }}>{answeredDisplay}</td>
                 <td style={{ padding: 12 }}>
                   <div style={{ display: "inline-flex", gap: 8 }}>
                     <IconButton

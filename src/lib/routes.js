@@ -3,6 +3,11 @@ export function normalizeRoute(route) {
   let normalized = String(route || "").trim();
   if (!normalized || normalized === "/") return "home";
   normalized = normalized.replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!normalized) return "home";
+  if (normalized.includes("/")) {
+    const parts = normalized.split("/").filter(Boolean);
+    normalized = parts[parts.length - 1] || "";
+  }
   return normalized || "home";
 }
 
