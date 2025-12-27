@@ -13,6 +13,8 @@ export default function SATIntro({ onNavigate }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [unlocked, setUnlocked] = useState(false);
+  const [serverCode, setServerCode] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
   const staffPreviewRole = useMemo(() => {
     try {
       const raw = localStorage.getItem("cg_current_user_v1");
@@ -32,6 +34,29 @@ export default function SATIntro({ onNavigate }) {
       finally { if (alive) setAuthLoading(false); }
     })();
     return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setCodeLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("access_codes")
+          .select("code")
+          .eq("purpose", "sat")
+          .maybeSingle();
+        if (!active) return;
+        if (error && error.code !== "PGRST116") throw error;
+        const value = (data?.code || "").trim();
+        setServerCode(value || "");
+      } catch (err) {
+        console.error("sat code fetch", err);
+      } finally {
+        if (active) setCodeLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   if (!authLoading && !authUser) {
@@ -90,10 +115,11 @@ export default function SATIntro({ onNavigate }) {
               <Btn
                 variant="primary"
                 onClick={() => {
-                  const expected = (import.meta.env.VITE_SAT_ACCESS_CODE || "").trim();
+                  const expected = serverCode || (import.meta.env.VITE_SAT_ACCESS_CODE || "").trim();
                   if (expected && code.trim() !== expected) { setError("Invalid access code"); return; }
                   setUnlocked(true);
                 }}
+                disabled={codeLoading}
               >Unlock</Btn>
             </div>
             {error && <p style={{ color: "#dc2626", fontSize: 13, marginTop: 6 }}>{error}</p>}

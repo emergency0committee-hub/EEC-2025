@@ -221,15 +221,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   const handleSatReadingCompetitionClick = (event) => {
     event?.preventDefault?.();
     setSatTestingPickerOpen(false);
-    onNavigate(
-      "sat-exam",
-      {
-        examSections: ["RW"],
-        testType: "reading_competition",
-        contextTitle: satPickerCopy.readingTitle,
-      },
-      event
-    );
+    onNavigate("sat-reading-competition", null, event);
   };
 
   return (
@@ -442,4 +434,3 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
     </PageWrap>
   );
 }
-

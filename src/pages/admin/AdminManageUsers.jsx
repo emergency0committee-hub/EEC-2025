@@ -7,6 +7,7 @@ import UserMenu from "../../components/UserMenu.jsx";
 import Btn from "../../components/Btn.jsx";
 import { LANGS } from "../../i18n/strings.js";
 import { supabase } from "../../lib/supabase.js";
+import { makeQrDataUrl } from "../../lib/qrCode.js";
 
 const COPY = {
   EN: {
@@ -133,6 +134,9 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
   const [savingProfile, setSavingProfile] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [selectedQrUrl, setSelectedQrUrl] = useState("");
+  const [selectedQrError, setSelectedQrError] = useState("");
+  const [selectedQrLoading, setSelectedQrLoading] = useState(false);
 
   const loadUsers = async (focus = null) => {
     setUsersLoading(true);
@@ -234,6 +238,33 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
       setSuccessMessage("");
     }
   }, [selectedUser]);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedUser?.id) {
+      setSelectedQrUrl("");
+      setSelectedQrError("");
+      return undefined;
+    }
+    setSelectedQrLoading(true);
+    makeQrDataUrl(selectedUser.id, 140)
+      .then((url) => {
+        if (!active) return;
+        setSelectedQrUrl(url);
+        setSelectedQrError("");
+      })
+      .catch(() => {
+        if (!active) return;
+        setSelectedQrError("Unable to generate QR code.");
+        setSelectedQrUrl("");
+      })
+      .finally(() => {
+        if (active) setSelectedQrLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedUser?.id]);
 
   const doSaveRole = async () => {
     if (!selectedUser) return;
@@ -545,10 +576,49 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
             )}
 
             {selectedUser ? (
-          <div style={{ display: "grid", gap: 16, maxWidth: 480 }}>
+          <div style={{ display: "grid", gap: 12, maxWidth: 480 }}>
             <div>
               <div style={{ fontWeight: 600 }}>{selectedUser.name || selectedUser.username || selectedUser.email}</div>
               <div style={{ color: "#6b7280", fontSize: 14 }}>{formatUserLabel(selectedUser)}</div>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                alignItems: "center",
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                padding: 12,
+                background: "#f9fafb",
+              }}
+            >
+              {selectedQrUrl ? (
+                <img src={selectedQrUrl} alt="Competition QR code" style={{ width: 120, height: 120 }} />
+              ) : (
+                <div
+                  style={{
+                    width: 120,
+                    height: 120,
+                    borderRadius: 10,
+                    border: "1px dashed #cbd5f5",
+                    display: "grid",
+                    placeItems: "center",
+                    color: "#64748b",
+                    background: "#ffffff",
+                    fontSize: 12,
+                  }}
+                >
+                  QR unavailable
+                </div>
+              )}
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontWeight: 600, color: "#111827" }}>Competition QR</div>
+                <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569" }}>
+                  {selectedUser.id}
+                </div>
+                {selectedQrLoading && <div style={{ color: "#6b7280", fontSize: 12 }}>Generating...</div>}
+                {selectedQrError && <div style={{ color: "#dc2626", fontSize: 12 }}>{selectedQrError}</div>}
+              </div>
             </div>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -711,7 +781,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
               {savingPassword ? "Saving..." : copy.passwordButton}
             </Btn>
 
-            {successMessage && <p style={{ color: "#047857", fontWeight: 600 }}>{successMessage}</p>}
+            {successMessage && <p style={{ margin: 0, color: "#047857", fontWeight: 600 }}>{successMessage}</p>}
           </div>
             ) : (
               <p style={{ color: "#6b7280" }}>Select a user from the table above to edit their details.</p>

@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 import { supabase } from "../lib/supabase.js";
+import { makeQrDataUrl } from "../lib/qrCode.js";
 
 export default function Account({ onNavigate }) {
   Account.propTypes = {
@@ -56,20 +57,24 @@ export default function Account({ onNavigate }) {
     }
     return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
   };
-  const [codes, setCodes] = useState({ sat: "—", cg: "—" });
+  const [codes, setCodes] = useState({ sat: "—", cg: "—", reading: "—" });
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [qrError, setQrError] = useState("");
+  const [qrLoading, setQrLoading] = useState(false);
   const fetchCodes = useCallback(async () => {
     setCodesLoading(true);
     try {
       const { data, error } = await supabase
         .from("access_codes")
         .select("purpose, code")
-        .in("purpose", ["sat", "career"]);
+        .in("purpose", ["sat", "career", "reading_competition"]);
       if (error) throw error;
-      const next = { sat: "—", cg: "—" };
+      const next = { sat: "—", cg: "—", reading: "—" };
       (data || []).forEach((row) => {
         const value = (row.code || "").trim();
         if (row.purpose === "sat") next.sat = value || "—";
         if (row.purpose === "career") next.cg = value || "—";
+        if (row.purpose === "reading_competition") next.reading = value || "—";
       });
       setCodes(next);
       setCodeError("");
@@ -89,6 +94,7 @@ export default function Account({ onNavigate }) {
     const rows = [
       { purpose: "sat", code: makeCode(), updated_by: user?.id || null },
       { purpose: "career", code: makeCode(), updated_by: user?.id || null },
+      { purpose: "reading_competition", code: makeCode(), updated_by: user?.id || null },
     ];
     try {
       const { error } = await supabase.from("access_codes").upsert(rows);
@@ -152,6 +158,33 @@ export default function Account({ onNavigate }) {
     };
     init();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!user?.id) {
+      setQrDataUrl("");
+      setQrError("");
+      return undefined;
+    }
+    setQrLoading(true);
+    makeQrDataUrl(user.id, 180)
+      .then((url) => {
+        if (!active) return;
+        setQrDataUrl(url);
+        setQrError("");
+      })
+      .catch(() => {
+        if (!active) return;
+        setQrError("Unable to generate QR code.");
+        setQrDataUrl("");
+      })
+      .finally(() => {
+        if (active) setQrLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -297,6 +330,18 @@ export default function Account({ onNavigate }) {
               </Btn>
             </div>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>SAT Reading Competition</div>
+              <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codesLoading ? "…" : codes.reading}</div>
+              <Btn
+                variant="secondary"
+                onClick={() => { if (!codesLoading) navigator.clipboard?.writeText(codes.reading); }}
+                disabled={codesLoading}
+                style={{ marginTop: 8 }}
+              >
+                Copy
+              </Btn>
+            </div>
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Career Guidance</div>
               <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 20 }}>{codesLoading ? "…" : codes.cg}</div>
               <Btn
@@ -324,6 +369,38 @@ export default function Account({ onNavigate }) {
         {errors.email && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.email}</p>}
         <Field label="Phone" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} />
         {errors.phone && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.phone}</p>}
+      </Card>
+      <Card>
+        <h3 style={{ marginTop: 0 }}>Competition QR</h3>
+        <p style={{ color: "#6b7280", marginTop: 0 }}>
+          Show this QR code to staff during the SAT Reading Competition check-in.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="Competition QR code" style={{ width: 160, height: 160 }} />
+          ) : (
+            <div
+              style={{
+                width: 160,
+                height: 160,
+                borderRadius: 12,
+                border: "1px dashed #cbd5f5",
+                display: "grid",
+                placeItems: "center",
+                color: "#64748b",
+                background: "#f8fafc",
+              }}
+            >
+              QR unavailable
+            </div>
+          )}
+          <div>
+            <div style={{ fontWeight: 600, color: "#111827" }}>User ID</div>
+            <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569" }}>{user.id}</div>
+            {qrLoading && <div style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>Generating...</div>}
+            {qrError && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{qrError}</div>}
+          </div>
+        </div>
       </Card>
       <Card>
         <h3 style={{ marginTop: 0 }}>Change Password (optional)</h3>

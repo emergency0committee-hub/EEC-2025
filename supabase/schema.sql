@@ -232,6 +232,42 @@ values
   ('resources', true)
 on conflict (bank_id) do nothing;
 
+-- Reading Competition access (QR check-in)
+create table if not exists public.cg_reading_competition_access (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  user_email text null,
+  unlocked boolean not null default true,
+  scanned_by uuid null references auth.users(id),
+  scanned_at timestamptz not null default now()
+);
+
+alter table public.cg_reading_competition_access enable row level security;
+
+do $$ begin
+  create policy "cg_rc_access_select_own"
+  on public.cg_reading_competition_access for select
+  using (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_rc_access_staff_all"
+  on public.cg_reading_competition_access for all
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator', 'staff')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator', 'staff')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
 -- SAT Training: live interactive class sessions (not quizzes/tests)
 create table if not exists public.cg_class_live_sessions (
   class_name text primary key,

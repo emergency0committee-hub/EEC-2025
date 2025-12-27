@@ -148,21 +148,23 @@ export default function SATDashboard({ onNavigate }) {
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h3 style={{ marginTop: 0, marginBottom: 0 }}>Recent SAT Diagnostic Submissions</h3>
-          <Btn
-            variant="primary"
-            onClick={() =>
-              onNavigate("sat-exam", {
-                preview: true,
-                practice: {
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Btn
+              variant="primary"
+              onClick={() =>
+                onNavigate("sat-exam", {
                   preview: true,
-                  kind: "diagnostic",
-                  title: "SAT Diagnostic Preview",
-                },
-              })
-            }
-          >
-            Preview Diagnostic
-          </Btn>
+                  practice: {
+                    preview: true,
+                    kind: "diagnostic",
+                    title: "SAT Diagnostic Preview",
+                  },
+                })
+              }
+            >
+              Preview Diagnostic
+            </Btn>
+          </div>
         </div>
         <p style={{ color: "#6b7280", marginTop: 8 }}>
           Use the preview button to open the live SAT diagnostic without saving any results. This is helpful for testing question flow or demonstrating the exam experience.

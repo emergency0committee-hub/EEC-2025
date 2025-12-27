@@ -19,6 +19,7 @@ import SATTrainingAdmin from "./pages/admin/SATTrainingDashboard.jsx";
 import Thanks from "./pages/Thanks.jsx";
 import Account from "./pages/Account.jsx";
 import SATIntro from "./pages/sat/SATIntro.jsx";
+import SATReadingCompetitionIntro from "./pages/sat/SATReadingCompetitionIntro.jsx";
 import SATExam from "./pages/sat/SATExam.jsx";
 import SATAssignment from "./pages/sat/SATAssignment.jsx";
 import SATTraining from "./pages/sat/training/SATTraining.jsx";
@@ -206,6 +207,9 @@ export default function App() {
         break;
       case "sat":
         pageTitle = "SAT Diagnostic";
+        break;
+      case "sat-reading-competition":
+        pageTitle = "SAT Reading Competition";
         break;
       case "sat-exam":
         pageTitle =
@@ -436,6 +440,7 @@ const currentUser = (() => {
   if (route === "about")  return <About onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;
   if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
+  if (route === "sat-reading-competition") return <SATReadingCompetitionIntro onNavigate={onNavigate} />;
   if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
   if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;

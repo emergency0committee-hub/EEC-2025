@@ -47,6 +47,7 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
     profile: strings.menuProfile || "Profile",
     careerDashboard: strings.menuCareerDashboard || "Career Dashboard",
     satDashboard: strings.menuSatDashboard || "SAT Dashboard",
+    competitionMode: strings.menuCompetitionMode || "Competition Mode",
     liveMonitor: strings.menuLiveMonitor || "Live Monitor",
     manageUsers: strings.menuManageUsers || "Manage Users",
     questions: strings.menuQuestions || "Question Bank",
@@ -162,6 +163,15 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                 }}
               >
                 {menuLabels.satDashboard}
+              </MenuItem>
+              <MenuItem
+                to="sat-reading-competition"
+                onSelect={(event) => {
+                  setOpen(false);
+                  onNavigate("sat-reading-competition", null, event);
+                }}
+              >
+                {menuLabels.competitionMode}
               </MenuItem>
               <MenuItem
                 to="admin-certificates"
