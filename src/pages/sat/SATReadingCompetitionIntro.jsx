@@ -27,6 +27,8 @@ export default function SATReadingCompetitionIntro({ onNavigate }) {
   const videoRef = useRef(null);
   const scanTimerRef = useRef(null);
   const scanStreamRef = useRef(null);
+  const scanControlsRef = useRef(null);
+  const scanReaderRef = useRef(null);
   const staffPreviewRole = useMemo(() => {
     try {
       const raw = localStorage.getItem("cg_current_user_v1");
@@ -104,6 +106,17 @@ export default function SATReadingCompetitionIntro({ onNavigate }) {
       clearInterval(scanTimerRef.current);
       scanTimerRef.current = null;
     }
+    if (scanControlsRef.current?.stop) {
+      try {
+        scanControlsRef.current.stop();
+      } catch {}
+      scanControlsRef.current = null;
+    }
+    if (scanReaderRef.current?.reset) {
+      try {
+        scanReaderRef.current.reset();
+      } catch {}
+    }
     if (scanStreamRef.current) {
       scanStreamRef.current.getTracks().forEach((track) => track.stop());
       scanStreamRef.current = null;
@@ -168,37 +181,71 @@ export default function SATReadingCompetitionIntro({ onNavigate }) {
     setScanError("");
     setScanStatus("");
     setScanProfile(null);
-    if (typeof window === "undefined" || !("BarcodeDetector" in window)) {
-      setScanError("QR scanning is not supported on this browser. Use manual entry.");
+    if (typeof window === "undefined") {
+      setScanError("QR scanning is not available in this environment.");
       return;
     }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setScanError("Camera access is not available on this device.");
+      return;
+    }
+    const supportsBarcodeDetector = "BarcodeDetector" in window;
+    const cameraConstraints = {
+      audio: false,
+      video: { facingMode: { ideal: "environment" } },
+    };
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
-      scanStreamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      const detector = new BarcodeDetector({ formats: ["qr_code"] });
-      setScanActive(true);
-      scanTimerRef.current = window.setInterval(async () => {
-        if (!videoRef.current) return;
-        if (videoRef.current.readyState < 2) return;
-        try {
-          const barcodes = await detector.detect(videoRef.current);
-          if (barcodes.length) {
-            handleScannedValue(barcodes[0].rawValue || "");
-          }
-        } catch (err) {
-          console.warn("QR detect failed", err);
+      if (supportsBarcodeDetector) {
+        setScanStatus("Requesting camera access...");
+        const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints);
+        scanStreamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
         }
-      }, 450);
+        const detector = new BarcodeDetector({ formats: ["qr_code"] });
+        setScanActive(true);
+        setScanStatus("Scanning...");
+        scanTimerRef.current = window.setInterval(async () => {
+          if (!videoRef.current) return;
+          if (videoRef.current.readyState < 2) return;
+          try {
+            const barcodes = await detector.detect(videoRef.current);
+            if (barcodes.length) {
+              handleScannedValue(barcodes[0].rawValue || "");
+            }
+          } catch (err) {
+            console.warn("QR detect failed", err);
+          }
+        }, 450);
+        return;
+      }
+
+      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      if (!videoRef.current) {
+        setScanError("Camera preview is not available.");
+        return;
+      }
+      scanReaderRef.current = scanReaderRef.current ?? new BrowserQRCodeReader();
+      setScanActive(true);
+      setScanStatus("Requesting camera access...");
+      scanControlsRef.current = await scanReaderRef.current.decodeFromConstraints(
+        cameraConstraints,
+        videoRef.current,
+        (result) => {
+          if (result) {
+            handleScannedValue(result.getText());
+          }
+        }
+      );
+      setScanStatus("Scanning...");
     } catch (err) {
       console.error("QR scan start failed", err);
-      setScanError("Unable to access camera.");
+      setScanError(
+        supportsBarcodeDetector
+          ? "Unable to access camera."
+          : "QR scanning is not supported on this browser. Use manual entry."
+      );
       stopScan();
     }
   }, [handleScannedValue, stopScan]);

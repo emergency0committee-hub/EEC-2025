@@ -795,7 +795,7 @@ export default function FunctionsAndDecimalsInteractive({ onNavigate }) {
             <div style={ruleCard}>
               <div style={ruleTitle}>1) Order of Operations (PEMDAS)</div>
               <div style={ruleText}>
-                Parentheses -> Exponents -> Multiply/Divide -> Add/Subtract.
+                {"Parentheses -> Exponents -> Multiply/Divide -> Add/Subtract."}
               </div>
 
               <div style={{ marginTop: 12, padding: 12, borderRadius: 14, background: "#f8fafc", border: "1px solid #e5e7eb" }}>
