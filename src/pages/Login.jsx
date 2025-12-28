@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
-import LanguageButton from "../components/LanguageButton.jsx";
-import { LANGS_EN as LANGS } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
 import logoPng from "../assets/logo.png";
 
@@ -322,11 +320,10 @@ function EyeOffIcon({ size = 18, stroke = "#4b5563" }) {
   );
 }
 
-export default function Login({ onNavigate, lang = "EN", setLang }) {
+export default function Login({ onNavigate, lang = "EN" }) {
   Login.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     lang: PropTypes.string.isRequired,
-    setLang: PropTypes.func.isRequired,
   };
   const copy = LOGIN_COPY[lang] || LOGIN_COPY.EN;
   const roleOptions = ROLE_OPTIONS[lang] || ROLE_OPTIONS.EN;
@@ -913,15 +910,9 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
 
   // no email confirmation flow
 
-  const HeaderActions = (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-    </div>
-  );
-
   return (
     <PageWrap>
-      <HeaderBar title={isSignUp ? copy.signUpTitle : copy.signInTitle} right={HeaderActions} lang={lang} />
+      <HeaderBar title={isSignUp ? copy.signUpTitle : copy.signInTitle} right={null} lang={lang} />
 
       <Card style={{ direction: isRTL ? "rtl" : "ltr", textAlign: isRTL ? "right" : "left" }}>
         {needsRoleSelection ? (

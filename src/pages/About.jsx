@@ -3,15 +3,13 @@ import React from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
-import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
-import { STR, LANGS } from "../i18n/strings.js";
+import { STR } from "../i18n/strings.js";
 
-export default function About({ onNavigate, lang = "EN", setLang }) {
+export default function About({ onNavigate, lang = "EN" }) {
   About.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     lang: PropTypes.string,
-    setLang: PropTypes.func,
   };
 
   const navTo = (route, data = null) => (event) => onNavigate(route, data, event);
@@ -125,7 +123,7 @@ export default function About({ onNavigate, lang = "EN", setLang }) {
         lang={lang}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto" }} />
+            <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto", mixBlendMode: "multiply" }} />
             <span style={{ fontWeight: 600, fontSize: 18 }}>EEC</span>
           </div>
         }
@@ -142,9 +140,6 @@ export default function About({ onNavigate, lang = "EN", setLang }) {
                 {t.navBlogs}
               </Btn>
             </nav>
-            {typeof setLang === "function" ? (
-              <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-            ) : null}
             <UserMenu onNavigate={onNavigate} lang={lang} />
           </div>
         }

@@ -2,14 +2,46 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
-import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
+import HelperBot from "../components/HelperBot.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
-import { LANGS_EN as LANGS, STR } from "../i18n/strings.js";
+import { useTheme, useWeather } from "../components/AppProviders.jsx";
+import { STR } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
 
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 const MAX_PROFILE_AVATAR_MB = 3;
+const WEATHER_LABELS = {
+  0: "Clear",
+  1: "Mainly clear",
+  2: "Partly cloudy",
+  3: "Overcast",
+  45: "Fog",
+  48: "Rime fog",
+  51: "Light drizzle",
+  53: "Drizzle",
+  55: "Heavy drizzle",
+  61: "Light rain",
+  63: "Rain",
+  65: "Heavy rain",
+  66: "Light freezing rain",
+  67: "Freezing rain",
+  71: "Light snow",
+  73: "Snow",
+  75: "Heavy snow",
+  77: "Snow grains",
+  80: "Rain showers",
+  81: "Heavy showers",
+  82: "Violent showers",
+  85: "Snow showers",
+  86: "Heavy snow showers",
+  95: "Thunderstorm",
+  96: "Thunderstorm with hail",
+  99: "Thunderstorm with heavy hail",
+};
+
+const getWeatherLabel = (code) =>
+  typeof code === "number" && WEATHER_LABELS[code] ? WEATHER_LABELS[code] : "Unknown";
 
 const HOME_CARDS = {
   EN: {
@@ -120,11 +152,10 @@ const PROFILE_PROMPT_COPY = {
 };
 
 
-export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEducator = false }) {
+export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = false }) {
   Home.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     lang: PropTypes.string.isRequired,
-    setLang: PropTypes.func.isRequired,
     canAccessAIEducator: PropTypes.bool,
   };
 
@@ -146,6 +177,13 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   const [profileAvatarError, setProfileAvatarError] = useState("");
   const [now, setNow] = useState(() => new Date());
   const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
+  const { theme: homeTheme } = useTheme();
+  const {
+    weather,
+    status: weatherStatus,
+    error: weatherError,
+    refresh: requestWeather,
+  } = useWeather();
 
   const t = STR[lang] || STR.EN;
   const home = HOME_CARDS[lang] || HOME_CARDS.EN;
@@ -165,6 +203,66 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   const showColon = now.getSeconds() % 2 === 0;
 
   const navTo = (nextRoute, data = null) => (event) => onNavigate(nextRoute, data, event);
+
+  const theme = useMemo(() => {
+    if (homeTheme === "dark") {
+      return {
+        pageStyle: {
+          backgroundColor: "#0b1220",
+          backgroundImage:
+            "radial-gradient(1200px 700px at 5% 15%, rgba(56, 189, 248, 0.12), transparent 64%)," +
+            "radial-gradient(1000px 600px at 95% 10%, rgba(34, 197, 94, 0.12), transparent 64%)," +
+            "radial-gradient(1100px 700px at 50% 95%, rgba(59, 130, 246, 0.1), transparent 64%)," +
+            "radial-gradient(800px 500px at 70% 50%, rgba(14, 116, 144, 0.12), transparent 70%)," +
+            "linear-gradient(135deg, #0b1220 0%, #0f172a 55%, #111827 100%)",
+          backgroundBlendMode: "screen, screen, screen, screen, normal",
+        },
+        textPrimary: "#e2e8f0",
+        textSecondary: "#cbd5f5",
+        textMuted: "#94a3b8",
+        label: "#e2e8f0",
+        cardBg: "rgba(15, 23, 42, 0.35)",
+        avatarBg: "rgba(148, 163, 184, 0.2)",
+        avatarText: "#e2e8f0",
+        panelBg: "rgba(15, 23, 42, 0.92)",
+        panelBorder: "rgba(148, 163, 184, 0.35)",
+        inputBg: "rgba(15, 23, 42, 0.78)",
+        inputBorder: "rgba(148, 163, 184, 0.45)",
+        time: "#cbd5f5",
+        overlayStrong: "rgba(2, 6, 23, 0.72)",
+        overlaySoft: "rgba(2, 6, 23, 0.6)",
+        navText: "#e2e8f0",
+        secondaryBtn: {
+          background: "rgba(148, 163, 184, 0.14)",
+          border: "1px solid rgba(148, 163, 184, 0.4)",
+          color: "#e2e8f0",
+        },
+      };
+    }
+    return {
+      pageStyle: {},
+      textPrimary: "#111827",
+      textSecondary: "#6b7280",
+      textMuted: "#9ca3af",
+      label: "#374151",
+      cardBg: "rgba(255, 255, 255, 0.015)",
+      avatarBg: "#e2e8f0",
+      avatarText: "#475569",
+      panelBg: "#ffffff",
+      panelBorder: "#d1d5db",
+      inputBg: "#ffffff",
+      inputBorder: "#d1d5db",
+      time: "#64748b",
+      overlayStrong: "rgba(15, 23, 42, 0.55)",
+      overlaySoft: "rgba(15, 23, 42, 0.45)",
+      navText: "#374151",
+      secondaryBtn: {
+        background: "#ffffff",
+        border: "1px solid #d1d5db",
+        color: "#374151",
+      },
+    };
+  }, [homeTheme]);
 
   const SAT_TESTING_COPY = {
     EN: {
@@ -209,6 +307,25 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         .join("")
         .toUpperCase()
     : "";
+  const homeCardStyle = useMemo(
+    () => ({
+      backgroundColor: theme.cardBg,
+    }),
+    [theme.cardBg]
+  );
+  const snowCapStyle = {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 140,
+    height: "auto",
+    opacity: 0.65,
+    pointerEvents: "none",
+    filter: "drop-shadow(0 6px 12px rgba(15, 23, 42, 0.12))",
+    transform: "translate(11px, -115px) scaleX(1.6)",
+    transformOrigin: "top right",
+    zIndex: 2,
+  };
 
   const handleAiEducatorClick = canAccessAIEducator
     ? navTo("ai-educator")
@@ -486,8 +603,8 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         lang={lang}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto" }} />
-            <span style={{ fontWeight: 600, fontSize: 18 }}>
+            <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto", mixBlendMode: "multiply" }} />
+            <span style={{ fontWeight: 600, fontSize: 18, color: theme.textPrimary }}>
               EEC
             </span>
           </div>
@@ -495,18 +612,17 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <nav style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <Btn variant="link" to="home" onClick={(e) => onNavigate("home", null, e)}>
+              <Btn variant="link" to="home" onClick={(e) => onNavigate("home", null, e)} style={{ color: theme.navText }}>
                 {t.navHome}
               </Btn>
-              <Btn variant="link" to="about" onClick={(e) => onNavigate("about", null, e)}>
+              <Btn variant="link" to="about" onClick={(e) => onNavigate("about", null, e)} style={{ color: theme.navText }}>
                 {t.navAbout}
               </Btn>
-              <Btn variant="link" to="blogs" onClick={(e) => onNavigate("blogs", null, e)}>
+              <Btn variant="link" to="blogs" onClick={(e) => onNavigate("blogs", null, e)} style={{ color: theme.navText }}>
                 {t.navBlogs}
               </Btn>
             </nav>
-            <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-            <UserMenu onNavigate={onNavigate} lang={lang} />
+            <UserMenu onNavigate={onNavigate} lang={lang} iconColor={theme.navText} />
           </div>
         }
       />
@@ -521,7 +637,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             position: "fixed",
             inset: 0,
             zIndex: 70,
-            background: "rgba(15, 23, 42, 0.55)",
+            background: theme.overlayStrong,
             padding: 16,
             display: "flex",
             alignItems: "center",
@@ -529,9 +645,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           }}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ width: "min(620px, 94vw)" }}>
-            <Card style={{ padding: 20 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 6, color: "#111827" }}>{promptCopy.title}</h3>
-              <p style={{ marginTop: 0, color: "#6b7280" }}>{promptCopy.subtitle}</p>
+            <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
+              <h3 style={{ marginTop: 0, marginBottom: 6, color: theme.textPrimary }}>{promptCopy.title}</h3>
+              <p style={{ marginTop: 0, color: theme.textSecondary }}>{promptCopy.subtitle}</p>
 
               <div style={{ display: "grid", gap: 14 }}>
                 {missingMap.avatar && (
@@ -541,12 +657,12 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                         width: 72,
                         height: 72,
                         borderRadius: "50%",
-                        border: "1px solid #e5e7eb",
+                        border: `1px solid ${theme.panelBorder}`,
                         overflow: "hidden",
-                        background: "#ffffff",
+                        background: theme.panelBg,
                         display: "grid",
                         placeItems: "center",
-                        color: "#94a3b8",
+                        color: theme.textMuted,
                         fontSize: 12,
                       }}
                     >
@@ -561,11 +677,11 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                       )}
                     </div>
                     <div style={{ display: "grid", gap: 6 }}>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: theme.label }}>
                         {promptCopy.avatarLabel}
                       </label>
                       <input type="file" accept="image/*" onChange={handleProfileAvatarChange} />
-                      <div style={{ fontSize: 12, color: "#6b7280" }}>{promptAvatarHelper}</div>
+                      <div style={{ fontSize: 12, color: theme.textSecondary }}>{promptAvatarHelper}</div>
                       {profileErrors.avatar && <p style={profileErrorStyle}>{profileErrors.avatar}</p>}
                     </div>
                   </div>
@@ -580,6 +696,8 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                       placeholder={promptCopy.nameLabel}
                       invalid={!!profileErrors.name}
                       name="profile-name"
+                      labelStyle={{ color: theme.label }}
+                      style={{ background: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
                     />
                     {profileErrors.name && <p style={profileErrorStyle}>{profileErrors.name}</p>}
                   </div>
@@ -594,6 +712,8 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                       placeholder={promptCopy.phoneLabel}
                       invalid={!!profileErrors.phone}
                       name="profile-phone"
+                      labelStyle={{ color: theme.label }}
+                      style={{ background: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
                     />
                     {profileErrors.phone && <p style={profileErrorStyle}>{profileErrors.phone}</p>}
                   </div>
@@ -608,6 +728,8 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                       placeholder={promptCopy.schoolLabel}
                       invalid={!!profileErrors.school}
                       name="profile-school"
+                      labelStyle={{ color: theme.label }}
+                      style={{ background: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
                     />
                     {profileErrors.school && <p style={profileErrorStyle}>{profileErrors.school}</p>}
                   </div>
@@ -622,6 +744,8 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                       placeholder={promptCopy.classLabel}
                       invalid={!!profileErrors.class_name}
                       name="profile-class"
+                      labelStyle={{ color: theme.label }}
+                      style={{ background: theme.inputBg, borderColor: theme.inputBorder, color: theme.textPrimary }}
                     />
                     {profileErrors.class_name && <p style={profileErrorStyle}>{profileErrors.class_name}</p>}
                   </div>
@@ -631,7 +755,12 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
-                <Btn variant="secondary" onClick={handleProfileLater} disabled={profileSaving}>
+                <Btn
+                  variant="secondary"
+                  onClick={handleProfileLater}
+                  disabled={profileSaving}
+                  style={theme.secondaryBtn}
+                >
                   {promptCopy.later}
                 </Btn>
                 <Btn variant="primary" onClick={handleProfileSave} disabled={profileSaving}>
@@ -643,57 +772,107 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         </div>
       )}
 
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {currentUser?.email ? (
-              currentUser?.avatar_url ? (
-                <img
-                  src={currentUser.avatar_url}
-                  alt={displayName || "Profile"}
-                  style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover" }}
-                />
+      <div id="home-welcome-card">
+        <Card style={{ ...homeCardStyle, position: "relative", overflow: "visible" }}>
+          <img
+            src="/snowcaps/snow-cap-02.svg"
+            alt=""
+            aria-hidden="true"
+            style={snowCapStyle}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {currentUser?.email ? (
+                currentUser?.avatar_url ? (
+                  <img
+                    src={currentUser.avatar_url}
+                    alt={displayName || "Profile"}
+                    style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    aria-label="Profile"
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: "50%",
+                      background: theme.avatarBg,
+                      color: theme.avatarText,
+                      display: "grid",
+                      placeItems: "center",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {initials || "?"}
+                  </div>
+                )
               ) : (
-                <div
-                  aria-label="Profile"
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: "50%",
-                    background: "#e2e8f0",
-                    color: "#475569",
-                    display: "grid",
-                    placeItems: "center",
-                    fontWeight: 700,
-                  }}
-                >
-                  {initials || "?"}
-                </div>
-              )
-            ) : (
-              <img src="/EEC_Logo.png" alt="Logo" style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain" }} />
-            )}
-            <div>
-              <h2 style={{ margin: 0, color: "#111827" }}>{currentUser?.email ? welcomeText : t.homeWelcome}</h2>
+                <img
+                  src="/EEC_Logo.png"
+                  alt="Logo"
+                  style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain", mixBlendMode: "multiply" }}
+                />
+              )}
+              <div>
+                <h2 style={{ margin: 0, color: theme.textPrimary }}>{currentUser?.email ? welcomeText : t.homeWelcome}</h2>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+              <div
+                aria-label="Current time"
+                style={{
+                  fontWeight: 600,
+                  color: theme.time,
+                  fontSize: "inherit",
+                  letterSpacing: "normal",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <span>{timeParts.hour}</span>
+                <span style={{ opacity: showColon ? 1 : 0, transition: "opacity 0.2s linear" }}>:</span>
+                <span>{timeParts.minute}</span>
+                {timeParts.dayPeriod ? <span> {timeParts.dayPeriod}</span> : null}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: theme.textMuted }}>
+                {weatherStatus === "loading" && "Weather: loading..."}
+                {weatherStatus === "unsupported" && "Weather: not supported"}
+                {weatherStatus === "denied" && "Weather: location blocked"}
+                {weatherStatus === "error" && (weatherError || "Weather: unavailable")}
+                {weatherStatus === "ready" && weather ? (
+                  <>
+                    <span>
+                      Weather:{" "}
+                      {typeof weather.temperature === "number"
+                        ? `${Math.round(weather.temperature)} C`
+                        : "--"}{" "}
+                      · {getWeatherLabel(weather.code)}
+                    </span>
+                    {typeof weather.wind === "number" && (
+                      <span style={{ color: theme.textSecondary }}>{`(${Math.round(weather.wind)} km/h)`}</span>
+                    )}
+                  </>
+                ) : null}
+                {(weatherStatus === "error" || weatherStatus === "denied") && (
+                  <button
+                    type="button"
+                    onClick={requestWeather}
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: theme.textSecondary,
+                      fontSize: 12,
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-          <div
-            aria-label="Current time"
-            style={{
-              fontWeight: 600,
-              color: "#64748b",
-              fontSize: "inherit",
-              letterSpacing: "normal",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <span>{timeParts.hour}</span>
-            <span style={{ opacity: showColon ? 1 : 0, transition: "opacity 0.2s linear" }}>:</span>
-            <span>{timeParts.minute}</span>
-            {timeParts.dayPeriod ? <span> {timeParts.dayPeriod}</span> : null}
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
       {satTestingPickerOpen && (
         <div
@@ -705,7 +884,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             position: "fixed",
             inset: 0,
             zIndex: 60,
-            background: "rgba(15, 23, 42, 0.45)",
+            background: theme.overlaySoft,
             padding: 16,
             display: "flex",
             alignItems: "center",
@@ -713,9 +892,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
           }}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 92vw)" }}>
-            <Card style={{ padding: 20 }}>
-              <h3 style={{ marginTop: 0, marginBottom: 6, color: "#111827" }}>{satPickerCopy.title}</h3>
-              <p style={{ marginTop: 0, color: "#6b7280" }}>{satPickerCopy.subtitle}</p>
+            <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
+              <h3 style={{ marginTop: 0, marginBottom: 6, color: theme.textPrimary }}>{satPickerCopy.title}</h3>
+              <p style={{ marginTop: 0, color: theme.textSecondary }}>{satPickerCopy.subtitle}</p>
 
               <div style={{ display: "grid", gap: 12 }}>
                 <button
@@ -726,35 +905,35 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
                   }}
                   style={{
                     textAlign: "left",
-                    border: "1px solid #d1d5db",
+                    border: `1px solid ${theme.panelBorder}`,
                     borderRadius: 12,
                     padding: "14px 16px",
-                    background: "#ffffff",
+                    background: theme.panelBg,
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: "#111827" }}>{satPickerCopy.diagnosticTitle}</div>
-                  <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>{satPickerCopy.diagnosticDesc}</div>
+                  <div style={{ fontWeight: 700, color: theme.textPrimary }}>{satPickerCopy.diagnosticTitle}</div>
+                  <div style={{ marginTop: 4, color: theme.textSecondary, fontSize: 13 }}>{satPickerCopy.diagnosticDesc}</div>
                 </button>
                 <button
                   type="button"
                   onClick={handleSatReadingCompetitionClick}
                   style={{
                     textAlign: "left",
-                    border: "1px solid #d1d5db",
+                    border: `1px solid ${theme.panelBorder}`,
                     borderRadius: 12,
                     padding: "14px 16px",
-                    background: "#ffffff",
+                    background: theme.panelBg,
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ fontWeight: 700, color: "#111827" }}>{satPickerCopy.readingTitle}</div>
-                  <div style={{ marginTop: 4, color: "#6b7280", fontSize: 13 }}>{satPickerCopy.readingDesc}</div>
+                  <div style={{ fontWeight: 700, color: theme.textPrimary }}>{satPickerCopy.readingTitle}</div>
+                  <div style={{ marginTop: 4, color: theme.textSecondary, fontSize: 13 }}>{satPickerCopy.readingDesc}</div>
                 </button>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-                <Btn variant="secondary" onClick={() => setSatTestingPickerOpen(false)}>
+                <Btn variant="secondary" onClick={() => setSatTestingPickerOpen(false)} style={theme.secondaryBtn}>
                   {satPickerCopy.cancel}
                 </Btn>
               </div>
@@ -779,7 +958,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             onClick: handleCareerClick,
             variant: "primary",
             extra: checkingResult ? (
-              <small style={{ color: "#9ca3af", fontSize: 12 }}>Checking for existing result...</small>
+              <small style={{ color: theme.textMuted, fontSize: 12 }}>Checking for existing result...</small>
             ) : null,
           },
           {
@@ -793,7 +972,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             },
             variant: "primary",
             extra: checkingResult ? (
-              <small style={{ color: "#9ca3af", fontSize: 12 }}>Checking for existing result...</small>
+              <small style={{ color: theme.textMuted, fontSize: 12 }}>Checking for existing result...</small>
             ) : null,
           },
           {
@@ -823,7 +1002,7 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             variant: "primary",
             disabled: !canAccessAIEducator,
             extra: !canAccessAIEducator ? (
-              <small style={{ color: "#9ca3af", fontSize: 12 }}>{aiLockedMessage}</small>
+              <small style={{ color: theme.textMuted, fontSize: 12 }}>{aiLockedMessage}</small>
             ) : null,
           },
           {
@@ -836,11 +1015,17 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
             extra: null,
           },
         ].map((card) => (
-          <Card key={card.key}>
+          <Card key={card.key} style={{ ...homeCardStyle, position: "relative", overflow: "visible" }}>
+            <img
+              src="/snowcaps/snow-cap-02.svg"
+              alt=""
+              aria-hidden="true"
+              style={snowCapStyle}
+            />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <h3 style={{ marginTop: 0, color: "#111827" }}>{card.title}</h3>
+              <h3 style={{ marginTop: 0, color: theme.textPrimary }}>{card.title}</h3>
               {card.desc && (
-                <p style={{ margin: 0, color: "#6b7280", fontSize: 14, lineHeight: 1.4 }}>
+                <p style={{ margin: 0, color: theme.textSecondary, fontSize: 14, lineHeight: 1.4 }}>
                   {card.desc}
                 </p>
               )}
@@ -859,7 +1044,9 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         ))}
       </div>
 
-      <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, marginTop: 8 }}>
+      <HelperBot currentRoute="home" onNavigate={onNavigate} recentRoutes={[]} placement="roam" />
+
+      <div style={{ textAlign: "center", color: theme.textMuted, fontSize: 12, marginTop: 8 }}>
         {t.footer(new Date().getFullYear())}
       </div>
     </PageWrap>

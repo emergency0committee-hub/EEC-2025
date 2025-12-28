@@ -2,11 +2,9 @@
 import React, { useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
-import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import Btn from "../components/Btn.jsx";
 import { supabase } from "../lib/supabase.js";
-import { LANGS } from "../i18n/strings.js";
 
 const COPY = {
   EN: {
@@ -88,11 +86,10 @@ const STATUS_COLORS = {
   expired: "#d97706",
 };
 
-export default function VerifyCertificate({ onNavigate, lang = "EN", setLang }) {
+export default function VerifyCertificate({ onNavigate, lang = "EN" }) {
   VerifyCertificate.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     lang: PropTypes.string,
-    setLang: PropTypes.func,
   };
 
   const copy = COPY[lang] || COPY.EN;
@@ -208,7 +205,6 @@ export default function VerifyCertificate({ onNavigate, lang = "EN", setLang }) 
         title={copy.title}
         right={
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
             <UserMenu lang={lang} onNavigate={onNavigate} />
           </div>
         }

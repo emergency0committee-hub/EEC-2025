@@ -3,9 +3,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import RichTextEditor from "../../components/RichTextEditor.jsx";
-import LanguageButton from "../../components/LanguageButton.jsx";
 import UserMenu from "../../components/UserMenu.jsx";
-import { LANGS } from "../../i18n/strings.js";
 import Btn from "../../components/Btn.jsx";
 import { BlockMath, InlineMath } from "react-katex";
 import { supabase } from "../../lib/supabase.js";
@@ -656,11 +654,10 @@ const normalizeQType = (row) => {
   return "mcq";
 };
 
-export default function AdminQuestionBank({ onNavigate, lang = "EN", setLang }) {
+export default function AdminQuestionBank({ onNavigate, lang = "EN" }) {
   AdminQuestionBank.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     lang: PropTypes.string,
-    setLang: PropTypes.func,
   };
 
   const copy = COPY[lang] || COPY.EN;
@@ -1710,7 +1707,6 @@ const validate = () => {
             <Btn variant="back" onClick={() => onNavigate("home")}>
               Back to Home
             </Btn>
-            <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
             <UserMenu lang={lang} onNavigate={onNavigate} />
           </div>
         }

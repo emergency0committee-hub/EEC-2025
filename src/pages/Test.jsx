@@ -3,7 +3,6 @@ import React, { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import PropTypes from "prop-types";
 // import { createPortal } from "react-dom";
 import Btn from "../components/Btn.jsx";
-import LanguageButton from "../components/LanguageButton.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
 import useCountdown from "../hooks/useCountdown.js";
 import { STR } from "../i18n/strings.js";

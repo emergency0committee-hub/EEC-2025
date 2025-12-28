@@ -23,16 +23,70 @@ const SUGGESTIONS = [
   "Open Question Bank",
 ];
 
-export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [] }) {
+export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [], placement = "floating" }) {
   HelperBot.propTypes = {
     currentRoute: PropTypes.string.isRequired,
     onNavigate: PropTypes.func.isRequired,
     recentRoutes: PropTypes.arrayOf(PropTypes.string),
+    placement: PropTypes.oneOf(["floating", "inline", "roam"]),
   };
 
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const panelRef = useRef(null);
+  const isInline = placement === "inline";
+  const isRoam = placement === "roam";
+  const [flyOffset, setFlyOffset] = useState({ x: 0, y: 0, r: 0, d: 2200 });
+  const [roamPos, setRoamPos] = useState({ x: 0, y: 0, r: 0, d: 2200 });
+
+  useEffect(() => {
+    if (!isInline) return undefined;
+    let active = true;
+    let timer = null;
+    const step = () => {
+      if (!active) return;
+      const width = typeof window !== "undefined" ? window.innerWidth : 1200;
+      const rangeX = Math.max(36, Math.min(120, Math.round(width * 0.16)));
+      const rangeY = Math.max(10, Math.min(52, Math.round(width * 0.07)));
+      const x = Math.round((Math.random() * 2 - 1) * rangeX);
+      const y = Math.round((Math.random() * 2 - 1) * rangeY);
+      const r = Math.round((Math.random() * 2 - 1) * 10);
+      const d = Math.round(1800 + Math.random() * 1400);
+      setFlyOffset({ x, y, r, d });
+      timer = window.setTimeout(step, Math.round(1400 + Math.random() * 1400));
+    };
+    step();
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [isInline]);
+
+  useEffect(() => {
+    if (!isRoam) return undefined;
+    let active = true;
+    let timer = null;
+    const size = 72;
+    const margin = 12;
+    const step = () => {
+      if (!active) return;
+      const width = typeof window !== "undefined" ? window.innerWidth : 1200;
+      const height = typeof window !== "undefined" ? window.innerHeight : 800;
+      const maxX = Math.max(margin, width - size - margin);
+      const maxY = Math.max(margin, height - size - margin);
+      const x = Math.round(margin + Math.random() * Math.max(0, maxX - margin));
+      const y = Math.round(margin + Math.random() * Math.max(0, maxY - margin));
+      const r = Math.round((Math.random() * 2 - 1) * 12);
+      const d = Math.round(2000 + Math.random() * 2200);
+      setRoamPos({ x, y, r, d });
+      timer = window.setTimeout(step, Math.round(1400 + Math.random() * 1800));
+    };
+    step();
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [isRoam]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -82,32 +136,127 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [] 
         `}
       </style>
 
-      <button
-        aria-label={open ? "Close helper bot" : "Open helper bot"}
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          position: "fixed",
-          right: 16,
-          bottom: 16,
-          width: 72,
-          height: 72,
-          borderRadius: 16,
-          border: "none",
-          background: "transparent",
-          boxShadow: "none",
-          cursor: "pointer",
-          zIndex: 1502,
-          animation: "bot-bob 2.4s ease-in-out infinite",
-          padding: 0,
-          overflow: "hidden",
-        }}
-      >
-        <img
-          src={robotPng}
-          alt="Helper bot"
-          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-        />
-      </button>
+      {isInline ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 18,
+            marginBottom: 6,
+          }}
+        >
+          <div
+            style={{
+              transform: `translate3d(${flyOffset.x}px, ${flyOffset.y}px, 0) rotate(${flyOffset.r}deg)`,
+              transition: `transform ${flyOffset.d}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
+              willChange: "transform",
+            }}
+          >
+            <button
+              aria-label={open ? "Close helper bot" : "Open helper bot"}
+              onClick={() => setOpen((v) => !v)}
+              style={{
+                position: "relative",
+                width: 72,
+                height: 72,
+                borderRadius: 16,
+                border: "none",
+                background: "transparent",
+                boxShadow: "none",
+                cursor: "pointer",
+                padding: 0,
+                overflow: "hidden",
+                zIndex: 2,
+              }}
+            >
+              <img
+                src={robotPng}
+                alt="Helper bot"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                  animation: "bot-bob 2.4s ease-in-out infinite",
+                }}
+              />
+            </button>
+          </div>
+        </div>
+      ) : isRoam ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          <button
+            aria-label={open ? "Close helper bot" : "Open helper bot"}
+            onClick={() => setOpen((v) => !v)}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: 72,
+              height: 72,
+              borderRadius: 16,
+              border: "none",
+              background: "transparent",
+              boxShadow: "none",
+              cursor: "pointer",
+              padding: 0,
+              overflow: "hidden",
+              transform: `translate3d(${roamPos.x}px, ${roamPos.y}px, 0) rotate(${roamPos.r}deg)`,
+              transition: `transform ${roamPos.d}ms cubic-bezier(0.22, 0.9, 0.2, 1)`,
+              willChange: "transform",
+              pointerEvents: "auto",
+            }}
+          >
+            <img
+              src={robotPng}
+              alt="Helper bot"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+                animation: "bot-bob 2.4s ease-in-out infinite",
+                opacity: 0.22,
+                filter: "grayscale(0.35) saturate(0.7)",
+              }}
+            />
+          </button>
+        </div>
+      ) : (
+        <button
+          aria-label={open ? "Close helper bot" : "Open helper bot"}
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            position: "fixed",
+            right: 16,
+            bottom: 16,
+            width: 72,
+            height: 72,
+            borderRadius: 16,
+            border: "none",
+            background: "transparent",
+            boxShadow: "none",
+            cursor: "pointer",
+            zIndex: 1502,
+            animation: "bot-bob 2.4s ease-in-out infinite",
+            padding: 0,
+            overflow: "hidden",
+          }}
+        >
+          <img
+            src={robotPng}
+            alt="Helper bot"
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+          />
+        </button>
+      )}
 
       {open && (
         <div
@@ -119,14 +268,19 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [] 
             background: "rgba(0,0,0,0.45)",
             display: "grid",
             alignItems: "end",
-            justifyItems: "end",
+            justifyItems: isInline || isRoam ? "center" : "end",
             padding: 12,
             zIndex: 1501,
           }}
           onClick={() => setOpen(false)}
         >
           <div
-            style={{ display: "flex", gap: 10, alignItems: "flex-end", paddingRight: 90 }}
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-end",
+              paddingRight: isInline || isRoam ? 0 : 90,
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div

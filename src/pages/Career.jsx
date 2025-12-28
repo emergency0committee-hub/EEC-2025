@@ -37,7 +37,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
             <img
               src="/EEC_Logo.png" // file stored under public/
               alt="Logo"
-              style={{ height: 40, width: "auto" }}
+              style={{ height: 40, width: "auto", mixBlendMode: "multiply" }}
             />
             <span style={{ fontWeight: 600, fontSize: 18 }}>
               {t.portalTitle}

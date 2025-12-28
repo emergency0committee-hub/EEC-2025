@@ -2,10 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
-import LanguageButton from "../../components/LanguageButton.jsx";
 import UserMenu from "../../components/UserMenu.jsx";
 import Btn from "../../components/Btn.jsx";
-import { LANGS } from "../../i18n/strings.js";
 import { supabase } from "../../lib/supabase.js";
 import { makeQrDataUrl } from "../../lib/qrCode.js";
 
@@ -103,15 +101,13 @@ const formatUserLabel = (user) => {
   return parts.join(" ");
 };
 
-export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
+export default function AdminManageUsers({ onNavigate, lang = "EN" }) {
   AdminManageUsers.propTypes = {
     onNavigate: PropTypes.func.isRequired,
     lang: PropTypes.string,
-    setLang: PropTypes.func,
   };
 
   const copy = COPY[lang] || COPY.EN;
-  const handleSetLang = setLang || (() => {});
   const [usersLoading, setUsersLoading] = useState(true);
   const [userError, setUserError] = useState("");
   const [users, setUsers] = useState([]);
@@ -419,7 +415,6 @@ export default function AdminManageUsers({ onNavigate, lang = "EN", setLang }) {
 
   const headerRight = (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <LanguageButton lang={lang} setLang={handleSetLang} langs={LANGS} />
       <UserMenu lang={lang} onNavigate={onNavigate} />
     </div>
   );

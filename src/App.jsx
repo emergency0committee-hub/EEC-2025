@@ -32,6 +32,7 @@ import WordProblemsInteractive from "./pages/sat/lessons/WordProblemsInteractive
 import SchoolTraining from "./pages/SchoolTraining.jsx";
 import OccupationScaleFull from "./pages/results/OccupationScaleFull.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
+import { AppProviders } from "./components/AppProviders.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
 import Btn from "./components/Btn.jsx";
@@ -39,13 +40,6 @@ import { normalizeRoute, routeHref, isModifiedEvent } from "./lib/routes.js";
 // import { testSupabaseConnection } from "./lib/supabase.js";
 import { supabase } from "./lib/supabase.js";
 import HelperBot from "./components/HelperBot.jsx";
-
-const withHelper = (node, helper) => (
-  <>
-    {helper}
-    {node}
-  </>
-);
 
 function SatPlaceholder() { return null; }
 
@@ -434,258 +428,258 @@ const currentUser = (() => {
 
   const recentRoutes = [];
 
-  const helper = route === "home"
-    ? <HelperBot currentRoute={route} onNavigate={onNavigate} recentRoutes={recentRoutes} />
-    : null;
+  const renderPage = () => {
+    if (route === "home")   return <Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />;
+    if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
+    if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    if (route === "about")  return <About onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
+    if (route === "sat-reading-competition") return <SATReadingCompetitionIntro onNavigate={onNavigate} />;
+    if (route === "sat-reading-competition-mode") return <SATReadingCompetitionMode onNavigate={onNavigate} />;
+    if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
+    if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
+    if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
+    if (route === "sat-lesson-functions-decimals") return <FunctionsAndDecimalsInteractive onNavigate={onNavigate} />;
+    if (["sat-lesson-polynomials", "sat-lesson-polynomial", "sat-lesson-polynomail", "sat-lesson-polynomails"].includes(route)) {
+      return <PolynomialsInteractive onNavigate={onNavigate} />;
+    }
+    if (["sat-lesson-solving-equations", "sat-lesson-solving-equation", "sat-lesson-solve-equations", "sat-lesson-solve-equation"].includes(route)) {
+      return <SolvingEquationsInteractive onNavigate={onNavigate} />;
+    }
+    if (["sat-lesson-quadratic-equations", "sat-lesson-quadratic-equation", "sat-lesson-quadratics", "sat-lesson-quadratic"].includes(route)) {
+      return <QuadraticEquationsInteractive onNavigate={onNavigate} />;
+    }
+    if (["sat-lesson-word-problems", "sat-lesson-word-problem", "sat-lesson-wordproblem", "sat-lesson-wordproblems"].includes(route)) {
+      return <WordProblemsInteractive onNavigate={onNavigate} />;
+    }
+    if (route === "school-training") return <SchoolTraining onNavigate={onNavigate} />;
+    if (route === "ai-educator") {
+      if (!canAccessAIEducator) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Educator Access Required" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                AI Educator is limited to approved educators. Please contact an administrator if you need access.
+              </p>
+              <Btn variant="primary" to="home" onClick={(e) => onNavigate("home", null, e)}>
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <AIEducator onNavigate={onNavigate} />;
+    }
+    if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
+    if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    if (route === "career-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    if (route === "admin-live-monitor") return <AdminLiveMonitor onNavigate={onNavigate} />;
+    if (route === "admin-manage-users") {
+      if (!canViewResults && !canViewOwnResult) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                User management is limited to administrators.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <AdminManageUsers onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    }
+    if (route === "admin-question-bank") {
+      if (!canAccessQuestionBank) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                Question management is limited to administrators.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <AdminQuestionBank onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    }
+    if (route === "admin-certificates") {
+      if (!canViewResults) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                Certificate management is limited to administrators.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <AdminCertificates onNavigate={onNavigate} />;
+    }
+    if (route === "admin-sat") return <SATAdmin onNavigate={onNavigate} />;
+    if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
+    if (route === "account") return <Account onNavigate={onNavigate} />;
+    if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
 
-  if (route === "home")   return withHelper(<Home onNavigate={onNavigate} lang={lang} setLang={setLang} canAccessAIEducator={canAccessAIEducator} />, helper);
-  if (route === "career") return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
-  if (route === "blogs")  return <Blogs onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "about")  return <About onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "verify-certificate") return <VerifyCertificate onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "sat")    return <SATIntro onNavigate={onNavigate} />;
-  if (route === "sat-reading-competition") return <SATReadingCompetitionIntro onNavigate={onNavigate} />;
-  if (route === "sat-reading-competition-mode") return <SATReadingCompetitionMode onNavigate={onNavigate} />;
-  if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  if (route === "sat-lesson-functions-decimals") return <FunctionsAndDecimalsInteractive onNavigate={onNavigate} />;
-  if (["sat-lesson-polynomials", "sat-lesson-polynomial", "sat-lesson-polynomail", "sat-lesson-polynomails"].includes(route)) {
-    return <PolynomialsInteractive onNavigate={onNavigate} />;
-  }
-  if (["sat-lesson-solving-equations", "sat-lesson-solving-equation", "sat-lesson-solve-equations", "sat-lesson-solve-equation"].includes(route)) {
-    return <SolvingEquationsInteractive onNavigate={onNavigate} />;
-  }
-  if (["sat-lesson-quadratic-equations", "sat-lesson-quadratic-equation", "sat-lesson-quadratics", "sat-lesson-quadratic"].includes(route)) {
-    return <QuadraticEquationsInteractive onNavigate={onNavigate} />;
-  }
-  if (["sat-lesson-word-problems", "sat-lesson-word-problem", "sat-lesson-wordproblem", "sat-lesson-wordproblems"].includes(route)) {
-    return <WordProblemsInteractive onNavigate={onNavigate} />;
-  }
-  if (route === "school-training") return <SchoolTraining onNavigate={onNavigate} />;
-  if (route === "ai-educator") {
-    if (!canAccessAIEducator) {
+    if (route === "occupation-scales-full") {
+      if (!canViewResults && !canViewOwnResult && !canViewSchoolResult) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                Occupational matches are visible to administrators or the candidate assigned to this report.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      const payload =
+        resultsPayload ||
+        (() => {
+          try {
+            const raw = sessionStorage.getItem("cg_occ_full_payload");
+            return raw ? JSON.parse(raw) : null;
+          } catch {
+            return null;
+          }
+        })();
+      const backPayload =
+        lastResultsPayload ||
+        (() => {
+          try {
+            const raw = sessionStorage.getItem("cg_last_results_payload");
+            return raw ? JSON.parse(raw) : null;
+          } catch {
+            return null;
+          }
+        })();
+      if (!payload) {
+        return (
+          <PageWrap>
+            <HeaderBar title="No Data" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                We couldn&rsquo;t find the occupation list. Please return to the results page and try again.
+              </p>
+              <Btn
+                variant="primary"
+                to="results"
+                onClick={(e) => onNavigate("results", backPayload, e)}
+              >
+                Back to Results
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
       return (
-        <PageWrap>
-          <HeaderBar title="Educator Access Required" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              AI Educator is limited to approved educators. Please contact an administrator if you need access.
-            </p>
-            <Btn variant="primary" to="home" onClick={(e) => onNavigate("home", null, e)}>
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
+        <OccupationScaleFull
+          payload={payload}
+          canGoBack={backPayload}
+          isAdmin={canViewResults}
+          onNavigate={(to, data, event) => onNavigate(to, data ?? backPayload, event)}
+        />
       );
     }
-    return <AIEducator onNavigate={onNavigate} />;
-  }
-  if (route === "test")   return <Test onNavigate={onNavigate} lang={lang} setLang={setLang} {...(resultsPayload || {})} />;
-  if (route === "thanks") return <Thanks onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "career-dashboard") return <AdminDashboard onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "admin-live-monitor") return <AdminLiveMonitor onNavigate={onNavigate} />;
-  if (route === "admin-manage-users") {
-    if (!canViewResults && !canViewOwnResult) {
-      return (
-        <PageWrap>
-          <HeaderBar title="Not Authorized" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              User management is limited to administrators.
-            </p>
-            <Btn
-              variant="primary"
-              to="home"
-              onClick={(e) => onNavigate("home", null, e)}
-            >
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
-    }
-    return <AdminManageUsers onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  }
-  if (route === "admin-question-bank") {
-    if (!canAccessQuestionBank) {
-      return (
-        <PageWrap>
-          <HeaderBar title="Not Authorized" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              Question management is limited to administrators.
-            </p>
-            <Btn
-              variant="primary"
-              to="home"
-              onClick={(e) => onNavigate("home", null, e)}
-            >
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
-    }
-    return <AdminQuestionBank onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  }
-  if (route === "admin-certificates") {
-    if (!canViewResults) {
-      return (
-        <PageWrap>
-          <HeaderBar title="Not Authorized" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              Certificate management is limited to administrators.
-            </p>
-            <Btn
-              variant="primary"
-              to="home"
-              onClick={(e) => onNavigate("home", null, e)}
-            >
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
-    }
-    return <AdminCertificates onNavigate={onNavigate} />;
-  }
-  if (route === "admin-sat") return <SATAdmin onNavigate={onNavigate} />;
-  if (route === "login")  return <Login onNavigate={onNavigate} lang={lang} setLang={setLang} />;
-  if (route === "account") return <Account onNavigate={onNavigate} />;
-  if (route === "select-results") return <SelectResults onNavigate={onNavigate} />;
 
-  if (route === "occupation-scales-full") {
-    if (!canViewResults && !canViewOwnResult && !canViewSchoolResult) {
-      return (
-        <PageWrap>
-          <HeaderBar title="Not Authorized" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              Occupational matches are visible to administrators or the candidate assigned to this report.
-            </p>
-            <Btn
-              variant="primary"
-              to="home"
-              onClick={(e) => onNavigate("home", null, e)}
-            >
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
+    if (route === "results") {
+      if (!canViewResults && !canViewOwnResult && !canViewSchoolResult) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                You are not authorized to view this result.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <Results onNavigate={onNavigate} {...(resultsPayload || {})} />;
     }
-    const payload =
-      resultsPayload ||
-      (() => {
-        try {
-          const raw = sessionStorage.getItem("cg_occ_full_payload");
-          return raw ? JSON.parse(raw) : null;
-        } catch {
-          return null;
-        }
-      })();
-    const backPayload =
-      lastResultsPayload ||
-      (() => {
-        try {
-          const raw = sessionStorage.getItem("cg_last_results_payload");
-          return raw ? JSON.parse(raw) : null;
-        } catch {
-          return null;
-        }
-      })();
-    if (!payload) {
-      return (
-        <PageWrap>
-          <HeaderBar title="No Data" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              We couldn&rsquo;t find the occupation list. Please return to the results page and try again.
-            </p>
-            <Btn
-              variant="primary"
-              to="results"
-              onClick={(e) => onNavigate("results", backPayload, e)}
-            >
-              Back to Results
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
+    if (route === "sat-results") {
+      if (!canViewResults) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                SAT results are visible to administrators only.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <SATResults onNavigate={onNavigate} {...(resultsPayload || {})} />;
     }
+    if (route === "admin-sat-training") return <SATTrainingAdmin onNavigate={onNavigate} />;
+
+    // 404
     return (
-      <OccupationScaleFull
-        payload={payload}
-        canGoBack={backPayload}
-        isAdmin={canViewResults}
-        onNavigate={(to, data, event) => onNavigate(to, data ?? backPayload, event)}
-      />
+      <PageWrap>
+        <HeaderBar title="Not Found" right={null} />
+        <Card>
+          <p>Page not found.</p>
+          <Btn
+            variant="primary"
+            to="home"
+            onClick={(e) => onNavigate("home", null, e)}
+          >
+            Back Home
+          </Btn>
+        </Card>
+        <HelperBot currentRoute={route} onNavigate={onNavigate} recentRoutes={recentRoutes} />
+      </PageWrap>
     );
-  }
+  };
 
-  if (route === "results") {
-    if (!canViewResults && !canViewOwnResult && !canViewSchoolResult) {
-      return (
-        <PageWrap>
-          <HeaderBar title="Not Authorized" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              You are not authorized to view this result.
-            </p>
-            <Btn
-              variant="primary"
-              to="home"
-              onClick={(e) => onNavigate("home", null, e)}
-            >
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
-    }
-    return <Results onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  }
-  if (route === "sat-results") {
-    if (!canViewResults) {
-      return (
-        <PageWrap>
-          <HeaderBar title="Not Authorized" right={null} />
-          <Card>
-            <p style={{ color: "#6b7280" }}>
-              SAT results are visible to administrators only.
-            </p>
-            <Btn
-              variant="primary"
-              to="home"
-              onClick={(e) => onNavigate("home", null, e)}
-            >
-              Back to Home
-            </Btn>
-          </Card>
-        </PageWrap>
-      );
-    }
-    return <SATResults onNavigate={onNavigate} {...(resultsPayload || {})} />;
-  }
-  if (route === "admin-sat-training") return <SATTrainingAdmin onNavigate={onNavigate} />;
-
-  // 404
-  return (
-    <PageWrap>
-      <HeaderBar title="Not Found" right={null} />
-      <Card>
-        <p>Page not found.</p>
-        <Btn
-          variant="primary"
-          to="home"
-          onClick={(e) => onNavigate("home", null, e)}
-        >
-          Back Home
-        </Btn>
-      </Card>
-      <HelperBot currentRoute={route} onNavigate={onNavigate} recentRoutes={recentRoutes} />
-    </PageWrap>
-  );
+  return <AppProviders>{renderPage()}</AppProviders>;
 }
