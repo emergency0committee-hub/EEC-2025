@@ -1,12 +1,15 @@
 // src/pages/Home.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
-import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
+import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import { LANGS_EN as LANGS, STR } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
+
+const PROFILE_AVATAR_BUCKET = "profile-avatars";
+const MAX_PROFILE_AVATAR_MB = 3;
 
 const HOME_CARDS = {
   EN: {
@@ -79,6 +82,43 @@ const HOME_CARDS = {
   },
 };
 
+const PROFILE_PROMPT_COPY = {
+  EN: {
+    title: "Complete your profile",
+    subtitle: "Please fill the missing details to continue.",
+    nameLabel: "Full name",
+    phoneLabel: "Phone",
+    schoolLabel: "School",
+    classLabel: "Class",
+    avatarLabel: "Profile photo",
+    avatarHelper: "Upload a clear photo. Max {max}MB.",
+    avatarInvalid: "Please choose an image file.",
+    avatarTooLarge: "Image must be {max}MB or smaller.",
+    required: "This field is required.",
+    avatarRequired: "Profile photo is required.",
+    save: "Save",
+    saving: "Saving...",
+    later: "Later",
+  },
+  FR: {
+    title: "Compl\u00e9ter votre profil",
+    subtitle: "Merci de renseigner les informations manquantes.",
+    nameLabel: "Nom complet",
+    phoneLabel: "T\u00e9l\u00e9phone",
+    schoolLabel: "\u00c9tablissement",
+    classLabel: "Classe",
+    avatarLabel: "Photo de profil",
+    avatarHelper: "T\u00e9l\u00e9versez une photo claire. Max {max} Mo.",
+    avatarInvalid: "Veuillez choisir un fichier image.",
+    avatarTooLarge: "L'image doit faire {max} Mo ou moins.",
+    required: "Ce champ est obligatoire.",
+    avatarRequired: "La photo de profil est obligatoire.",
+    save: "Enregistrer",
+    saving: "Enregistrement...",
+    later: "Plus tard",
+  },
+};
+
 
 export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEducator = false }) {
   Home.propTypes = {
@@ -91,10 +131,38 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingResult, setCheckingResult] = useState(false);
   const [satTestingPickerOpen, setSatTestingPickerOpen] = useState(false);
+  const [profilePromptOpen, setProfilePromptOpen] = useState(false);
+  const [profilePromptDismissed, setProfilePromptDismissed] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({
+    name: "",
+    phone: "",
+    school: "",
+    class_name: "",
+  });
+  const [profileErrors, setProfileErrors] = useState({});
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileAvatarFile, setProfileAvatarFile] = useState(null);
+  const [profileAvatarPreview, setProfileAvatarPreview] = useState("");
+  const [profileAvatarError, setProfileAvatarError] = useState("");
+  const [now, setNow] = useState(() => new Date());
   const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
 
   const t = STR[lang] || STR.EN;
   const home = HOME_CARDS[lang] || HOME_CARDS.EN;
+  const promptCopy = PROFILE_PROMPT_COPY[lang] || PROFILE_PROMPT_COPY.EN;
+  const promptAvatarHelper = promptCopy.avatarHelper.replace("{max}", MAX_PROFILE_AVATAR_MB);
+  const timeFormatter = useMemo(() => {
+    const locale = lang === "FR" ? "fr-FR" : "en-US";
+    return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" });
+  }, [lang]);
+  const timeParts = useMemo(() => {
+    const parts = timeFormatter.formatToParts(now);
+    const hour = parts.find((part) => part.type === "hour")?.value || "";
+    const minute = parts.find((part) => part.type === "minute")?.value || "";
+    const dayPeriod = parts.find((part) => part.type === "dayPeriod")?.value || "";
+    return { hour, minute, dayPeriod };
+  }, [timeFormatter, now]);
+  const showColon = now.getSeconds() % 2 === 0;
 
   const navTo = (nextRoute, data = null) => (event) => onNavigate(nextRoute, data, event);
 
@@ -127,6 +195,20 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
   const lockedCopy = lockedLabelMap[lang] || lockedLabelMap.EN;
   const aiLockedLabel = home.aiEducator.locked || lockedCopy.label;
   const aiLockedMessage = home.aiEducator.lockedMessage || lockedCopy.message;
+  const profileErrorStyle = { color: "#dc2626", fontSize: 12, margin: "4px 0 0" };
+  const displayName = (currentUser?.name || currentUser?.username || "").trim();
+  const welcomeText = displayName
+    ? (t.homeWelcomeName || t.homeWelcome || "").replace("{name}", displayName)
+    : t.homeWelcome;
+  const initials = displayName
+    ? displayName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase()
+    : "";
 
   const handleAiEducatorClick = canAccessAIEducator
     ? navTo("ai-educator")
@@ -138,16 +220,190 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
       };
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("cg_current_user_v1");
-      if (raw) {
+    let active = true;
+    const loadCurrentUser = async () => {
+      try {
+        const raw = localStorage.getItem("cg_current_user_v1");
+        if (!raw) return;
         const parsed = JSON.parse(raw);
-        if (parsed?.email) setCurrentUser(parsed);
+        if (!parsed?.email) return;
+        if (active) setCurrentUser(parsed);
+        if (parsed?.id) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("id,email,username,name,avatar_url,role,school,class_name,phone,ai_access")
+            .eq("id", parsed.id)
+            .single();
+          if (!error && data && active) {
+            const merged = { ...parsed, ...data };
+            setCurrentUser(merged);
+            try { localStorage.setItem("cg_current_user_v1", JSON.stringify(merged)); } catch {}
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read current user", e);
       }
-    } catch (e) {
-      console.warn("Failed to read current user", e);
-    }
+    };
+    loadCurrentUser();
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setCurrentUser(null);
+        setProfilePromptOpen(false);
+        setProfilePromptDismissed(false);
+      }
+    });
+    return () => {
+      authSub?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    setProfileDraft({
+      name: currentUser.name || "",
+      phone: currentUser.phone || "",
+      school: currentUser.school || "",
+      class_name: currentUser.class_name || "",
+    });
+  }, [currentUser]);
+
+  useEffect(() => {
+    return () => {
+      if (profileAvatarPreview) URL.revokeObjectURL(profileAvatarPreview);
+    };
+  }, [profileAvatarPreview]);
+
+  const normalizedRole = (currentUser?.role || "").toLowerCase();
+  const needsSchool = ["student", "educator", "school"].includes(normalizedRole);
+  const needsClass = normalizedRole === "student";
+  const missingMap = useMemo(() => {
+    return {
+      avatar: !currentUser?.avatar_url,
+      name: !currentUser?.name || !currentUser.name.trim(),
+      phone: !currentUser?.phone || !String(currentUser.phone).trim(),
+      school: needsSchool && (!currentUser?.school || !String(currentUser.school).trim()),
+      class_name: needsClass && (!currentUser?.class_name || !String(currentUser.class_name).trim()),
+    };
+  }, [currentUser, needsSchool, needsClass]);
+  const missingKeys = Object.keys(missingMap).filter((key) => missingMap[key]);
+  const shouldPrompt = Boolean(currentUser?.email && missingKeys.length > 0);
+
+  useEffect(() => {
+    if (!shouldPrompt || profilePromptDismissed) return;
+    setProfilePromptOpen(true);
+  }, [shouldPrompt, profilePromptDismissed]);
+
+  useEffect(() => {
+    if (!shouldPrompt) setProfilePromptDismissed(false);
+  }, [shouldPrompt]);
+
+  const handleProfileDraftChange = (field, value) => {
+    setProfileDraft((prev) => ({ ...prev, [field]: value }));
+    if (profileErrors[field]) setProfileErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const handleProfileAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setProfileAvatarError(promptCopy.avatarInvalid);
+      setProfileErrors((prev) => ({ ...prev, avatar: promptCopy.avatarInvalid }));
+      return;
+    }
+    if (file.size > MAX_PROFILE_AVATAR_MB * 1024 * 1024) {
+      const msg = promptCopy.avatarTooLarge.replace("{max}", MAX_PROFILE_AVATAR_MB);
+      setProfileAvatarError(msg);
+      setProfileErrors((prev) => ({ ...prev, avatar: msg }));
+      return;
+    }
+    setProfileAvatarError("");
+    setProfileErrors((prev) => ({ ...prev, avatar: "" }));
+    if (profileAvatarPreview) URL.revokeObjectURL(profileAvatarPreview);
+    setProfileAvatarPreview(URL.createObjectURL(file));
+    setProfileAvatarFile(file);
+  };
+
+  const handleProfileSave = async () => {
+    if (!currentUser?.email) return;
+    const nextErrors = {};
+    if (!profileDraft.name.trim()) nextErrors.name = promptCopy.required;
+    if (!profileDraft.phone.trim()) nextErrors.phone = promptCopy.required;
+    if (needsSchool && !profileDraft.school.trim()) nextErrors.school = promptCopy.required;
+    if (needsClass && !profileDraft.class_name.trim()) nextErrors.class_name = promptCopy.required;
+    if (missingMap.avatar && !profileAvatarFile && !currentUser?.avatar_url) {
+      nextErrors.avatar = promptCopy.avatarRequired;
+    }
+    if (profileAvatarError) nextErrors.avatar = profileAvatarError;
+    setProfileErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setProfileSaving(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const authId = userData?.user?.id || currentUser?.id;
+      if (!authId) throw new Error("Missing user session.");
+
+      let avatarUrl = currentUser?.avatar_url || "";
+      if (profileAvatarFile) {
+        const path = `${authId}/avatar`;
+        const { error: uploadError } = await supabase.storage
+          .from(PROFILE_AVATAR_BUCKET)
+          .upload(path, profileAvatarFile, {
+            upsert: true,
+            cacheControl: "3600",
+            contentType: profileAvatarFile.type || "image/*",
+          });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabase.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(path);
+        avatarUrl = publicData?.publicUrl || avatarUrl;
+      }
+
+      const updatePayload = {
+        name: profileDraft.name.trim(),
+        phone: profileDraft.phone.trim(),
+        school: needsSchool ? profileDraft.school.trim() : null,
+        class_name: needsClass ? profileDraft.class_name.trim() : null,
+        avatar_url: avatarUrl || null,
+      };
+      const { error: updateError } = await supabase.from("profiles").update(updatePayload).eq("id", authId);
+      if (updateError) throw updateError;
+
+      const updatedUser = { ...currentUser, ...updatePayload, avatar_url: avatarUrl || currentUser?.avatar_url };
+      setCurrentUser(updatedUser);
+      try { localStorage.setItem("cg_current_user_v1", JSON.stringify(updatedUser)); } catch {}
+      setProfilePromptOpen(false);
+      setProfilePromptDismissed(false);
+      if (profileAvatarPreview) URL.revokeObjectURL(profileAvatarPreview);
+      setProfileAvatarPreview("");
+      setProfileAvatarFile(null);
+    } catch (err) {
+      setProfileErrors((prev) => ({ ...prev, submit: err?.message || String(err) }));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleProfileLater = () => {
+    setProfilePromptOpen(false);
+    setProfilePromptDismissed(true);
+    if (profileAvatarPreview) URL.revokeObjectURL(profileAvatarPreview);
+    setProfileAvatarPreview("");
+    setProfileAvatarFile(null);
+    setProfileErrors({});
+  };
 
   const handleCareerClick = async (event) => {
     if (isSchoolAccount) {
@@ -255,11 +511,186 @@ export default function Home({ onNavigate, lang = "EN", setLang, canAccessAIEduc
         }
       />
 
+      {profilePromptOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={promptCopy.title}
+          onClick={handleProfileLater}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 70,
+            background: "rgba(15, 23, 42, 0.55)",
+            padding: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(620px, 94vw)" }}>
+            <Card style={{ padding: 20 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 6, color: "#111827" }}>{promptCopy.title}</h3>
+              <p style={{ marginTop: 0, color: "#6b7280" }}>{promptCopy.subtitle}</p>
+
+              <div style={{ display: "grid", gap: 14 }}>
+                {missingMap.avatar && (
+                  <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: "50%",
+                        border: "1px solid #e5e7eb",
+                        overflow: "hidden",
+                        background: "#ffffff",
+                        display: "grid",
+                        placeItems: "center",
+                        color: "#94a3b8",
+                        fontSize: 12,
+                      }}
+                    >
+                      {profileAvatarPreview || currentUser?.avatar_url ? (
+                        <img
+                          src={profileAvatarPreview || currentUser?.avatar_url}
+                          alt={promptCopy.avatarLabel}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        "No photo"
+                      )}
+                    </div>
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                        {promptCopy.avatarLabel}
+                      </label>
+                      <input type="file" accept="image/*" onChange={handleProfileAvatarChange} />
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{promptAvatarHelper}</div>
+                      {profileErrors.avatar && <p style={profileErrorStyle}>{profileErrors.avatar}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {missingMap.name && (
+                  <div>
+                    <Field
+                      label={promptCopy.nameLabel}
+                      value={profileDraft.name}
+                      onChange={(e) => handleProfileDraftChange("name", e.target.value)}
+                      placeholder={promptCopy.nameLabel}
+                      invalid={!!profileErrors.name}
+                      name="profile-name"
+                    />
+                    {profileErrors.name && <p style={profileErrorStyle}>{profileErrors.name}</p>}
+                  </div>
+                )}
+
+                {missingMap.phone && (
+                  <div>
+                    <Field
+                      label={promptCopy.phoneLabel}
+                      value={profileDraft.phone}
+                      onChange={(e) => handleProfileDraftChange("phone", e.target.value)}
+                      placeholder={promptCopy.phoneLabel}
+                      invalid={!!profileErrors.phone}
+                      name="profile-phone"
+                    />
+                    {profileErrors.phone && <p style={profileErrorStyle}>{profileErrors.phone}</p>}
+                  </div>
+                )}
+
+                {missingMap.school && (
+                  <div>
+                    <Field
+                      label={promptCopy.schoolLabel}
+                      value={profileDraft.school}
+                      onChange={(e) => handleProfileDraftChange("school", e.target.value)}
+                      placeholder={promptCopy.schoolLabel}
+                      invalid={!!profileErrors.school}
+                      name="profile-school"
+                    />
+                    {profileErrors.school && <p style={profileErrorStyle}>{profileErrors.school}</p>}
+                  </div>
+                )}
+
+                {missingMap.class_name && (
+                  <div>
+                    <Field
+                      label={promptCopy.classLabel}
+                      value={profileDraft.class_name}
+                      onChange={(e) => handleProfileDraftChange("class_name", e.target.value)}
+                      placeholder={promptCopy.classLabel}
+                      invalid={!!profileErrors.class_name}
+                      name="profile-class"
+                    />
+                    {profileErrors.class_name && <p style={profileErrorStyle}>{profileErrors.class_name}</p>}
+                  </div>
+                )}
+
+                {profileErrors.submit && <p style={profileErrorStyle}>{profileErrors.submit}</p>}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
+                <Btn variant="secondary" onClick={handleProfileLater} disabled={profileSaving}>
+                  {promptCopy.later}
+                </Btn>
+                <Btn variant="primary" onClick={handleProfileSave} disabled={profileSaving}>
+                  {profileSaving ? promptCopy.saving : promptCopy.save}
+                </Btn>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
       <Card>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <img src="/EEC_Logo.png" alt="Logo" style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain" }} />
-          <div>
-            <h2 style={{ margin: 0, color: "#111827" }}>{t.homeWelcome}</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {currentUser?.email ? (
+              currentUser?.avatar_url ? (
+                <img
+                  src={currentUser.avatar_url}
+                  alt={displayName || "Profile"}
+                  style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover" }}
+                />
+              ) : (
+                <div
+                  aria-label="Profile"
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    background: "#e2e8f0",
+                    color: "#475569",
+                    display: "grid",
+                    placeItems: "center",
+                    fontWeight: 700,
+                  }}
+                >
+                  {initials || "?"}
+                </div>
+              )
+            ) : (
+              <img src="/EEC_Logo.png" alt="Logo" style={{ width: 56, height: 56, borderRadius: 8, objectFit: "contain" }} />
+            )}
+            <div>
+              <h2 style={{ margin: 0, color: "#111827" }}>{currentUser?.email ? welcomeText : t.homeWelcome}</h2>
+            </div>
+          </div>
+          <div
+            aria-label="Current time"
+            style={{
+              fontWeight: 600,
+              color: "#64748b",
+              fontSize: "inherit",
+              letterSpacing: "normal",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>{timeParts.hour}</span>
+            <span style={{ opacity: showColon ? 1 : 0, transition: "opacity 0.2s linear" }}>:</span>
+            <span>{timeParts.minute}</span>
+            {timeParts.dayPeriod ? <span> {timeParts.dayPeriod}</span> : null}
           </div>
         </div>
       </Card>

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import LanguageButton from "../components/LanguageButton.jsx";
 import { LANGS_EN as LANGS } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
+import logoPng from "../assets/logo.png";
 
 const ROLE_OPTIONS = {
   EN: [
@@ -52,6 +53,23 @@ const SIGNUP_GRADE_OPTIONS = [
   { value: "Grade 12", label: "Grade 12" },
 ];
 
+const AVATAR_BUCKET = "profile-avatars";
+const MAX_AVATAR_MB = 3;
+const AVATAR_PREVIEW_SIZE = 88;
+const AVATAR_OUTPUT_SIZE = 512;
+const AVATAR_EDITOR_SIZE = 240;
+const AVATAR_EMPTY_OFFSET_RATIO = 0.5;
+
+const clampValue = (value, min, max) => Math.min(max, Math.max(min, value));
+const getCoverMetrics = (sourceWidth, sourceHeight, targetSize) => {
+  const scale = Math.max(targetSize / sourceWidth, targetSize / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  const maxOffsetX = Math.max(0, (width - targetSize) / 2);
+  const maxOffsetY = Math.max(0, (height - targetSize) / 2);
+  return { width, height, maxOffsetX, maxOffsetY };
+};
+
 const LOGIN_COPY = {
   EN: {
     isRTL: false,
@@ -80,6 +98,11 @@ const LOGIN_COPY = {
     usernamePlaceholder: "Choose a username",
     phoneLabel: "Phone",
     phonePlaceholder: "e.g., 555 123 4567",
+    profilePhotoLabel: "Profile Photo",
+    profilePhotoHelper: "Upload a clear photo. Max {max}MB.",
+    profilePhotoRequired: "Profile photo is required",
+    profilePhotoInvalid: "Please choose an image file",
+    profilePhotoTooLarge: "Image must be {max}MB or smaller",
     loginIdRequired: "Email or username is required",
     loginIdInvalid: "Please enter a valid email address or username",
     usernameRequired: "Username is required",
@@ -151,6 +174,11 @@ const LOGIN_COPY = {
     usernamePlaceholder: "\u0627\u062e\u062a\u0631 \u0627\u0633\u0645 \u0645\u0633\u062a\u062e\u062f\u0645",
     phoneLabel: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641",
     phonePlaceholder: "\u0645\u062b\u0627\u0644: 555 123 4567",
+    profilePhotoLabel: "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629",
+    profilePhotoHelper: "\u0627\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0648\u0627\u0636\u062d\u0629. \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 {max} \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a.",
+    profilePhotoRequired: "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629 \u0645\u0637\u0644\u0648\u0628\u0629",
+    profilePhotoInvalid: "\u064a\u0631\u062c\u0649 \u0627\u062e\u062a\u064a\u0627\u0631 \u0645\u0644\u0641 \u0635\u0648\u0631\u0629",
+    profilePhotoTooLarge: "\u064a\u062c\u0628 \u0623\u0644\u0627 \u064a\u062a\u062c\u0627\u0648\u0632 \u062d\u062c\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 {max} \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a",
     loginIdRequired: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0623\u0648 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0637\u0644\u0648\u0628",
     loginIdInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0628\u0631\u064a\u062f \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0635\u0627\u0644\u062d \u0623\u0648 \u0627\u0633\u0645 \u0645\u0633\u062a\u062e\u062f\u0645 \u0635\u0627\u0644\u062d",
     usernameRequired: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0637\u0644\u0648\u0628",
@@ -222,6 +250,11 @@ const LOGIN_COPY = {
     usernamePlaceholder: "Choisissez un nom d'utilisateur",
     phoneLabel: "T\xe9l\xe9phone",
     phonePlaceholder: "ex. 06 12 34 56 78",
+    profilePhotoLabel: "Photo de profil",
+    profilePhotoHelper: "T\u00e9l\u00e9versez une photo claire. Max {max} Mo.",
+    profilePhotoRequired: "La photo de profil est obligatoire",
+    profilePhotoInvalid: "Veuillez choisir un fichier image",
+    profilePhotoTooLarge: "L'image doit faire {max} Mo ou moins",
     loginIdRequired: "L'e-mail ou le nom d'utilisateur est obligatoire",
     loginIdInvalid: "Veuillez saisir une adresse e-mail ou un nom d'utilisateur valide",
     usernameRequired: "Le nom d'utilisateur est obligatoire",
@@ -298,6 +331,8 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
   const copy = LOGIN_COPY[lang] || LOGIN_COPY.EN;
   const roleOptions = ROLE_OPTIONS[lang] || ROLE_OPTIONS.EN;
   const isRTL = copy.isRTL;
+  const photoHelper = (copy.profilePhotoHelper || "").replace("{max}", MAX_AVATAR_MB);
+  const avatarInputId = "signup-avatar-upload";
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [formData, setFormData] = useState({
@@ -318,6 +353,24 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarError, setAvatarError] = useState("");
+  const [showAvatarPreview, setShowAvatarPreview] = useState(false);
+  const avatarInputRef = useRef(null);
+  const [avatarOffset, setAvatarOffset] = useState({ x: 0, y: 0 });
+  const [avatarNatural, setAvatarNatural] = useState(null);
+  const dragStartRef = useRef(null);
+  const dragStartOffsetRef = useRef({ x: 0, y: 0 });
+  const suppressClickRef = useRef(false);
+  const avatarMetrics = useMemo(() => {
+    if (!avatarNatural?.width || !avatarNatural?.height) return null;
+    return getCoverMetrics(avatarNatural.width, avatarNatural.height, AVATAR_PREVIEW_SIZE);
+  }, [avatarNatural]);
+  const avatarEditorMetrics = useMemo(() => {
+    if (!avatarNatural?.width || !avatarNatural?.height) return null;
+    return getCoverMetrics(avatarNatural.width, avatarNatural.height, AVATAR_EDITOR_SIZE);
+  }, [avatarNatural]);
 
   const activeRoleLabel =
     formData.accountType === "educator"
@@ -357,6 +410,13 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     setLoading(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setAvatarError("");
+    setAvatarFile(null);
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview("");
+    setShowAvatarPreview(false);
+    setAvatarOffset({ x: 0, y: 0 });
+    setAvatarNatural(null);
     setIsSignUp((prev) => {
       const next = !prev;
       setFormData((f) => ({
@@ -394,6 +454,23 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     setShowPassword(false);
     setShowConfirmPassword(false);
   };
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
+
+  useEffect(() => {
+    if (!avatarPreview) {
+      setAvatarNatural(null);
+      setAvatarOffset({ x: 0, y: 0 });
+      return;
+    }
+    const img = new Image();
+    img.onload = () => setAvatarNatural({ width: img.width, height: img.height });
+    img.src = avatarPreview;
+  }, [avatarPreview]);
 
   useEffect(() => {
     let active = true;
@@ -455,6 +532,126 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
   };
 
+  const handleAvatarClick = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    if (avatarPreview) {
+      setShowAvatarPreview(true);
+      return;
+    }
+    avatarInputRef.current?.click();
+  };
+
+  const clampAvatarOffset = useCallback(
+    (next) => {
+      if (!avatarMetrics) return { x: 0, y: 0 };
+      const extraOffset = AVATAR_PREVIEW_SIZE * AVATAR_EMPTY_OFFSET_RATIO;
+      return {
+        x: clampValue(next.x, -(avatarMetrics.maxOffsetX + extraOffset), avatarMetrics.maxOffsetX + extraOffset),
+        y: clampValue(next.y, -(avatarMetrics.maxOffsetY + extraOffset), avatarMetrics.maxOffsetY + extraOffset),
+      };
+    },
+    [avatarMetrics]
+  );
+
+  const startAvatarDrag = (event, size) => {
+    if (!avatarPreview || !avatarMetrics) return;
+    suppressClickRef.current = false;
+    dragStartRef.current = { x: event.clientX, y: event.clientY, size };
+    dragStartOffsetRef.current = avatarOffset;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleAvatarPointerDown = (event) => startAvatarDrag(event, AVATAR_PREVIEW_SIZE);
+
+  const handleAvatarEditorPointerDown = (event) => startAvatarDrag(event, AVATAR_EDITOR_SIZE);
+
+  const handleAvatarPointerMove = (event) => {
+    if (!dragStartRef.current || !avatarMetrics) return;
+    const { x: startX, y: startY, size } = dragStartRef.current;
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) suppressClickRef.current = true;
+    const scale = AVATAR_PREVIEW_SIZE / (size || AVATAR_PREVIEW_SIZE);
+    const next = clampAvatarOffset({
+      x: dragStartOffsetRef.current.x + dx * scale,
+      y: dragStartOffsetRef.current.y + dy * scale,
+    });
+    setAvatarOffset(next);
+  };
+
+  const handleAvatarPointerUp = (event) => {
+    if (!dragStartRef.current) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    dragStartRef.current = null;
+  };
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError(copy.profilePhotoInvalid);
+      setErrors((prev) => ({ ...prev, avatar: copy.profilePhotoInvalid }));
+      return;
+    }
+    if (file.size > MAX_AVATAR_MB * 1024 * 1024) {
+      const msg = copy.profilePhotoTooLarge.replace("{max}", MAX_AVATAR_MB);
+      setAvatarError(msg);
+      setErrors((prev) => ({ ...prev, avatar: msg }));
+      return;
+    }
+    setAvatarError("");
+    setErrors((prev) => ({ ...prev, avatar: "" }));
+    setShowAvatarPreview(false);
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarFile(file);
+    setAvatarOffset({ x: 0, y: 0 });
+  };
+
+  const buildAvatarBlob = useCallback(async () => {
+    if (!avatarPreview || !avatarNatural?.width || !avatarNatural?.height) return null;
+    const img = new Image();
+    img.src = avatarPreview;
+    if (img.decode) {
+      try {
+        await img.decode();
+      } catch {
+        await new Promise((resolve) => { img.onload = resolve; });
+      }
+    } else {
+      await new Promise((resolve) => { img.onload = resolve; });
+    }
+    const metrics = getCoverMetrics(avatarNatural.width, avatarNatural.height, AVATAR_OUTPUT_SIZE);
+    const offsetScale = AVATAR_OUTPUT_SIZE / AVATAR_PREVIEW_SIZE;
+    const extraOffset = AVATAR_OUTPUT_SIZE * AVATAR_EMPTY_OFFSET_RATIO;
+    const offsetX = clampValue(
+      avatarOffset.x * offsetScale,
+      -(metrics.maxOffsetX + extraOffset),
+      metrics.maxOffsetX + extraOffset
+    );
+    const offsetY = clampValue(
+      avatarOffset.y * offsetScale,
+      -(metrics.maxOffsetY + extraOffset),
+      metrics.maxOffsetY + extraOffset
+    );
+    const drawX = (AVATAR_OUTPUT_SIZE - metrics.width) / 2 + offsetX;
+    const drawY = (AVATAR_OUTPUT_SIZE - metrics.height) / 2 + offsetY;
+    const canvas = document.createElement("canvas");
+    canvas.width = AVATAR_OUTPUT_SIZE;
+    canvas.height = AVATAR_OUTPUT_SIZE;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, drawX, drawY, metrics.width, metrics.height);
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);
+    });
+  }, [avatarPreview, avatarNatural, avatarOffset]);
+
   const validateForm = () => {
     const newErrors = {};
     const loginId = formData.loginId.trim();
@@ -497,6 +694,8 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
       } else if (accountType === "educator") {
         if (!certification) newErrors.certification = copy.certificationRequired;
       }
+      if (!avatarFile) newErrors.avatar = copy.profilePhotoRequired;
+      else if (avatarError) newErrors.avatar = avatarError;
     }
 
     if (!password) newErrors.password = copy.passwordRequired;
@@ -567,6 +766,26 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           setLoading(false);
           return;
         }
+        let avatarUrl = "";
+        if (avatarFile) {
+          let uploadFile = avatarFile;
+          const cropped = await buildAvatarBlob();
+          if (cropped) {
+            uploadFile = new File([cropped], "avatar.jpg", { type: cropped.type || "image/jpeg" });
+          }
+          const path = `${user.id}/avatar`;
+          const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, uploadFile, {
+            upsert: true,
+            cacheControl: "3600",
+            contentType: uploadFile.type || avatarFile.type || "image/*",
+          });
+          if (uploadError) {
+            console.error("avatar upload failed", uploadError);
+          } else {
+            const { data: publicData } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+            avatarUrl = publicData?.publicUrl || "";
+          }
+        }
         // Upsert profile with default role
         let role = email.toLowerCase() === "anasitani186@gmail.com" ? "admin" : normalizedAccountType;
         const profileRow = {
@@ -575,6 +794,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           username,
           name: fullName || username,
           role,
+          avatar_url: avatarUrl || null,
           school: school || null,
           class_name: normalizedAccountType === "student" ? (className || null) : null,
           phone: phone || null,
@@ -587,6 +807,7 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           username,
           name: profileRow.name,
           role,
+          avatar_url: avatarUrl || "",
           school: profileRow.school || "",
           class_name: profileRow.class_name || "",
           phone: profileRow.phone || "",
@@ -756,6 +977,15 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
           </>
         ) : (
           <form onSubmit={handleSubmit} noValidate autoComplete="on">
+            {!isSignUp && (
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                <img
+                  src={logoPng}
+                  alt="EEC logo"
+                  style={{ width: 120, height: 120, objectFit: "contain" }}
+                />
+              </div>
+            )}
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ margin: 0, color: "#111827", textAlign: "center" }}>
                 {isSignUp ? copy.createAccount : copy.welcomeBack}
@@ -806,6 +1036,151 @@ export default function Login({ onNavigate, lang = "EN", setLang }) {
 
             {isSignUp && (
               <>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    onClick={handleAvatarClick}
+                    onPointerDown={handleAvatarPointerDown}
+                    onPointerMove={handleAvatarPointerMove}
+                    onPointerUp={handleAvatarPointerUp}
+                    onPointerCancel={handleAvatarPointerUp}
+                    style={{
+                      width: AVATAR_PREVIEW_SIZE,
+                      height: AVATAR_PREVIEW_SIZE,
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      border: "1px solid #e5e7eb",
+                      background: "#ffffff",
+                      display: "grid",
+                      placeItems: "center",
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      padding: 0,
+                      position: "relative",
+                      touchAction: "none",
+                    }}
+                  >
+                    {avatarPreview ? (
+                      <img
+                        src={avatarPreview}
+                        alt={copy.profilePhotoLabel}
+                        style={{
+                          width: avatarMetrics?.width || "100%",
+                          height: avatarMetrics?.height || "100%",
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: `translate(-50%, -50%) translate(${avatarOffset.x}px, ${avatarOffset.y}px)`,
+                          userSelect: "none",
+                          pointerEvents: "none",
+                        }}
+                      />
+                    ) : (
+                      "No photo"
+                    )}
+                  </button>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <label style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>
+                      {copy.profilePhotoLabel}
+                    </label>
+                    <input
+                      id={avatarInputId}
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <div style={{ fontSize: 12, color: "#6b7280" }}>{photoHelper}</div>
+                    {errors.avatar && <p style={errorStyle}>{errors.avatar}</p>}
+                  </div>
+                </div>
+                {showAvatarPreview && avatarPreview && (
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={() => setShowAvatarPreview(false)}
+                    style={{
+                      position: "fixed",
+                      inset: 0,
+                      background: "rgba(15, 23, 42, 0.6)",
+                      display: "grid",
+                      placeItems: "center",
+                      zIndex: 2000,
+                    }}
+                  >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        background: "#ffffff",
+                        borderRadius: 12,
+                        padding: 12,
+                        maxWidth: "90vw",
+                        maxHeight: "90vh",
+                        display: "grid",
+                        gap: 10,
+                        justifyItems: "center",
+                      }}
+                    >
+                      <div
+                        onPointerDown={handleAvatarEditorPointerDown}
+                        onPointerMove={handleAvatarPointerMove}
+                        onPointerUp={handleAvatarPointerUp}
+                        onPointerCancel={handleAvatarPointerUp}
+                        style={{
+                          width: AVATAR_EDITOR_SIZE,
+                          height: AVATAR_EDITOR_SIZE,
+                          borderRadius: 16,
+                          overflow: "hidden",
+                          position: "relative",
+                          background: "#ffffff",
+                          touchAction: "none",
+                          cursor: "grab",
+                        }}
+                      >
+                        <img
+                          src={avatarPreview}
+                          alt={copy.profilePhotoLabel}
+                          style={{
+                            width: avatarEditorMetrics?.width || "100%",
+                            height: avatarEditorMetrics?.height || "100%",
+                            position: "absolute",
+                            top: "50%",
+                            left: "50%",
+                            transform: `translate(-50%, -50%) translate(${avatarOffset.x * (AVATAR_EDITOR_SIZE / AVATAR_PREVIEW_SIZE)}px, ${avatarOffset.y * (AVATAR_EDITOR_SIZE / AVATAR_PREVIEW_SIZE)}px)`,
+                            userSelect: "none",
+                            pointerEvents: "none",
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            borderRadius: "50%",
+                            boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.5)",
+                            border: "2px solid #f8fafc",
+                            pointerEvents: "none",
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAvatarPreview(false)}
+                        style={{
+                          border: "1px solid #d1d5db",
+                          background: "#ffffff",
+                          color: "#374151",
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div
                   style={{
                     display: "grid",

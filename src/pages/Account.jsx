@@ -38,6 +38,13 @@ export default function Account({ onNavigate }) {
 });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const AVATAR_BUCKET = "profile-avatars";
+  const MAX_AVATAR_MB = 3;
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarVersion, setAvatarVersion] = useState(0);
   const isAdmin = (() => { try { return localStorage.getItem("cg_admin_ok_v1") === "1"; } catch { return false; } })();
 
   // Access code generator (manual refresh)
@@ -145,6 +152,8 @@ export default function Account({ onNavigate }) {
         const { data: rows } = await supabase.from("profiles").select("*").eq("id", user.id).limit(1);
         const prof = rows && rows[0];
         setProfile(prof || null);
+        setAvatarUrl(prof?.avatar_url || "");
+        setAvatarVersion(Date.now());
         setForm((f) => ({
           ...f,
           name: prof?.name || user.user_metadata?.name || "",
@@ -158,6 +167,12 @@ export default function Account({ onNavigate }) {
     };
     init();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
 
   useEffect(() => {
     let active = true;
@@ -208,6 +223,22 @@ export default function Account({ onNavigate }) {
   }
 
   const handleChange = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("Please choose an image file.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_MB * 1024 * 1024) {
+      setAvatarError(`Image must be ${MAX_AVATAR_MB}MB or smaller.`);
+      return;
+    }
+    setAvatarError("");
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarFile(file);
+  };
 
   const onSave = async () => {
     const errs = {};
@@ -231,6 +262,20 @@ export default function Account({ onNavigate }) {
 
     setSaving(true);
     try {
+      let nextAvatarUrl = avatarUrl;
+      if (avatarFile) {
+        const path = `${user.id}/avatar`;
+        const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, avatarFile, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: avatarFile.type || "image/*",
+        });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+        if (!publicData?.publicUrl) throw new Error("Unable to read avatar URL.");
+        nextAvatarUrl = publicData.publicUrl;
+      }
+
       // If changing password, verify current by attempting a sign-in
       if (form.newPassword) {
         const { error: verifyErr } = await supabase.auth.signInWithPassword({ email, password: form.password });
@@ -262,7 +307,10 @@ export default function Account({ onNavigate }) {
       }
 
       // Update profile (RLS allows own row)
-      const { error: updErr } = await supabase.from("profiles").update({ name, username, email, phone }).eq("id", user.id);
+      const { error: updErr } = await supabase
+        .from("profiles")
+        .update({ name, username, email, phone, avatar_url: nextAvatarUrl || null })
+        .eq("id", user.id);
       if (updErr) {
         // Unique constraint violation fallback message
         const msg = updErr.message || "";
@@ -273,10 +321,14 @@ export default function Account({ onNavigate }) {
         }
         throw updErr;
       }
-      setProfile((prev) => ({ ...(prev || {}), name, username, email, phone }));
+      setProfile((prev) => ({ ...(prev || {}), name, username, email, phone, avatar_url: nextAvatarUrl || null }));
+      setAvatarUrl(nextAvatarUrl || "");
+      setAvatarFile(null);
+      setAvatarPreview("");
+      setAvatarVersion(Date.now());
       // Update local session copy for UI
       const role = profile?.role || (localStorage.getItem("cg_admin_ok_v1") === "1" ? "admin" : "user");
-      saveCurrent({ id: user.id, email, name, username, phone, role });
+      saveCurrent({ id: user.id, email, name, username, phone, role, avatar_url: nextAvatarUrl || "" });
       onNavigate("home");
     } catch (e) {
       console.error(e);
@@ -361,6 +413,38 @@ export default function Account({ onNavigate }) {
       )}
       <Card>
         <h3 style={{ marginTop: 0 }}>Profile</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              overflow: "hidden",
+              border: "1px solid #e5e7eb",
+              background: "#f8fafc",
+              display: "grid",
+              placeItems: "center",
+              color: "#94a3b8",
+              fontSize: 12,
+            }}
+          >
+            {avatarPreview || avatarUrl ? (
+              <img
+                src={`${avatarPreview || avatarUrl}${avatarPreview ? "" : `?v=${avatarVersion}`}`}
+                alt="Profile"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              "No photo"
+            )}
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            <label style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>Profile Photo</label>
+            <input type="file" accept="image/*" onChange={handleAvatarChange} />
+            <div style={{ fontSize: 12, color: "#6b7280" }}>JPG, PNG, or WebP. Max {MAX_AVATAR_MB}MB.</div>
+            {avatarError && <div style={{ color: "#dc2626", fontSize: 12 }}>{avatarError}</div>}
+          </div>
+        </div>
         <Field label="Full Name" value={form.name} onChange={(e) => handleChange("name", e.target.value)} />
         {errors.name && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.name}</p>}
         <Field label="Username" value={form.username} onChange={(e) => handleChange("username", e.target.value)} />

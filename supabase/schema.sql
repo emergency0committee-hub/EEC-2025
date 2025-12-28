@@ -27,6 +27,7 @@ create table if not exists public.profiles (
   email text unique,
   username text unique,
   name text,
+  avatar_url text null,
   role text not null default 'user',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -47,6 +48,9 @@ for each row execute function public.handle_profiles_updated_at();
 
 -- Enable RLS and policies so users can manage their own profile
 alter table public.profiles enable row level security;
+
+alter table public.profiles
+  add column if not exists avatar_url text;
 
 do $$ begin
   create policy "profiles_select_own"
@@ -348,3 +352,32 @@ drop trigger if exists trg_cg_class_live_sessions_updated_at on public.cg_class_
 create trigger trg_cg_class_live_sessions_updated_at
 before update on public.cg_class_live_sessions for each row
 execute function public.cg_class_live_sessions_set_updated_at();
+
+-- Storage bucket for profile avatars
+insert into storage.buckets (id, name, public)
+values ('profile-avatars', 'profile-avatars', true)
+on conflict (id) do nothing;
+
+do $$ begin
+  create policy "profile avatars public read"
+  on storage.objects for select
+  using (bucket_id = 'profile-avatars');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "profile avatars own insert"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'profile-avatars'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "profile avatars own update"
+  on storage.objects for update
+  using (
+    bucket_id = 'profile-avatars'
+    and split_part(name, '/', 1) = auth.uid()::text
+  );
+exception when duplicate_object then null; end $$;

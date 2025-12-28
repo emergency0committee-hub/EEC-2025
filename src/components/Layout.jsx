@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 
 const KEYFRAME_ID = "__hb_slide_keyframes__";
+const THEME_KEYFRAME_ID = "__app_theme_keyframes__";
 
 export function PageWrap({ children, style = {}, className = "" }) {
   PageWrap.propTypes = {
@@ -9,6 +10,24 @@ export function PageWrap({ children, style = {}, className = "" }) {
     style: PropTypes.object,
     className: PropTypes.string,
   };
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (document.getElementById(THEME_KEYFRAME_ID)) return;
+    const styleEl = document.createElement("style");
+    styleEl.id = THEME_KEYFRAME_ID;
+    styleEl.textContent = `
+@keyframes appBgShift {
+  0% { background-position: 0% 0%, 100% 0%, 50% 100%, 80% 40%, 0 0; }
+  50% { background-position: 100% 70%, 0% 80%, 40% 20%, 10% 60%, 0 0; }
+  100% { background-position: 0% 0%, 100% 0%, 50% 100%, 80% 40%, 0 0; }
+}
+@keyframes appCardSheen {
+  0% { background-position: 0 0, -120% 0; }
+  100% { background-position: 0 0, 120% 0; }
+}
+`;
+    document.head.appendChild(styleEl);
+  }, []);
   return (
     <div
       className={className}
@@ -18,6 +37,17 @@ export function PageWrap({ children, style = {}, className = "" }) {
         display: "flex",
         justifyContent: "center",
         padding: "40px 0",
+        backgroundColor: "#eef2ff",
+        backgroundImage:
+          "radial-gradient(1200px 700px at 5% 15%, rgba(59, 130, 246, 0.28), transparent 60%)," +
+          "radial-gradient(1000px 600px at 95% 10%, rgba(249, 115, 22, 0.3), transparent 60%)," +
+          "radial-gradient(1100px 700px at 50% 95%, rgba(244, 63, 94, 0.24), transparent 60%)," +
+          "radial-gradient(800px 500px at 70% 50%, rgba(34, 197, 94, 0.2), transparent 65%)," +
+          "linear-gradient(135deg, #eef2ff 0%, #fef3c7 45%, #ffe4e6 100%)",
+        backgroundSize: "240% 240%, 240% 240%, 220% 220%, 200% 200%, 100% 100%",
+        backgroundPosition: "0% 0%, 100% 0%, 50% 100%, 80% 40%, 0 0",
+        backgroundBlendMode: "screen, screen, screen, screen, normal",
+        animation: "appBgShift 12s ease-in-out infinite",
         ...style,
       }}
     >
@@ -314,17 +344,73 @@ export function Card({ children, style = {} }) {
     children: PropTypes.node.isRequired,
     style: PropTypes.object,
   };
+  const [hovered, setHovered] = useState(false);
+  const cardRef = React.useRef(null);
+  const baseBackground = "linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08))";
+  const sheenBackground =
+    "linear-gradient(120deg, rgba(255, 255, 255, 0) 5%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0) 95%)";
+  const baseShadow = style?.boxShadow || "0 16px 40px rgba(15, 23, 42, 0.18)";
+  const hoverShadow = style?.boxShadow || "0 22px 50px rgba(15, 23, 42, 0.22)";
+  const rawBackground = typeof style?.background === "string" ? style.background : "";
+  const customBackgroundImage =
+    style?.backgroundImage ||
+    (rawBackground && (rawBackground.includes("gradient") || rawBackground.includes("url")) ? rawBackground : "");
+  const customFill =
+    rawBackground && !rawBackground.includes("gradient") && !rawBackground.includes("url")
+      ? rawBackground
+      : style?.backgroundColor;
+  const highlightOpacity = hovered ? 0.55 : 0;
+  const hazeOpacity = hovered ? 0.28 : 0;
+  const highlightGradient = `radial-gradient(180px 180px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, ${highlightOpacity}), rgba(255, 255, 255, 0) 70%)`;
+  const hazeGradient = `radial-gradient(360px 360px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, ${hazeOpacity}), rgba(255, 255, 255, 0) 75%)`;
+  const backgroundImage = customBackgroundImage
+    ? `${highlightGradient}, ${hazeGradient}, ${customBackgroundImage}`
+    : customFill
+      ? `${highlightGradient}, ${hazeGradient}`
+      : `${highlightGradient}, ${hazeGradient}, ${baseBackground}`;
+
+  const updateLightPosition = (event) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    const clampedX = Math.max(0, Math.min(100, x));
+    const clampedY = Math.max(0, Math.min(100, y));
+    cardRef.current.style.setProperty("--mx", `${clampedX}%`);
+    cardRef.current.style.setProperty("--my", `${clampedY}%`);
+  };
 
   return (
-    <div style={{
-      border: "1px solid #e5e7eb",
-      borderRadius: 12,
-      padding: 24,
-      marginBottom: 20,
-      background: "#ffffff",
-      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-      ...style
-    }}>
+    <div
+      ref={cardRef}
+      onMouseEnter={(event) => {
+        setHovered(true);
+        updateLightPosition(event);
+      }}
+      onMouseMove={updateLightPosition}
+      onMouseLeave={() => {
+        setHovered(false);
+        if (cardRef.current) {
+          cardRef.current.style.setProperty("--mx", "50%");
+          cardRef.current.style.setProperty("--my", "50%");
+        }
+      }}
+      style={{
+        borderRadius: 12,
+        padding: 24,
+        marginBottom: 20,
+        boxShadow: hovered ? hoverShadow : baseShadow,
+        backdropFilter: "blur(14px) saturate(170%)",
+        WebkitBackdropFilter: "blur(14px) saturate(170%)",
+        boxSizing: "border-box",
+        transition: "box-shadow 180ms ease",
+        ...style,
+        border: "1px solid transparent",
+        backgroundColor: customFill || "rgba(255, 255, 255, 0.08)",
+        backgroundImage,
+        backgroundSize: "100% 100%",
+      }}
+    >
       {children}
     </div>
   );
