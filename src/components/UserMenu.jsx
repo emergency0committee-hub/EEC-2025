@@ -165,10 +165,10 @@ export default function UserMenu({ onNavigate, lang = "EN" }) {
                 {menuLabels.satDashboard}
               </MenuItem>
               <MenuItem
-                to="sat-reading-competition"
+                to="sat-reading-competition-mode"
                 onSelect={(event) => {
                   setOpen(false);
-                  onNavigate("sat-reading-competition", null, event);
+                  onNavigate("sat-reading-competition-mode", null, event);
                 }}
               >
                 {menuLabels.competitionMode}

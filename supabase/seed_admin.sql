@@ -1,9 +1,3 @@
--- Seed an admin profile. IMPORTANT: Create the auth user first
--- with email and password via the Supabase Dashboard (Auth > Users):
---   email:    anasitani186@gmail.com
---   password: careeradmin123
--- Then run this SQL to upsert the profile and grant admin role.
-
 do $$
 declare
   v_user_id uuid;
