@@ -19,6 +19,73 @@ const CLOUD_URL = `url("data:image/svg+xml;utf8,${CLOUD_SVG}")`;
 const DEFAULT_COORDS = { lat: 34.44532, lon: 35.82705 };
 const CELESTIAL_SIZE = 72;
 const FALLBACK_SUN_TIMES = { sunrise: 360, sunset: 1080 };
+const CARD_LIGHT_RADIUS = 100;
+const CARD_LIGHT_VIEWPORT_MARGIN = 120;
+
+const cardLightSubscribers = new Set();
+let cardLightListening = false;
+let cardLightRaf = null;
+let cardLightDirtyRects = true;
+let cardLightPointer = { x: Number.NaN, y: Number.NaN };
+
+const runCardLightUpdate = () => {
+  cardLightRaf = null;
+  const shouldMeasure = cardLightDirtyRects;
+  cardLightDirtyRects = false;
+  cardLightSubscribers.forEach((subscriber) => {
+    if (shouldMeasure) subscriber.measure();
+    subscriber.update(cardLightPointer.x, cardLightPointer.y);
+  });
+};
+
+const scheduleCardLightUpdate = () => {
+  if (cardLightRaf !== null) return;
+  if (typeof window === "undefined") return;
+  cardLightRaf = window.requestAnimationFrame(runCardLightUpdate);
+};
+
+const handleCardPointerMove = (event) => {
+  cardLightPointer = { x: event.clientX, y: event.clientY };
+  scheduleCardLightUpdate();
+};
+
+const handleCardPointerLeave = () => {
+  cardLightPointer = { x: Number.NaN, y: Number.NaN };
+  scheduleCardLightUpdate();
+};
+
+const markCardRectsDirty = () => {
+  cardLightDirtyRects = true;
+  scheduleCardLightUpdate();
+};
+
+const registerCardLight = (subscriber) => {
+  if (!subscriber) return () => {};
+  cardLightSubscribers.add(subscriber);
+  cardLightDirtyRects = true;
+  if (typeof window !== "undefined" && !cardLightListening) {
+    window.addEventListener("mousemove", handleCardPointerMove, { passive: true });
+    window.addEventListener("mouseleave", handleCardPointerLeave);
+    window.addEventListener("scroll", markCardRectsDirty, { passive: true });
+    window.addEventListener("resize", markCardRectsDirty);
+    cardLightListening = true;
+  }
+  scheduleCardLightUpdate();
+  return () => {
+    cardLightSubscribers.delete(subscriber);
+    if (cardLightSubscribers.size === 0 && typeof window !== "undefined" && cardLightListening) {
+      window.removeEventListener("mousemove", handleCardPointerMove);
+      window.removeEventListener("mouseleave", handleCardPointerLeave);
+      window.removeEventListener("scroll", markCardRectsDirty);
+      window.removeEventListener("resize", markCardRectsDirty);
+      cardLightListening = false;
+      if (cardLightRaf !== null) {
+        window.cancelAnimationFrame(cardLightRaf);
+        cardLightRaf = null;
+      }
+    }
+  };
+};
 
 const toRad = (deg) => (deg * Math.PI) / 180;
 const toDeg = (rad) => (rad * 180) / Math.PI;
@@ -911,6 +978,8 @@ export function Card({ children, style = {} }) {
     children: PropTypes.node.isRequired,
     style: PropTypes.object,
   };
+  const hoveredRef = React.useRef(false);
+  const rectRef = React.useRef(null);
   const toGlassColor = (color, alpha = 0.45) => {
     if (!color || typeof color !== "string") return color;
     const trimmed = color.trim();
@@ -971,8 +1040,25 @@ export function Card({ children, style = {} }) {
 
   const updateLightPosition = (clientX, clientY) => {
     if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
+    const rect = rectRef.current || cardRef.current.getBoundingClientRect();
+    rectRef.current = rect;
     if (!rect.width || !rect.height) return;
+    if (typeof window !== "undefined") {
+      if (rect.bottom < -CARD_LIGHT_VIEWPORT_MARGIN || rect.top > window.innerHeight + CARD_LIGHT_VIEWPORT_MARGIN) {
+        if (hoveredRef.current) {
+          hoveredRef.current = false;
+          setHovered(false);
+        }
+        return;
+      }
+    }
+    if (Number.isNaN(clientX) || Number.isNaN(clientY)) {
+      if (hoveredRef.current) {
+        hoveredRef.current = false;
+        setHovered(false);
+      }
+      return;
+    }
     const x = ((clientX - rect.left) / rect.width) * 100;
     const y = ((clientY - rect.top) / rect.height) * 100;
     const clampedX = Math.max(-10, Math.min(110, x));
@@ -982,33 +1068,30 @@ export function Card({ children, style = {} }) {
     const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
     const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
     const distance = Math.hypot(dx, dy);
-    setHovered(distance <= 100);
+    const nextHovered = distance <= CARD_LIGHT_RADIUS;
+    if (nextHovered !== hoveredRef.current) {
+      hoveredRef.current = nextHovered;
+      setHovered(nextHovered);
+    }
   };
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const handleMove = (event) => {
-      updateLightPosition(event.clientX, event.clientY);
-    };
-    const handleLeave = () => setHovered(false);
-    window.addEventListener("mousemove", handleMove, { passive: true });
-    window.addEventListener("mouseleave", handleLeave);
-    return () => {
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseleave", handleLeave);
-    };
+    rectRef.current = cardRef.current?.getBoundingClientRect?.() || null;
+    const unsubscribe = registerCardLight({
+      measure: () => {
+        rectRef.current = cardRef.current?.getBoundingClientRect?.() || null;
+      },
+      update: (clientX, clientY) => {
+        updateLightPosition(clientX, clientY);
+      },
+    });
+    return unsubscribe;
   }, []);
 
   return (
     <div
       ref={cardRef}
-      onMouseEnter={(event) => {
-        updateLightPosition(event.clientX, event.clientY);
-      }}
-      onMouseMove={(event) => updateLightPosition(event.clientX, event.clientY)}
-      onMouseLeave={() => {
-        setHovered(false);
-      }}
       style={{
         borderRadius: 12,
         padding: 24,
