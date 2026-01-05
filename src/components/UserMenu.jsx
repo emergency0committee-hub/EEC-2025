@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "./Btn.jsx";
+import { useAppSettings } from "./AppProviders.jsx";
 import { supabase } from "../lib/supabase.js";
 import { routeHref, isModifiedEvent } from "../lib/routes.js";
 import { STR } from "../i18n/strings.js";
@@ -16,9 +17,17 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
 
   const isDrawer = variant === "drawer";
   const [open, setOpen] = useState(false);
+  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
   const [menuPosition, setMenuPosition] = useState(null);
+  const {
+    animationsEnabled,
+    setAnimationsEnabled,
+    settingsLoading,
+    settingsSaving,
+    settingsError,
+  } = useAppSettings();
 
   const currentUser = (() => {
     try {
@@ -56,6 +65,12 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
+
+  useEffect(() => {
+    if (!open && !isDrawer) {
+      setGlobalSettingsOpen(false);
+    }
+  }, [open, isDrawer]);
 
   useEffect(() => {
     if (isDrawer) return undefined;
@@ -103,9 +118,15 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
     manageUsers: strings.menuManageUsers || "Manage Users",
     questions: strings.menuQuestions || "Question Bank",
     certificates: strings.menuCertificates || "Certificates",
+    globalSettings: strings.menuGlobalSettings || "Global Settings",
+    animations: strings.menuAnimations || "Animations",
+    toggleOn: strings.menuToggleOn || "On",
+    toggleOff: strings.menuToggleOff || "Off",
     signOut: strings.menuSignOut || strings.signOut || "Sign Out",
     title: strings.menuTitle || "Account menu",
   };
+  const settingsBusy = settingsLoading || settingsSaving;
+  const animationsLabel = animationsEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
 
   if (!currentUser) {
     return (
@@ -192,6 +213,44 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
       </MenuItem>
       {isAdmin && (
         <>
+          <MenuItem onClick={() => setGlobalSettingsOpen((prev) => !prev)}>
+            {menuLabels.globalSettings}
+          </MenuItem>
+          {globalSettingsOpen && (
+            <div style={{ display: "grid", gap: 6, padding: "0 6px 6px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (settingsBusy) return;
+                  setAnimationsEnabled(!animationsEnabled);
+                }}
+                disabled={settingsBusy}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "9px 10px",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255, 255, 255, 0.35)",
+                  background: "rgba(255, 255, 255, 0.2)",
+                  color: "#0f172a",
+                  fontFamily: "inherit",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: settingsBusy ? "not-allowed" : "pointer",
+                  opacity: settingsBusy ? 0.6 : 1,
+                }}
+              >
+                <span>{menuLabels.animations}</span>
+                <span>{animationsLabel}</span>
+              </button>
+              {settingsError && (
+                <div style={{ color: "#b91c1c", fontSize: 12 }}>
+                  {settingsError}
+                </div>
+              )}
+            </div>
+          )}
           <MenuItem to="admin-manage-users" onSelect={handleMenuSelect("admin-manage-users")}>
             {menuLabels.manageUsers}
           </MenuItem>

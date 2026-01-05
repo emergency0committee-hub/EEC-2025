@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
+import { supabase } from "../lib/supabase.js";
 
 const ThemeContext = React.createContext({ theme: "light", setTheme: () => {} });
 const WeatherContext = React.createContext({
@@ -8,9 +9,19 @@ const WeatherContext = React.createContext({
   error: "",
   refresh: () => {},
 });
+const AppSettingsContext = React.createContext({
+  animationsEnabled: true,
+  setAnimationsEnabled: async () => {},
+  settingsLoading: false,
+  settingsSaving: false,
+  settingsError: "",
+  refreshSettings: async () => {},
+});
 
 const THEME_KEY = "cg_theme";
 const LEGACY_THEME_KEY = "cg_home_theme";
+const SETTINGS_TABLE = "cg_site_settings";
+const ANIMATIONS_KEY = "animations_enabled";
 
 export function useTheme() {
   return React.useContext(ThemeContext);
@@ -18,6 +29,10 @@ export function useTheme() {
 
 export function useWeather() {
   return React.useContext(WeatherContext);
+}
+
+export function useAppSettings() {
+  return React.useContext(AppSettingsContext);
 }
 
 export function AppProviders({ children }) {
@@ -37,6 +52,10 @@ export function AppProviders({ children }) {
   const [weather, setWeather] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+  const [animationsEnabled, setAnimationsEnabledState] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
 
   useEffect(() => {
     try {
@@ -45,6 +64,33 @@ export function AppProviders({ children }) {
       document.documentElement.dataset.theme = theme;
     } catch {}
   }, [theme]);
+
+  useEffect(() => {
+    try {
+      document.documentElement.dataset.animations = animationsEnabled ? "on" : "off";
+    } catch {}
+  }, [animationsEnabled]);
+
+  const refreshSettings = useCallback(async () => {
+    setSettingsLoading(true);
+    setSettingsError("");
+    try {
+      const { data, error: fetchError } = await supabase
+        .from(SETTINGS_TABLE)
+        .select("value")
+        .eq("key", ANIMATIONS_KEY)
+        .maybeSingle();
+      if (fetchError) throw fetchError;
+      const value = data?.value;
+      setAnimationsEnabledState(value == null ? true : Boolean(value));
+    } catch (err) {
+      console.error("settings load", err);
+      setSettingsError(err?.message || "Unable to load settings.");
+      setAnimationsEnabledState(true);
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, []);
 
   const refresh = useCallback(() => {
     if (typeof window === "undefined" || !navigator?.geolocation) {
@@ -101,15 +147,55 @@ export function AppProviders({ children }) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    refreshSettings();
+  }, [refreshSettings]);
+
+  const setAnimationsEnabled = useCallback(
+    async (nextValue) => {
+      const resolved = Boolean(nextValue);
+      const prev = animationsEnabled;
+      setAnimationsEnabledState(resolved);
+      setSettingsSaving(true);
+      setSettingsError("");
+      try {
+        const { error: saveError } = await supabase
+          .from(SETTINGS_TABLE)
+          .upsert({ key: ANIMATIONS_KEY, value: resolved }, { onConflict: "key" });
+        if (saveError) throw saveError;
+      } catch (err) {
+        console.error("settings save", err);
+        setAnimationsEnabledState(prev);
+        setSettingsError(err?.message || "Unable to save settings.");
+      } finally {
+        setSettingsSaving(false);
+      }
+    },
+    [animationsEnabled]
+  );
+
   const themeValue = useMemo(() => ({ theme, setTheme }), [theme]);
   const weatherValue = useMemo(
     () => ({ weather, status, error, refresh }),
     [weather, status, error, refresh]
   );
+  const settingsValue = useMemo(
+    () => ({
+      animationsEnabled,
+      setAnimationsEnabled,
+      settingsLoading,
+      settingsSaving,
+      settingsError,
+      refreshSettings,
+    }),
+    [animationsEnabled, setAnimationsEnabled, settingsLoading, settingsSaving, settingsError, refreshSettings]
+  );
 
   return (
     <ThemeContext.Provider value={themeValue}>
-      <WeatherContext.Provider value={weatherValue}>{children}</WeatherContext.Provider>
+      <WeatherContext.Provider value={weatherValue}>
+        <AppSettingsContext.Provider value={settingsValue}>{children}</AppSettingsContext.Provider>
+      </WeatherContext.Provider>
     </ThemeContext.Provider>
   );
 }

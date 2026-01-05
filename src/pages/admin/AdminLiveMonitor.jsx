@@ -4,6 +4,8 @@ import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
 
+const LIVE_TEST_TABLE = (import.meta.env.VITE_LIVE_TEST_TABLE || "cg_live_test_sessions").trim();
+
 export default function AdminLiveMonitor({ onNavigate }) {
   AdminLiveMonitor.propTypes = {
     onNavigate: PropTypes.func.isRequired,
@@ -13,92 +15,70 @@ export default function AdminLiveMonitor({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const mapRowToSession = (row, table) => {
-    const participant = row?.participant || row?.profile || {};
-    const startAt = participant.started_at || row.started_at || row.ts || row.created_at || null;
-    const statusField = Object.prototype.hasOwnProperty.call(row || {}, "submission_status")
-      ? "submission_status"
-      : Object.prototype.hasOwnProperty.call(row || {}, "status")
-      ? "status"
-      : null;
-    const rawStatus = (statusField && row?.[statusField]) || participant?.status;
-    const status = rawStatus || (participant?.finished_at ? "completed" : "in_progress");
-    const answersArr = Array.isArray(row?.answers)
-      ? row.answers
-      : Array.isArray(row?.answers_json)
-      ? row.answers_json
-      : [];
-    const totalQuestions = participant.total_questions || row.total_questions || null;
-    const answered = Number.isFinite(participant.answered)
-      ? participant.answered
-      : answersArr.length || 0;
+  const formatTestType = (value) => {
+    const key = String(value || "").toLowerCase();
+    if (key === "career") return "Career Guidance";
+    if (key === "sat_diagnostic") return "SAT Diagnostic";
+    if (key === "sat_reading_competition") return "SAT Reading Competition";
+    if (!key) return "Test";
+    return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const mapRowToSession = (row) => {
+    const totalQuestions = row.total_questions || null;
+    const answered = Number.isFinite(row.answered_count) ? row.answered_count : 0;
     const progress = totalQuestions ? Math.round((answered / totalQuestions) * 100) : null;
     return {
       id: row.id,
-      name: participant.name || participant.email || "Student",
-      email: participant.email || "",
-      school: participant.school || participant.school_name || "",
-      testType: row.practice?.kind
-        ? `SAT ${String(row.practice.kind || "").toUpperCase()}`
-        : row.riasec_code
-        ? "Career"
-        : "Test",
-      status: status || "in_progress",
-      startedAt: startAt,
+      name: row.participant_name || row.user_email || "Student",
+      email: row.user_email || "",
+      school: row.school || "",
+      testType: formatTestType(row.test_type),
+      status: row.status || "in_progress",
+      startedAt: row.started_at || row.created_at || null,
       answered,
       totalQuestions,
       progress,
-      table,
-      statusField,
+      table: LIVE_TEST_TABLE,
+      statusField: "status",
     };
   };
 
   const loadSessions = async () => {
     setLoading(true);
     setError("");
-    const candidates = Array.from(new Set(["cg_results", "cg_submissions", "sat_diagnostic_submissions"].filter(Boolean)));
     const next = [];
     let lastErr = null;
-    for (const table of candidates) {
-      try {
-        const resp = await supabase.from(table).select("*").limit(200);
-        if (resp.error) {
-          lastErr = resp.error;
-          continue;
-        }
-        (resp.data || []).forEach((row) => {
-          const participant = row?.participant || row?.profile || {};
-          const status = row?.status || participant?.status || (participant?.finished_at ? "completed" : "in_progress");
-          const inProgress = status === "in_progress" || (!participant?.finished_at && status !== "completed");
-          if (!inProgress) return;
-          next.push(mapRowToSession(row, table));
-        });
-      } catch (err) {
-        lastErr = err;
-      }
-    }
-    if (!next.length) {
-      if (lastErr) {
-        console.warn("Live session fetch issue", lastErr);
-        setError("No live sessions found yet (source table missing status). Showing demo.");
-      } else {
-        setError("");
-      }
-      const demoStart = new Date(Date.now() - 12 * 60 * 1000).toISOString();
-      next.push({
-        id: "demo-live",
-        name: "Demo Student",
-        email: "demo@example.com",
-        school: "Preview Academy",
-        testType: "Career",
-        status: "in_progress",
-        startedAt: demoStart,
-        answered: 12,
-        totalQuestions: 40,
-        progress: 30,
-        table: null,
+    try {
+      const resp = await supabase
+        .from(LIVE_TEST_TABLE)
+        .select("*")
+        .in("status", ["in_progress", "paused"])
+        .order("started_at", { ascending: false })
+        .limit(200);
+      if (resp.error) throw resp.error;
+      (resp.data || []).forEach((row) => {
+        next.push(mapRowToSession(row));
       });
+    } catch (err) {
+      lastErr = err;
     }
+
+    if (!next.length && lastErr) {
+      console.warn("Live session fetch issue", lastErr);
+      const code = lastErr?.code || "";
+      const base = lastErr?.message || "Unknown error.";
+      const detail =
+        code === "42P01"
+          ? `Missing table. Expected ${LIVE_TEST_TABLE}.`
+          : code === "42703"
+          ? "Missing column. Ensure the live table has status, started_at, and answered_count fields."
+          : "Check table access/RLS and that live sessions are being written during tests.";
+      setError(`No live sessions found yet. Last fetch error: ${base} ${detail}`);
+    } else {
+      setError("");
+    }
+
     setSessions(next);
     setLoading(false);
   };
@@ -224,7 +204,7 @@ export default function AdminLiveMonitor({ onNavigate }) {
                           </Btn>
                         ) : (
                           <Btn variant="secondary" onClick={() => handleAction(s, "resume")}>
-                            Resume
+                            Continue
                           </Btn>
                         )}
                         <Btn variant="primary" onClick={() => handleAction(s, "force-submit")}>

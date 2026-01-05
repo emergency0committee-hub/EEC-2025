@@ -5,6 +5,7 @@ import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import AdminTable from "./AdminTable.jsx";
 import AdminLegend from "./AdminLegend.jsx";
+import LiveTestSessionsPanel from "../../components/LiveTestSessionsPanel.jsx";
 import { supabase } from "../../lib/supabase.js";
 import Results from "../Results.jsx";
 import { renderSubmissionToPdfA3 } from "../../lib/exportResults.jsx";
@@ -221,6 +222,7 @@ export default function AdminDashboard({ onNavigate }) {
   const lockSchoolToUser = Boolean(viewerSchool) && viewerRole === "school";
   const activeSchoolFilter = lockSchoolToUser ? viewerSchool : selectedSchool;
   const canManageSubmissions = viewerRole === "admin";
+  const canSeeLive = canManageSubmissions;
   const downloadCsv = (filename, rows) => {
     const safeRows = Array.isArray(rows) ? rows : [];
     const escapeCell = (value) => {
@@ -1053,13 +1055,20 @@ export default function AdminDashboard({ onNavigate }) {
               )}
             </div>
           </div>
-          {canManageSubmissions && (
-            <p style={{ color: "#6b7280", marginTop: 8 }}>
-              Open the full Career Guidance test in preview mode to review the experience. No data is saved while in preview.
-            </p>
-          )}
+            {canManageSubmissions && (
+              <p style={{ color: "#6b7280", marginTop: 8 }}>
+                Open the full Career Guidance test in preview mode to review the experience. No data is saved while in preview.
+              </p>
+            )}
+            {canSeeLive && (
+              <LiveTestSessionsPanel
+                testType="career"
+                title="Live Career Guidance Sessions"
+                description="Watch active Career Guidance tests and manage them in real time."
+              />
+            )}
 
-          {canManageSubmissions && bulkSet?.school && bulkEntries.length > 0 && (
+            {canManageSubmissions && bulkSet?.school && bulkEntries.length > 0 && (
             <div
               className="no-print"
               style={{

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
 import Btn from "./Btn.jsx";
 import robotPng from "../assets/robot.png";
+import { useAppSettings } from "./AppProviders.jsx";
 
 const ROUTE_HINTS = [
   { label: "Career Guidance", route: "career" },
@@ -36,11 +37,13 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
   const panelRef = useRef(null);
   const isInline = placement === "inline";
   const isRoam = placement === "roam";
+  const { animationsEnabled } = useAppSettings();
+  const allowMotion = animationsEnabled !== false;
   const [flyOffset, setFlyOffset] = useState({ x: 0, y: 0, r: 0, d: 2200 });
   const [roamPos, setRoamPos] = useState({ x: 0, y: 0, r: 0, d: 2200 });
 
   useEffect(() => {
-    if (!isInline) return undefined;
+    if (!isInline || !allowMotion) return undefined;
     let active = true;
     let timer = null;
     const step = () => {
@@ -60,10 +63,10 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [isInline]);
+  }, [isInline, allowMotion]);
 
   useEffect(() => {
-    if (!isRoam) return undefined;
+    if (!isRoam || !allowMotion) return undefined;
     let active = true;
     let timer = null;
     const size = 72;
@@ -86,7 +89,7 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [isRoam]);
+  }, [isRoam, allowMotion]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -147,9 +150,13 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
         >
           <div
             style={{
-              transform: `translate3d(${flyOffset.x}px, ${flyOffset.y}px, 0) rotate(${flyOffset.r}deg)`,
-              transition: `transform ${flyOffset.d}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
-              willChange: "transform",
+              transform: allowMotion
+                ? `translate3d(${flyOffset.x}px, ${flyOffset.y}px, 0) rotate(${flyOffset.r}deg)`
+                : "translate3d(0, 0, 0)",
+              transition: allowMotion
+                ? `transform ${flyOffset.d}ms cubic-bezier(0.2, 0.8, 0.2, 1)`
+                : "none",
+              willChange: allowMotion ? "transform" : "auto",
             }}
           >
             <button
@@ -177,7 +184,7 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
                   height: "100%",
                   objectFit: "contain",
                   display: "block",
-                  animation: "bot-bob 2.4s ease-in-out infinite",
+                  animation: allowMotion ? "bot-bob 2.4s ease-in-out infinite" : "none",
                 }}
               />
             </button>
@@ -208,9 +215,13 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
               cursor: "pointer",
               padding: 0,
               overflow: "hidden",
-              transform: `translate3d(${roamPos.x}px, ${roamPos.y}px, 0) rotate(${roamPos.r}deg)`,
-              transition: `transform ${roamPos.d}ms cubic-bezier(0.22, 0.9, 0.2, 1)`,
-              willChange: "transform",
+              transform: allowMotion
+                ? `translate3d(${roamPos.x}px, ${roamPos.y}px, 0) rotate(${roamPos.r}deg)`
+                : "translate3d(0, 0, 0)",
+              transition: allowMotion
+                ? `transform ${roamPos.d}ms cubic-bezier(0.22, 0.9, 0.2, 1)`
+                : "none",
+              willChange: allowMotion ? "transform" : "auto",
               pointerEvents: "auto",
             }}
           >
@@ -222,7 +233,7 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
                 height: "100%",
                 objectFit: "contain",
                 display: "block",
-                animation: "bot-bob 2.4s ease-in-out infinite",
+                animation: allowMotion ? "bot-bob 2.4s ease-in-out infinite" : "none",
                 opacity: 0.22,
                 filter: "grayscale(0.35) saturate(0.7)",
               }}
@@ -245,7 +256,7 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
             boxShadow: "none",
             cursor: "pointer",
             zIndex: 1502,
-            animation: "bot-bob 2.4s ease-in-out infinite",
+            animation: allowMotion ? "bot-bob 2.4s ease-in-out infinite" : "none",
             padding: 0,
             overflow: "hidden",
           }}

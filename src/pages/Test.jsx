@@ -20,6 +20,11 @@ import { validateAll } from "../lib/validate.js";
 import { saveTestSubmission } from "../lib/supabaseStorage.js";
 import { supabase } from "../lib/supabase.js";
 import { toEditorHtml } from "../lib/richText.js";
+import {
+  startLiveTestSession,
+  updateLiveTestSession,
+  completeLiveTestSession,
+} from "../lib/liveTestSessions.js";
 
 const toPlainString = (value) => {
   if (value == null) return "";
@@ -54,6 +59,7 @@ const GRADE_OPTIONS = [
 
 const ENV_CG_ACCESS_CODE = (import.meta.env.VITE_CG_ACCESS_CODE || "").trim();
 const ENV_CG_QUESTIONS_TABLE = (import.meta.env.VITE_CG_QUESTIONS_TABLE || "cg_career_questions").trim();
+const LIVE_TEST_TABLE = (import.meta.env.VITE_LIVE_TEST_TABLE || "cg_live_test_sessions").trim();
 const RIASEC_SCALE_MAX = 5;
 
 /* ====================== Validation / Questions ====================== */
@@ -208,7 +214,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   const LAST = R_START + Math.max(0, lenR - 1);
   const totalQuestions = lenR;
   const isPreview = Boolean(preview);
-  const [tabExited, setTabExited] = useState(false);
+  const [sessionPaused, setSessionPaused] = useState(false);
+  const [pauseReason, setPauseReason] = useState("");
 
   // Disable text selection/copy while in the test
   useEffect(() => {
@@ -229,24 +236,14 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     };
   }, []);
 
-  useEffect(() => {
-    if (typeof document === "undefined") return undefined;
-    const onVis = () => { if (document.hidden) setTabExited(true); };
-    const onBlur = () => setTabExited(true);
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("blur", onBlur);
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("blur", onBlur);
-    };
-  }, []);
-
   const indexFromPage = (p) => (p >= R_START && p <= LAST ? p - R_START + 1 : 0);
   const pageFromIndex = (idx) => R_START + (idx - 1);
 
   // Require sign-in before taking the test (Supabase Auth)
   const [authLoading, setAuthLoading] = useState(true);
   const [authUser, setAuthUser] = useState(null);
+  const [checkingExistingResult, setCheckingExistingResult] = useState(false);
+  const existingResultRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -265,6 +262,48 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     });
     return () => { mounted = false; sub?.subscription?.unsubscribe?.(); };
   }, []);
+
+  useEffect(() => {
+    existingResultRef.current = false;
+  }, [authUser?.email, isPreview]);
+
+  useEffect(() => {
+    setLiveSessionId(null);
+    liveUpdateRef.current = { lastSentAt: 0, lastCount: -1 };
+    pauseRequestedRef.current = false;
+    setSessionPaused(false);
+    setPauseReason("");
+  }, [authUser?.id, isPreview]);
+
+  useEffect(() => {
+    if (isPreview || authLoading || !authUser?.email) return;
+    if (existingResultRef.current) return;
+    existingResultRef.current = true;
+    let active = true;
+    setCheckingExistingResult(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("cg_results")
+          .select("*")
+          .eq("user_email", authUser.email)
+          .order("ts", { ascending: false })
+          .limit(1);
+        if (error) throw error;
+        const row = Array.isArray(data) && data.length ? data[0] : null;
+        if (row && active) {
+          onNavigate("results", { resultId: row.id, submission: row });
+        }
+      } catch (err) {
+        console.warn("career result check", err);
+      } finally {
+        if (active) setCheckingExistingResult(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [authLoading, authUser?.email, isPreview, onNavigate]);
 
   const loadRiasecQuestions = useCallback(async () => {
     if (!ENV_CG_QUESTIONS_TABLE) {
@@ -354,6 +393,31 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   const [savedScroll, setSavedScroll] = useState(null);
   const [attemptId, setAttemptId] = useState(null);
   const [hoverVal, setHoverVal] = useState(null);
+  const [liveSessionId, setLiveSessionId] = useState(null);
+  const liveUpdateRef = useRef({ lastSentAt: 0, lastCount: -1 });
+  const pauseRequestedRef = useRef(false);
+
+  const requestPause = useCallback(
+    (reason) => {
+      if (isPreview || !examLocked) return;
+      pauseRequestedRef.current = true;
+      setPauseReason(reason || "left");
+      setSessionPaused(true);
+    },
+    [isPreview, examLocked]
+  );
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const onVis = () => { if (document.hidden) requestPause("tab"); };
+    const onBlur = () => requestPause("blur");
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [requestPause]);
 
   const storedGateUser = useMemo(() => {
     try {
@@ -773,6 +837,84 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     }
     return set;
   }, [ansTF, shuffledRIASEC, totalQuestions]);
+  const answeredCount = answeredIndexes.size;
+
+  useEffect(() => {
+    if (isPreview || !liveSessionId || !examLocked || !startTs || sessionPaused) return;
+    const now = Date.now();
+    const last = liveUpdateRef.current;
+    if (answeredCount === last.lastCount && now - last.lastSentAt < 15000) return;
+    liveUpdateRef.current = { lastSentAt: now, lastCount: answeredCount };
+    updateLiveTestSession(liveSessionId, {
+      answered_count: answeredCount,
+      total_questions: totalQuestions,
+      status: "in_progress",
+    }).catch((err) => {
+      console.warn("live session update", err);
+    });
+  }, [answeredCount, totalQuestions, liveSessionId, isPreview, examLocked, startTs, sessionPaused]);
+
+  useEffect(() => {
+    if (isPreview || !liveSessionId || !sessionPaused) {
+      if (!sessionPaused) pauseRequestedRef.current = false;
+      return;
+    }
+    if (!pauseRequestedRef.current) return;
+    updateLiveTestSession(liveSessionId, {
+      status: "paused",
+    })
+      .then(() => {
+        pauseRequestedRef.current = false;
+      })
+      .catch((err) => {
+        console.warn("live session pause", err);
+      });
+  }, [sessionPaused, liveSessionId, isPreview]);
+
+  useEffect(() => {
+    if (isPreview || !liveSessionId) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const { data, error } = await supabase
+          .from(LIVE_TEST_TABLE)
+          .select("status")
+          .eq("id", liveSessionId)
+          .maybeSingle();
+        if (!active) return;
+        if (error) throw error;
+        const status = data?.status || "";
+        if (status === "paused") {
+          pauseRequestedRef.current = false;
+          setSessionPaused(true);
+        } else if (status === "in_progress") {
+          if (!pauseRequestedRef.current) {
+            setSessionPaused(false);
+            setPauseReason("");
+          }
+        }
+      } catch (err) {
+        console.warn("live session poll", err);
+      }
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
+  }, [liveSessionId, isPreview]);
+
+  useEffect(() => {
+    if (isPreview) return;
+    if (sessionPaused) {
+      cd.stop();
+      return;
+    }
+    if (examLocked && startTs) {
+      cd.start();
+    }
+  }, [sessionPaused, examLocked, startTs, isPreview, cd.start, cd.stop]);
 
   const next = useCallback(() => setPage((p) => Math.min(p + 1, LAST)), [LAST]);
   const prev = useCallback(() => setPage((p) => Math.max(p - 1, INTRO)), [INTRO]);
@@ -802,15 +944,33 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       return;
     }
     try { localStorage.setItem("cg_exam_lang", chosen); } catch {}
-    if (typeof setLang === "function" && (chosen === "EN" || chosen === "FR")) setLang(chosen);
-    setExamLocked(true);
-    // Shuffle questions each time the test starts
-    hasEndedRef.current = false;
-    setShuffledRIASEC(shuffleArray(riasecQuestions));
-    cd.reset(); cd.start();
-    setStartTs(Date.now());
-    setPage(R_START);
-  };
+      if (typeof setLang === "function" && (chosen === "EN" || chosen === "FR")) setLang(chosen);
+      setExamLocked(true);
+      // Shuffle questions each time the test starts
+      hasEndedRef.current = false;
+      setShuffledRIASEC(shuffleArray(riasecQuestions));
+      cd.reset(); cd.start();
+      const startedAtMs = Date.now();
+      setStartTs(startedAtMs);
+      if (!isPreview && authUser?.id) {
+        try {
+          const session = await startLiveTestSession({
+            userId: authUser.id,
+            userEmail: authUser.email || profile?.email || null,
+            name: profile?.name || authUser.email || null,
+            school: profile?.school || null,
+            className: profile?.className || null,
+            testType: "career",
+            totalQuestions,
+            startedAt: new Date(startedAtMs).toISOString(),
+          });
+          if (session?.sessionId) setLiveSessionId(session.sessionId);
+        } catch (err) {
+          console.warn("live session start", err);
+        }
+      }
+      setPage(R_START);
+    };
 
   const endTest = async () => {
     if (hasEndedRef.current) return;
@@ -848,6 +1008,16 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       }
 
       await saveTestSubmission(submissionPayload);
+      if (liveSessionId) {
+        try {
+          await completeLiveTestSession(liveSessionId, {
+            answered_count: answeredCount,
+            total_questions: totalQuestions,
+          });
+        } catch (err) {
+          console.warn("live session completion failed", err);
+        }
+      }
       goToResults();
     } catch (e) {
       console.error("Save failed:", e);
@@ -897,16 +1067,21 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [page, R_START, LAST, shuffledRIASEC, next, prev, endTest]);
 
-  if (!isPreview && tabExited) {
+  if (!isPreview && sessionPaused) {
     return (
       <PageWrap style={rtlPageStyle}>
         <Card>
+          <div style={{ color: "#111827", fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
+            Session paused
+          </div>
           <p style={{ color: "#6b7280", margin: 0 }}>
-            Session paused because the tab was switched. Click Continue to resume (or refresh to restart).
+            {pauseReason
+              ? "You left the test. The session is locked until an admin allows you to continue."
+              : "This session is paused. Waiting for admin approval to continue."}
           </p>
           <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "flex-start" }}>
-            <Btn variant="primary" onClick={() => setTabExited(false)}>
-              Continue
+            <Btn variant="back" onClick={() => onNavigate("home")}>
+              Back Home
             </Btn>
           </div>
         </Card>
@@ -937,6 +1112,19 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
             <Btn variant="primary" onClick={() => onNavigate("login")}>{loginLabel}</Btn>
             <Btn variant="back" onClick={() => onNavigate("home")}>{backHomeLabel}</Btn>
           </div>
+        </Card>
+      </PageWrap>
+    );
+  }
+
+  if (checkingExistingResult) {
+    return (
+      <PageWrap style={rtlPageStyle}>
+        <HeaderBar title={ui.loadingTitle || "Loading"} right={null} lang={examLocaleKey} />
+        <Card>
+          <p style={{ color: "#6b7280" }}>
+            {ui.checkingSession || "Please wait while we check your results."}
+          </p>
         </Card>
       </PageWrap>
     );

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
-import { useTheme, useWeather } from "./AppProviders.jsx";
+import { useAppSettings, useTheme, useWeather } from "./AppProviders.jsx";
 
 const KEYFRAME_ID = "__hb_slide_keyframes__";
 const THEME_KEYFRAME_ID = "__app_theme_keyframes__";
@@ -169,8 +169,10 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
     clouds: PropTypes.bool,
   };
   const { theme } = useTheme();
+  const { animationsEnabled } = useAppSettings();
   const { weather, status } = useWeather();
   const isDark = theme === "dark";
+  const allowMotion = animationsEnabled !== false;
   const pageText = isDark ? "#e2e8f0" : "#111827";
   const pageMuted = isDark ? "#cbd5f5" : "#6b7280";
   const themeStyle = isDark
@@ -185,10 +187,10 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         backgroundBlendMode: "screen, screen, screen, screen, normal",
       }
     : {};
-  const showSnow = snow !== false;
+  const showSnow = allowMotion && snow !== false;
   const autoClouds =
     status === "ready" && weather && typeof weather.code === "number" ? weather.code !== 0 : false;
-  const showClouds = typeof clouds === "boolean" ? clouds : autoClouds;
+  const showClouds = allowMotion && (typeof clouds === "boolean" ? clouds : autoClouds);
   const coords = weather?.coords || DEFAULT_COORDS;
   const [now, setNow] = useState(() => new Date());
   const [celestialDrag, setCelestialDrag] = useState(null);
@@ -196,9 +198,13 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
   const dragRef = React.useRef({ startX: 0, startProgress: 0, width: 1 });
 
   useEffect(() => {
+    if (!allowMotion) {
+      setNow(new Date());
+      return undefined;
+    }
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [allowMotion]);
 
   const sunTimes = useMemo(() => {
     const baseDate = new Date(now);
@@ -234,8 +240,8 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
   }
 
   const isDaytime = nowMinutes >= sunrise && nowMinutes < sunset;
-  const showSun = theme !== "dark" && isDaytime;
-  const showMoon = theme === "dark" && !isDaytime;
+  const showSun = allowMotion && theme !== "dark" && isDaytime;
+  const showMoon = allowMotion && theme === "dark" && !isDaytime;
   const baseProgress = showSun ? sunProgress : showMoon ? nightProgress : sunProgress;
   const arcProgress = clampProgress(
     typeof celestialDrag === "number" ? celestialDrag : baseProgress
@@ -249,6 +255,16 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
     return { left, top };
   }, [arcProgress]);
   const celestialVars = useMemo(() => {
+    if (!allowMotion) {
+      return {
+        "--celestial-on": 0,
+        "--celestial-x": "50%",
+        "--celestial-y": `calc(${CELESTIAL_SIZE / 2}px)`,
+        "--celestial-ray": "rgba(0, 0, 0, 0)",
+        "--celestial-glow": "rgba(0, 0, 0, 0)",
+        "--celestial-haze": "rgba(0, 0, 0, 0)",
+      };
+    }
     const active = showSun || showMoon;
     const rayColor = active
       ? showSun
@@ -273,7 +289,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
       "--celestial-glow": glowColor,
       "--celestial-haze": hazeColor,
     };
-  }, [showSun, showMoon, moonArc.left, moonArc.top]);
+  }, [allowMotion, showSun, showMoon, moonArc.left, moonArc.top]);
 
   const handleCelestialDown = (event) => {
     event.preventDefault();
@@ -359,6 +375,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
     return Array.from({ length: count }, (_, index) => {
       const size = 10 + Math.random() * 8;
       const left = Math.random() * 100;
+      const staticTop = Math.random() * 100;
       const drift = -(60 + Math.random() * 140);
       const duration = 7 + Math.random() * 6;
       const delay = -(Math.random() * duration);
@@ -369,6 +386,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         id: `flake-${index}`,
         size,
         left,
+        staticTop,
         drift,
         duration,
         delay,
@@ -378,7 +396,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         soft,
       };
     });
-  }, [showSnow]);
+  }, [showSnow, allowMotion]);
   const cloudLayers = useMemo(() => {
     if (!showClouds) return [];
     const width = typeof window !== "undefined" ? window.innerWidth : 1200;
@@ -386,6 +404,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
     return Array.from({ length: count }, (_, index) => {
       const scale = 0.6 + Math.random() * 0.9;
       const top = 6 + Math.random() * 28;
+      const staticLeft = Math.random() * 100;
       const duration = 60 + Math.random() * 60;
       const delay = -(Math.random() * duration);
       const opacity = 0.12 + Math.random() * 0.18;
@@ -397,6 +416,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
       return {
         id: `cloud-${index}`,
         top,
+        staticLeft,
         duration,
         delay,
         opacity,
@@ -406,7 +426,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         heightPx,
       };
     });
-  }, [showClouds]);
+  }, [showClouds, allowMotion]);
 
   return (
     <div
@@ -427,12 +447,12 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         backgroundSize: "170% 170%, 170% 170%, 165% 165%, 160% 160%, 100% 100%",
         backgroundPosition: "0% 0%, 100% 0%, 50% 100%, 80% 40%, 0 0",
         backgroundBlendMode: "screen, screen, screen, screen, normal",
-        animation: "appBgShift 32s ease-in-out infinite",
+        animation: allowMotion ? "appBgShift 32s ease-in-out infinite" : "none",
         color: pageText,
         ["--app-text"]: pageText,
         ["--app-muted"]: pageMuted,
-        transitionProperty: isDragging ? "none" : "--celestial-x, --celestial-y",
-        transitionDuration: "0.8s",
+        transitionProperty: !allowMotion || isDragging ? "none" : "--celestial-x, --celestial-y",
+        transitionDuration: allowMotion ? "0.8s" : "0s",
         transitionTimingFunction: "linear",
         ...themeStyle,
         ...style,
@@ -479,7 +499,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
                 style={{
                   position: "absolute",
                   top: `${cloud.top}vh`,
-                  left: 0,
+                  left: allowMotion ? 0 : `${cloud.staticLeft}vw`,
                   width: `${cloud.widthPx}px`,
                   height: `${cloud.heightPx}px`,
                   backgroundImage: CLOUD_URL,
@@ -487,7 +507,9 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
                   backgroundSize: "contain",
                   opacity: cloud.opacity,
                   filter: "blur(0.3px)",
-                  animation: `appCloudDrift ${cloud.duration}s linear ${cloud.delay}s infinite`,
+                  animation: allowMotion
+                    ? `appCloudDrift ${cloud.duration}s linear ${cloud.delay}s infinite`
+                    : "none",
                   ["--cloud-start"]: cloud.start,
                   ["--cloud-end"]: cloud.end,
                 }}
@@ -571,7 +593,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
                 key={flake.id}
                 style={{
                   position: "absolute",
-                  top: "-15vh",
+                  top: allowMotion ? "-15vh" : `${flake.staticTop}vh`,
                   left: `${flake.left}%`,
                   width: `${flake.size}px`,
                   height: `${flake.size}px`,
@@ -580,8 +602,10 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
                   backgroundSize: "contain",
                   opacity: flake.opacity,
                   filter: "drop-shadow(0 0 2px rgba(15, 23, 42, 0.22))",
-                  animation: `appSnowflakeFall ${flake.duration}s linear ${flake.delay}s infinite`,
-                  transform: "translate3d(0, -15vh, 0)",
+                  animation: allowMotion
+                    ? `appSnowflakeFall ${flake.duration}s linear ${flake.delay}s infinite`
+                    : "none",
+                  transform: allowMotion ? "translate3d(0, -15vh, 0)" : "none",
                   ["--drift"]: `${flake.drift}px`,
                   ["--spin"]: `${flake.spin}deg`,
                   zIndex: flake.depth,
@@ -978,6 +1002,8 @@ export function Card({ children, style = {} }) {
     children: PropTypes.node.isRequired,
     style: PropTypes.object,
   };
+  const { animationsEnabled } = useAppSettings();
+  const allowMotion = animationsEnabled !== false;
   const hoveredRef = React.useRef(false);
   const rectRef = React.useRef(null);
   const toGlassColor = (color, alpha = 0.45) => {
@@ -1022,8 +1048,8 @@ export function Card({ children, style = {} }) {
       ? rawBackground
       : style?.backgroundColor;
   const glassFill = customFill ? toGlassColor(customFill, 0.42) : customFill;
-  const highlightOpacity = hovered ? 0.55 : 0;
-  const hazeOpacity = hovered ? 0.28 : 0;
+  const highlightOpacity = hovered && allowMotion ? 0.55 : 0;
+  const hazeOpacity = hovered && allowMotion ? 0.28 : 0;
   const highlightGradient = `radial-gradient(180px 180px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, ${highlightOpacity}), rgba(255, 255, 255, 0) 70%)`;
   const hazeGradient = `radial-gradient(360px 360px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, ${hazeOpacity}), rgba(255, 255, 255, 0) 75%)`;
   const celestialGlow = `radial-gradient(220px 220px at var(--celestial-x, 50vw) var(--celestial-y, 0px), var(--celestial-glow, rgba(255, 255, 255, 0)), transparent 70%)`;
@@ -1036,9 +1062,12 @@ export function Card({ children, style = {} }) {
     : glassFill
       ? `linear-gradient(135deg, ${glassFill}, ${glassFill})`
       : baseBackground;
-  const backgroundImage = `${highlightGradient}, ${hazeGradient}, ${celestialGlow}, ${celestialHaze}, ${baseLayer}, ${borderGradient}`;
+  const backgroundImage = allowMotion
+    ? `${highlightGradient}, ${hazeGradient}, ${celestialGlow}, ${celestialHaze}, ${baseLayer}, ${borderGradient}`
+    : `${baseLayer}, ${borderGradient}`;
 
   const updateLightPosition = (clientX, clientY) => {
+    if (!allowMotion) return;
     if (!cardRef.current) return;
     const rect = rectRef.current || cardRef.current.getBoundingClientRect();
     rectRef.current = rect;
@@ -1077,6 +1106,11 @@ export function Card({ children, style = {} }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
+    if (!allowMotion) {
+      hoveredRef.current = false;
+      setHovered(false);
+      return undefined;
+    }
     rectRef.current = cardRef.current?.getBoundingClientRect?.() || null;
     const unsubscribe = registerCardLight({
       measure: () => {
@@ -1087,7 +1121,7 @@ export function Card({ children, style = {} }) {
       },
     });
     return unsubscribe;
-  }, []);
+  }, [allowMotion]);
 
   return (
     <div
@@ -1100,16 +1134,22 @@ export function Card({ children, style = {} }) {
         backdropFilter: "blur(4px) saturate(120%)",
         WebkitBackdropFilter: "blur(4px) saturate(120%)",
         boxSizing: "border-box",
-        transition: "box-shadow 180ms ease",
+        transition: allowMotion ? "box-shadow 180ms ease" : "none",
         ...style,
         border: "1px solid transparent",
         backgroundColor: "transparent",
         backgroundImage,
-        backgroundSize: "100% 100%, 100% 100%, 100vw 100vh, 100vw 100vh, 100% 100%, 100% 100%",
+        backgroundSize: allowMotion
+          ? "100% 100%, 100% 100%, 100vw 100vh, 100vw 100vh, 100% 100%, 100% 100%"
+          : "100% 100%, 100% 100%",
         backgroundPosition: "0 0",
-        backgroundAttachment: "scroll, scroll, fixed, fixed, scroll, scroll",
-        backgroundOrigin: "padding-box, padding-box, padding-box, padding-box, padding-box, border-box",
-        backgroundClip: "padding-box, padding-box, padding-box, padding-box, padding-box, border-box",
+        backgroundAttachment: allowMotion ? "scroll, scroll, fixed, fixed, scroll, scroll" : "scroll, scroll",
+        backgroundOrigin: allowMotion
+          ? "padding-box, padding-box, padding-box, padding-box, padding-box, border-box"
+          : "padding-box, border-box",
+        backgroundClip: allowMotion
+          ? "padding-box, padding-box, padding-box, padding-box, padding-box, border-box"
+          : "padding-box, border-box",
       }}
     >
       {children}

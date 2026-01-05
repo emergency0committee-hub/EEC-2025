@@ -5,6 +5,7 @@ import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
 import AdminTable from "./AdminTable.jsx";
+import LiveTestSessionsPanel from "../../components/LiveTestSessionsPanel.jsx";
 
 export default function SATDashboard({ onNavigate }) {
   SATDashboard.propTypes = { onNavigate: PropTypes.func.isRequired };
@@ -14,6 +15,16 @@ export default function SATDashboard({ onNavigate }) {
   const [tableSort, setTableSort] = useState("ts_desc");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
+  const [currentUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem("cg_current_user_v1");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const viewerRole = (currentUser?.role || "").toLowerCase();
+  const canSeeLive = viewerRole === "admin";
 
   useEffect(() => {
     (async () => {
@@ -169,6 +180,13 @@ export default function SATDashboard({ onNavigate }) {
         <p style={{ color: "#6b7280", marginTop: 8 }}>
           Use the preview button to open the live SAT diagnostic without saving any results. This is helpful for testing question flow or demonstrating the exam experience.
         </p>
+        {canSeeLive && (
+          <LiveTestSessionsPanel
+            testType="sat_diagnostic"
+            title="Live SAT Diagnostic Sessions"
+            description="Watch active SAT diagnostic sessions and manage them in real time."
+          />
+        )}
         {loading ? (
           <p style={{ color: "#6b7280" }}>Loading SAT submissions...</p>
         ) : sortedSubmissions.length > 0 ? (

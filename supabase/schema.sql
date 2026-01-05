@@ -236,6 +236,150 @@ values
   ('resources', true)
 on conflict (bank_id) do nothing;
 
+-- Global site settings (admin-controlled)
+create table if not exists public.cg_site_settings (
+  key text primary key,
+  value boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.cg_site_settings_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_site_settings_updated_at on public.cg_site_settings;
+create trigger trg_cg_site_settings_updated_at
+before update on public.cg_site_settings for each row
+execute function public.cg_site_settings_set_updated_at();
+
+alter table public.cg_site_settings enable row level security;
+
+do $$ begin
+  create policy "cg_site_settings_read_all"
+  on public.cg_site_settings for select
+  using ( true );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_site_settings_admin_insert"
+  on public.cg_site_settings for insert
+  with check (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_site_settings_admin_update"
+  on public.cg_site_settings for update
+  using (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  )
+  with check (
+    exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  );
+exception when duplicate_object then null; end $$;
+
+insert into public.cg_site_settings (key, value)
+values ('animations_enabled', true)
+on conflict (key) do nothing;
+
+-- Live test monitoring sessions (Career + SAT)
+create table if not exists public.cg_live_test_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  user_email text null,
+  participant_name text null,
+  school text null,
+  class_name text null,
+  test_type text not null,
+  status text not null default 'in_progress',
+  answered_count integer not null default 0,
+  total_questions integer null,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz null,
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists cg_live_test_sessions_user_idx
+  on public.cg_live_test_sessions (user_id);
+
+create index if not exists cg_live_test_sessions_status_idx
+  on public.cg_live_test_sessions (status);
+
+create index if not exists cg_live_test_sessions_test_type_idx
+  on public.cg_live_test_sessions (test_type);
+
+create or replace function public.cg_live_test_sessions_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_live_test_sessions_updated_at on public.cg_live_test_sessions;
+create trigger trg_cg_live_test_sessions_updated_at
+before update on public.cg_live_test_sessions
+for each row execute function public.cg_live_test_sessions_set_updated_at();
+
+alter table public.cg_live_test_sessions enable row level security;
+
+do $$ begin
+  create policy "cg_live_test_sessions_select_admin"
+  on public.cg_live_test_sessions for select
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator', 'staff')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_live_test_sessions_select_own"
+  on public.cg_live_test_sessions for select
+  using (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_live_test_sessions_insert_own"
+  on public.cg_live_test_sessions for insert
+  with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_live_test_sessions_update_own"
+  on public.cg_live_test_sessions for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_live_test_sessions_update_admin"
+  on public.cg_live_test_sessions for update
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator', 'staff')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator', 'staff')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
 -- Reading Competition events (staff scheduling)
 create table if not exists public.cg_reading_competition_events (
   id uuid primary key default gen_random_uuid(),

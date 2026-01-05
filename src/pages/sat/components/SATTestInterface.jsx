@@ -14,6 +14,13 @@ import { renderMathText } from "../../../lib/mathText.jsx";
 import { fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
 import { supabase } from "../../../lib/supabase.js";
 import { BANKS, mapBankQuestionToResource } from "../../../lib/questionBanks.js";
+import {
+  startLiveTestSession,
+  updateLiveTestSession,
+  completeLiveTestSession,
+} from "../../../lib/liveTestSessions.js";
+
+const LIVE_TEST_TABLE = (import.meta.env.VITE_LIVE_TEST_TABLE || "cg_live_test_sessions").trim();
 
 const TRAINING_KIND_WHITELIST = ["classwork", "homework", "quiz", "lecture", "test"];
 const normalizeTrainingKind = (value) => {
@@ -59,7 +66,8 @@ export default function SATTestInterface({
   const previewMode = Boolean(preview || practice?.preview);
   const resolvedContextTitle = contextTitle || "SAT Diagnostic";
   const resolvedTestType = (testType || "diagnostic").toString().trim().toLowerCase();
-  const [tabExited, setTabExited] = useState(false);
+  const [sessionPaused, setSessionPaused] = useState(false);
+  const [pauseReason, setPauseReason] = useState("");
 
   // Disable text selection/copy during the SAT test
   useEffect(() => {
@@ -80,22 +88,31 @@ export default function SATTestInterface({
     };
   }, []);
 
+  // Require auth
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const pauseRequestedRef = useRef(false);
+  const requestPause = useCallback(
+    (reason) => {
+      if (previewMode) return;
+      pauseRequestedRef.current = true;
+      setPauseReason(reason || "left");
+      setSessionPaused(true);
+    },
+    [previewMode]
+  );
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
-    const onVis = () => { if (document.hidden) setTabExited(true); };
-    const onBlur = () => setTabExited(true);
+    const onVis = () => { if (document.hidden) requestPause("tab"); };
+    const onBlur = () => requestPause("blur");
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("blur", onBlur);
     };
-  }, []);
-
-  // Require auth
-  const [authUser, setAuthUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
+  }, [requestPause]);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -104,6 +121,11 @@ export default function SATTestInterface({
     })();
     return () => { alive = false; };
   }, []);
+  useEffect(() => {
+    pauseRequestedRef.current = false;
+    setSessionPaused(false);
+    setPauseReason("");
+  }, [authUser?.id, previewMode]);
   useEffect(() => {
     if (!authUser?.email) return;
     let cancelled = false;
@@ -532,10 +554,13 @@ export default function SATTestInterface({
   const totalMods = modules.length;
   const isTimed = !previewMode && !reviewOnly && Number.isFinite(mod?.durationSec) && mod.durationSec > 0;
   const resumeEnabled = Boolean(practice?.meta?.resumeMode === "resume" && practice?.resourceId);
-  const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
-  const [answers, setAnswers] = useState({}); // { modKey: { qid: value } }
-  const updateAnswerRef = useRef(null);
-  const handleNextModuleRef = useRef(null);
+    const resumeKey = resumeEnabled ? `cg_sat_resume_${practice.resourceId}` : null;
+    const [answers, setAnswers] = useState({}); // { modKey: { qid: value } }
+    const updateAnswerRef = useRef(null);
+    const handleNextModuleRef = useRef(null);
+    const [liveSessionId, setLiveSessionId] = useState(null);
+    const liveUpdateRef = useRef({ lastSentAt: 0, lastCount: -1 });
+
   const [pendingReviewAnswers, setPendingReviewAnswers] = useState(null);
   const [resumeLoaded, setResumeLoaded] = useState(!resumeEnabled);
   const [reviewAnswersLoaded, setReviewAnswersLoaded] = useState(!reviewOnly);
@@ -597,16 +622,157 @@ export default function SATTestInterface({
     setPendingReviewAnswers(null);
   }, [pendingReviewAnswers, mod]);
   const qCount = mod?.questions?.length || 0;
-  const cd = useCountdown(isTimed ? mod?.durationSec : 60);
-  const startedAtRef = useRef(Date.now());
-  const questionStartRef = useRef(Date.now());
-  const prevPageRef = useRef(1);
-  const timesRef = useRef({}); // { qid: seconds }
-  const pendingResultRef = useRef(null);
+    const cd = useCountdown(isTimed ? mod?.durationSec : 60);
+    const startedAtRef = useRef(Date.now());
+    const questionStartRef = useRef(Date.now());
+    const prevPageRef = useRef(1);
+    const timesRef = useRef({}); // { qid: seconds }
+    const pendingResultRef = useRef(null);
 
-  const isMathSection = useMemo(() => {
-    if (!mod) return false;
-    const key = String(mod.key || "").toLowerCase();
+    const totalQuestionsCount = useMemo(
+      () => modules.reduce((sum, m) => sum + (m?.questions?.length || 0), 0),
+      [modules]
+    );
+    const answeredCount = useMemo(() => {
+      return Object.values(answers || {}).reduce((sum, modAns) => {
+        if (!modAns || typeof modAns !== "object") return sum;
+        return sum + Object.keys(modAns).length;
+      }, 0);
+    }, [answers]);
+    const enableLiveSession = !previewMode && !practice;
+    const liveTestType =
+      resolvedTestType === "reading_competition" ? "sat_reading_competition" : "sat_diagnostic";
+    const participantName =
+      profile?.name ||
+      profile?.full_name ||
+      profile?.username ||
+      authUser?.user_metadata?.name ||
+      authUser?.email ||
+      null;
+    const participantSchool =
+      profile?.school ||
+      profile?.school_name ||
+      profile?.organization ||
+      profile?.org ||
+      profile?.company ||
+      null;
+
+    useEffect(() => {
+      if (!enableLiveSession || !authUser?.id) return;
+      let cancelled = false;
+      (async () => {
+        try {
+          const session = await startLiveTestSession({
+            userId: authUser.id,
+            userEmail: authUser.email || profile?.email || null,
+            name: participantName,
+            school: participantSchool,
+            className: profile?.class_name || null,
+            testType: liveTestType,
+            totalQuestions: totalQuestionsCount,
+            startedAt: new Date(startedAtRef.current || Date.now()).toISOString(),
+          });
+          if (!cancelled && session?.sessionId) {
+            setLiveSessionId(session.sessionId);
+          }
+        } catch (err) {
+          console.warn("live session start", err);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [
+      enableLiveSession,
+      authUser?.id,
+      authUser?.email,
+      participantName,
+      participantSchool,
+      profile?.email,
+      profile?.class_name,
+      liveTestType,
+      totalQuestionsCount,
+    ]);
+
+    useEffect(() => {
+      if (!enableLiveSession || !liveSessionId || sessionPaused) return;
+      const now = Date.now();
+      const last = liveUpdateRef.current;
+      if (answeredCount === last.lastCount && now - last.lastSentAt < 15000) return;
+      liveUpdateRef.current = { lastCount: answeredCount, lastSentAt: now };
+      updateLiveTestSession(liveSessionId, {
+        answered_count: answeredCount,
+        total_questions: totalQuestionsCount,
+        status: "in_progress",
+      }).catch((err) => {
+        console.warn("live session update", err);
+      });
+    }, [enableLiveSession, liveSessionId, answeredCount, totalQuestionsCount, sessionPaused]);
+
+    useEffect(() => {
+      if (!enableLiveSession || !liveSessionId || !sessionPaused) {
+        if (!sessionPaused) pauseRequestedRef.current = false;
+        return;
+      }
+      if (!pauseRequestedRef.current) return;
+      updateLiveTestSession(liveSessionId, {
+        status: "paused",
+      })
+        .then(() => {
+          pauseRequestedRef.current = false;
+        })
+        .catch((err) => {
+          console.warn("live session pause", err);
+        });
+    }, [enableLiveSession, liveSessionId, sessionPaused]);
+
+    useEffect(() => {
+      if (!enableLiveSession || !liveSessionId) return;
+      let active = true;
+      const poll = async () => {
+        try {
+          const { data, error } = await supabase
+            .from(LIVE_TEST_TABLE)
+            .select("status")
+            .eq("id", liveSessionId)
+            .maybeSingle();
+          if (!active) return;
+          if (error) throw error;
+          const status = data?.status || "";
+          if (status === "paused") {
+            pauseRequestedRef.current = false;
+            setSessionPaused(true);
+          } else if (status === "in_progress") {
+            if (!pauseRequestedRef.current) {
+              setSessionPaused(false);
+              setPauseReason("");
+            }
+          }
+        } catch (err) {
+          console.warn("live session poll", err);
+        }
+      };
+      poll();
+      const t = setInterval(poll, 5000);
+      return () => {
+        active = false;
+        clearInterval(t);
+      };
+    }, [enableLiveSession, liveSessionId]);
+
+    useEffect(() => {
+      if (sessionPaused) {
+        cd.stop();
+        return;
+      }
+      if (sectionActive && isTimed) {
+        cd.start();
+      }
+    }, [sessionPaused, sectionActive, isTimed, cd.start, cd.stop]);
+
+    const isMathSection = useMemo(() => {
+      if (!mod) return false;
+      const key = String(mod.key || "").toLowerCase();
     if (key.startsWith("m")) return true;
     const title = String(mod.title || "").toLowerCase();
     if (title.includes("math")) return true;
@@ -678,21 +844,21 @@ export default function SATTestInterface({
     }
   }, [isMathSection, modIdx]);
 
-  useEffect(() => {
-    if (!mod) return;
-    const duration = mod?.durationSec || 60;
-    if (sectionActive) {
-      cd.reset(duration);
-      if (isTimed) cd.start();
-      else cd.stop();
-      setShowTimer(isTimed);
-      questionStartRef.current = Date.now();
-      prevPageRef.current = 1;
-    } else {
-      cd.stop();
-      setShowTimer(false);
-    }
-  }, [sectionActive, isTimed, mod?.durationSec]);
+    useEffect(() => {
+      if (!mod) return;
+      const duration = mod?.durationSec || 60;
+      if (sectionActive) {
+        cd.reset(duration);
+        if (isTimed) cd.start();
+        else cd.stop();
+        setShowTimer(isTimed);
+        questionStartRef.current = Date.now();
+        prevPageRef.current = 1;
+      } else {
+        cd.stop();
+        setShowTimer(false);
+      }
+    }, [sectionActive, isTimed, mod?.durationSec]);
 
   useEffect(() => { // auto-advance on timer end
     if (!isTimed || !sectionActive || finalTimeout) return;
@@ -1166,19 +1332,29 @@ export default function SATTestInterface({
           started_at: startedAtIso,
           finished_at: finishedAtIso,
         };
-        const saved = await saveSatResult({
-          summary,
-          skills: skillPercents,
-          difficulty: difficultyPercents,
-          answers,
-          modules: moduleMeta,
-          elapsedSec,
-          participant: participantPayload,
-        });
-        pendingResultRef.current = null;
-        setSummaryModal({ open: false, stats: null, reason: null });
-        alert("Thanks! Your responses were submitted.");
-        onNavigate('sat-training');
+          const saved = await saveSatResult({
+            summary,
+            skills: skillPercents,
+            difficulty: difficultyPercents,
+            answers,
+            modules: moduleMeta,
+            elapsedSec,
+            participant: participantPayload,
+          });
+          if (liveSessionId) {
+            try {
+              await completeLiveTestSession(liveSessionId, {
+                answered_count: answeredCount,
+                total_questions: totalQuestionsCount,
+              });
+            } catch (err) {
+              console.warn("live session completion failed", err);
+            }
+          }
+          pendingResultRef.current = null;
+          setSummaryModal({ open: false, stats: null, reason: null });
+          alert("Thanks! Your responses were submitted.");
+          onNavigate('sat-training');
       }
     } catch (e) {
       console.error("SAT save failed:", e);
@@ -1254,16 +1430,27 @@ export default function SATTestInterface({
     );
   }
 
-  if (!previewMode && tabExited) {
-    return (
-      <PageWrap>
-        <Card>
-          <div style={{ color: "#111827", fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Session locked</div>
-          <p style={{ color: "#6b7280", margin: 0 }}>The test was paused because the tab was switched. Please refresh to restart.</p>
-        </Card>
-      </PageWrap>
-    );
-  }
+    if (!previewMode && sessionPaused) {
+      return (
+        <PageWrap>
+          <Card>
+            <div style={{ color: "#111827", fontWeight: 700, fontSize: 16, marginBottom: 6 }}>
+              Session paused
+            </div>
+            <p style={{ color: "#6b7280", margin: 0 }}>
+              {pauseReason
+                ? "You left the test. The session is locked until an admin allows you to continue."
+                : "This session is paused. Waiting for admin approval to continue."}
+            </p>
+            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+              <Btn variant="back" onClick={() => onNavigate("home")}>
+                Back Home
+              </Btn>
+            </div>
+          </Card>
+        </PageWrap>
+      );
+    }
 
   return (
     <PageWrap style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
@@ -1738,11 +1925,3 @@ export default function SATTestInterface({
     </PageWrap>
   );
 }
-
-
-
-
-
-
-
-

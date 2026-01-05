@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
+import LiveTestSessionsPanel from "../../components/LiveTestSessionsPanel.jsx";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const formatTimestamp = (value) => {
@@ -64,7 +65,7 @@ export default function SATReadingCompetitionMode({ onNavigate }) {
     }
   }, []);
   const canPreview = ["admin", "administrator", "staff"].includes(staffPreviewRole);
-  const isAdmin = ["admin", "administrator"].includes(staffPreviewRole);
+  const isAdmin = staffPreviewRole === "admin";
   const selectedEvent = useMemo(
     () => events.find((row) => row.id === selectedEventId) || null,
     [events, selectedEventId]
@@ -534,6 +535,13 @@ export default function SATReadingCompetitionMode({ onNavigate }) {
               </div>
             </div>
           </div>
+        )}
+        {isAdmin && (
+          <LiveTestSessionsPanel
+            testType="sat_reading_competition"
+            title="Live Reading Competition Sessions"
+            description="Watch active Reading Competition sessions and manage them in real time."
+          />
         )}
 
         <div
