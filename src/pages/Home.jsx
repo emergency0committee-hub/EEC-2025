@@ -5,7 +5,7 @@ import Btn from "../components/Btn.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import HelperBot from "../components/HelperBot.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
-import { useTheme, useWeather } from "../components/AppProviders.jsx";
+import { useAppSettings, useTheme, useWeather } from "../components/AppProviders.jsx";
 import { STR } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
 
@@ -178,6 +178,7 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
   const [now, setNow] = useState(() => new Date());
   const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
   const { theme: homeTheme } = useTheme();
+  const { animationsEnabled } = useAppSettings();
   const {
     weather,
     status: weatherStatus,
@@ -201,6 +202,7 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
     return { hour, minute, dayPeriod };
   }, [timeFormatter, now]);
   const showColon = now.getSeconds() % 2 === 0;
+  const isSignedIn = Boolean(currentUser?.email);
 
   const navTo = (nextRoute, data = null) => (event) => onNavigate(nextRoute, data, event);
 
@@ -404,6 +406,7 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
   }, [profileAvatarPreview]);
 
   const normalizedRole = (currentUser?.role || "").toLowerCase();
+  const isPrivilegedRole = ["admin", "administrator", "staff"].includes(normalizedRole);
   const needsSchool = ["student", "educator", "school"].includes(normalizedRole);
   const needsClass = normalizedRole === "student";
   const missingMap = useMemo(() => {
@@ -597,6 +600,101 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
     onNavigate("sat-reading-competition", null, event);
   };
 
+  const featureItems = useMemo(
+    () => {
+      const isEducatorRole = normalizedRole === "educator";
+      const allowedKeys = new Set(
+        !isSignedIn
+          ? ["career", "satDiag", "satTraining", "schoolTraining", "aiEducator", "verify"]
+          : isPrivilegedRole
+            ? ["career", "satDiag", "satTraining", "schoolTraining", "aiEducator", "verify"]
+            : isEducatorRole
+            ? ["aiEducator", "verify"]
+            : ["career", "satDiag", "satTraining", "schoolTraining", "verify"]
+      );
+      const items = [
+        {
+          key: "career",
+          title: home.career.title,
+          desc: home.career.desc,
+          cta: home.career.cta,
+          onClick: isSignedIn ? handleCareerClick : navTo("intro-career"),
+          extra: isSignedIn && checkingResult ? (
+            <small style={{ color: theme.textMuted, fontSize: 12 }}>Checking for existing result...</small>
+          ) : null,
+        },
+        {
+          key: "satDiag",
+          title: home.satDiagnostic.title,
+          desc: home.satDiagnostic.desc,
+          cta: home.satDiagnostic.cta,
+          onClick: (event) => {
+            if (isSignedIn) {
+              event?.preventDefault?.();
+              setSatTestingPickerOpen(true);
+            } else {
+              navTo("intro-sat-testing")(event);
+            }
+          },
+          extra: isSignedIn && checkingResult ? (
+            <small style={{ color: theme.textMuted, fontSize: 12 }}>Checking for existing result...</small>
+          ) : null,
+        },
+        {
+          key: "satTraining",
+          title: home.satTraining.title,
+          desc: home.satTraining.desc,
+          cta: home.satTraining.cta,
+          onClick: isSignedIn ? navTo("sat-training") : navTo("intro-sat-training"),
+          extra: null,
+        },
+        {
+          key: "schoolTraining",
+          title: (home.schoolTraining && home.schoolTraining.title) || "School Training",
+          desc: home.schoolTraining && home.schoolTraining.desc,
+          cta: (home.schoolTraining && home.schoolTraining.cta) || home.satTraining.cta,
+          onClick: isSignedIn ? navTo("school-training") : navTo("intro-school-training"),
+          extra: null,
+        },
+        {
+          key: "aiEducator",
+          title: home.aiEducator.title,
+          desc: home.aiEducator.desc,
+          cta: canAccessAIEducator ? home.aiEducator.cta : aiLockedLabel,
+          onClick: isSignedIn ? handleAiEducatorClick : navTo("intro-ai-educator"),
+          disabled: isSignedIn && !canAccessAIEducator,
+          extra: isSignedIn && !canAccessAIEducator ? (
+            <small style={{ color: theme.textMuted, fontSize: 12 }}>{aiLockedMessage}</small>
+          ) : null,
+        },
+        {
+          key: "verify",
+          title: home.certificate.title,
+          desc: home.certificate.desc,
+          cta: home.certificate.cta,
+          onClick: isSignedIn ? navTo("verify-certificate") : navTo("intro-verify-certificate"),
+          extra: null,
+        },
+      ];
+      return items.filter((item) => allowedKeys.has(item.key));
+    },
+    [
+      home,
+      handleCareerClick,
+      handleSatDiagClick,
+      checkingResult,
+      navTo,
+      handleAiEducatorClick,
+      canAccessAIEducator,
+      aiLockedLabel,
+      aiLockedMessage,
+      setSatTestingPickerOpen,
+      isSignedIn,
+      normalizedRole,
+      isPrivilegedRole,
+    ]
+  );
+
   return (
     <PageWrap>
       <HeaderBar
@@ -772,6 +870,162 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
         </div>
       )}
 
+      {!isSignedIn && (
+        <div
+          style={{
+            position: "relative",
+            width: "min(660px, 100%)",
+            height: "clamp(500px, 115vw, 660px)",
+            margin: "20px auto 24px",
+            display: "grid",
+            placeItems: "center",
+            ["--radial-radius"]: "clamp(180px, 34vw, 260px)",
+          }}
+        >
+          <style>{`
+            @keyframes homeRingSpin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+            @keyframes homeRingCounter {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(-360deg); }
+            }
+          `}</style>
+          <div
+            style={{
+              width: "clamp(220px, 46vw, 340px)",
+              height: "clamp(220px, 46vw, 340px)",
+              borderRadius: "50%",
+              display: "grid",
+              gap: 8,
+              textAlign: "center",
+              padding: "16px 18px",
+              background:
+                homeTheme === "dark"
+                  ? "linear-gradient(135deg, rgba(56,189,248,0.18), rgba(14,165,233,0.16) 40%, rgba(129,140,248,0.18))"
+                  : "linear-gradient(135deg, rgba(14,165,233,0.16), rgba(52,211,153,0.14) 45%, rgba(99,102,241,0.16))",
+              border: `1px solid ${theme.panelBorder}`,
+              color: theme.textPrimary,
+              alignContent: "center",
+            }}
+          >
+            <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 1.2, color: theme.textMuted }}>
+              {t.navHome}
+            </div>
+            <h2 style={{ margin: 0, color: theme.textPrimary, lineHeight: 1.2 }}>
+              {t.homeWelcome || "Welcome to EEC"}
+            </h2>
+            <p style={{ margin: 0, color: theme.textSecondary, fontSize: 13, lineHeight: 1.4 }}>
+              Sign in to unlock your career guidance, SAT practice, and competition dashboards.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+              <Btn variant="primary" onClick={(e) => onNavigate("login", null, e)}>
+                Sign in
+              </Btn>
+              <Btn
+                variant="secondary"
+                onClick={(e) => onNavigate("login", { intent: "signup" }, e)}
+                style={theme.secondaryBtn}
+              >
+                Create account
+              </Btn>
+            </div>
+            <div style={{ fontSize: 11, color: theme.textSecondary, lineHeight: 1.35 }}>
+              <div style={{ fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>What you get</div>
+              <div>Career guidance, SAT testing & training, school sessions, certificates.</div>
+            </div>
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              transformOrigin: "50% 50%",
+              animation: animationsEnabled ? "homeRingSpin 44s linear infinite" : "none",
+            }}
+          >
+            {featureItems.map((item, idx) => {
+              const gradients =
+                homeTheme === "dark"
+                  ? [
+                      "linear-gradient(135deg, rgba(59,130,246,0.28), rgba(14,165,233,0.22))",
+                      "linear-gradient(135deg, rgba(16,185,129,0.28), rgba(5,150,105,0.22))",
+                      "linear-gradient(135deg, rgba(244,114,182,0.24), rgba(236,72,153,0.22))",
+                      "linear-gradient(135deg, rgba(250,204,21,0.24), rgba(245,158,11,0.22))",
+                      "linear-gradient(135deg, rgba(168,85,247,0.26), rgba(99,102,241,0.22))",
+                      "linear-gradient(135deg, rgba(248,113,113,0.26), rgba(239,68,68,0.22))",
+                    ]
+                  : [
+                      "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(14,165,233,0.16))",
+                      "linear-gradient(135deg, rgba(16,185,129,0.2), rgba(5,150,105,0.16))",
+                      "linear-gradient(135deg, rgba(244,114,182,0.18), rgba(236,72,153,0.16))",
+                      "linear-gradient(135deg, rgba(250,204,21,0.2), rgba(245,158,11,0.16))",
+                      "linear-gradient(135deg, rgba(168,85,247,0.18), rgba(99,102,241,0.16))",
+                      "linear-gradient(135deg, rgba(248,113,113,0.18), rgba(239,68,68,0.16))",
+                    ];
+              const bg = gradients[idx % gradients.length];
+              const angle = (360 / featureItems.length) * idx - 90;
+              return (
+                <div
+                  key={item.key}
+                  style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: `translate(-50%, -50%) rotate(${angle}deg) translate(var(--radial-radius)) rotate(${-angle}deg)`,
+                  }}
+                >
+                  <div style={{ animation: animationsEnabled ? "homeRingCounter 44s linear infinite" : "none" }}>
+                    <button
+                      onClick={item.onClick}
+                      disabled={item.disabled}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: item.disabled ? "not-allowed" : "pointer",
+                        padding: 0,
+                      }}
+                      aria-label={item.title}
+                    >
+                      <div
+                        style={{
+                          width: "clamp(88px, 16vw, 110px)",
+                          height: "clamp(88px, 16vw, 110px)",
+                          borderRadius: "50%",
+                          background: bg,
+                          display: "grid",
+                          placeItems: "center",
+                          boxShadow: "0 12px 32px rgba(15,23,42,0.18)",
+                          border: `1px solid ${theme.panelBorder}`,
+                          color: theme.textPrimary,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          textAlign: "center",
+                          padding: "0 10px",
+                          transition: "transform 180ms ease, box-shadow 180ms ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "scale(1.06)";
+                          e.currentTarget.style.boxShadow = "0 16px 36px rgba(15,23,42,0.26)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "scale(1)";
+                          e.currentTarget.style.boxShadow = "0 12px 32px rgba(15,23,42,0.18)";
+                        }}
+                      >
+                        {item.title}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isSignedIn && (
+        <>
       <div id="home-welcome-card">
         <Card style={{ ...homeCardStyle, position: "relative", overflow: "visible" }}>
           <img
@@ -874,7 +1128,7 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
         </Card>
       </div>
 
-      {satTestingPickerOpen && (
+      {isSignedIn && satTestingPickerOpen && (
         <div
           role="dialog"
           aria-modal="true"
@@ -942,107 +1196,44 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {[
-          {
-            key: "career",
-            title: home.career.title,
-            desc: home.career.desc,
-            cta: home.career.cta,
-            onClick: handleCareerClick,
-            variant: "primary",
-            extra: checkingResult ? (
-              <small style={{ color: theme.textMuted, fontSize: 12 }}>Checking for existing result...</small>
-            ) : null,
-          },
-          {
-            key: "satDiag",
-            title: home.satDiagnostic.title,
-            desc: home.satDiagnostic.desc,
-            cta: home.satDiagnostic.cta,
-            onClick: (event) => {
-              event?.preventDefault?.();
-              setSatTestingPickerOpen(true);
-            },
-            variant: "primary",
-            extra: checkingResult ? (
-              <small style={{ color: theme.textMuted, fontSize: 12 }}>Checking for existing result...</small>
-            ) : null,
-          },
-          {
-            key: "satTraining",
-            title: home.satTraining.title,
-            desc: home.satTraining.desc,
-            cta: home.satTraining.cta,
-            onClick: navTo("sat-training"),
-            variant: "primary",
-            extra: null,
-          },
-          {
-            key: "schoolTraining",
-            title: (home.schoolTraining && home.schoolTraining.title) || "School Training",
-            desc: home.schoolTraining && home.schoolTraining.desc,
-            cta: (home.schoolTraining && home.schoolTraining.cta) || home.satTraining.cta,
-            onClick: navTo("school-training"),
-            variant: "primary",
-            extra: null,
-          },
-          {
-            key: "aiEducator",
-            title: home.aiEducator.title,
-            desc: home.aiEducator.desc,
-            cta: canAccessAIEducator ? home.aiEducator.cta : aiLockedLabel,
-            onClick: handleAiEducatorClick,
-            variant: "primary",
-            disabled: !canAccessAIEducator,
-            extra: !canAccessAIEducator ? (
-              <small style={{ color: theme.textMuted, fontSize: 12 }}>{aiLockedMessage}</small>
-            ) : null,
-          },
-          {
-            key: "verify",
-            title: home.certificate.title,
-            desc: home.certificate.desc,
-            cta: home.certificate.cta,
-            onClick: navTo("verify-certificate"),
-            variant: "primary",
-            extra: null,
-          },
-        ].map((card) => (
-          <Card key={card.key} style={{ ...homeCardStyle, position: "relative", overflow: "visible" }}>
-            <img
-              src="/snowcaps/snow-cap-02.svg"
-              alt=""
-              aria-hidden="true"
-              style={snowCapStyle}
-            />
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <h3 style={{ marginTop: 0, color: theme.textPrimary }}>{card.title}</h3>
-              {card.desc && (
-                <p style={{ margin: 0, color: theme.textSecondary, fontSize: 14, lineHeight: 1.4 }}>
-                  {card.desc}
-                </p>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <Btn
-                  variant={card.variant}
-                  onClick={card.onClick}
-                  disabled={card.disabled}
-                >
-                  {card.cta}
-                </Btn>
-                {card.extra}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 16,
+            }}
+          >
+            {featureItems.map((card) => (
+              <Card key={card.key} style={{ ...homeCardStyle, position: "relative", overflow: "visible" }}>
+                <img
+                  src="/snowcaps/snow-cap-02.svg"
+                  alt=""
+                  aria-hidden="true"
+                  style={snowCapStyle}
+                />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <h3 style={{ marginTop: 0, color: theme.textPrimary }}>{card.title}</h3>
+                  {card.desc && (
+                    <p style={{ margin: 0, color: theme.textSecondary, fontSize: 14, lineHeight: 1.4 }}>
+                      {card.desc}
+                    </p>
+                  )}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <Btn
+                      variant="primary"
+                      onClick={card.onClick}
+                      disabled={card.disabled}
+                    >
+                      {card.cta}
+                    </Btn>
+                    {card.extra}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       <HelperBot currentRoute="home" onNavigate={onNavigate} recentRoutes={[]} placement="roam" />
 

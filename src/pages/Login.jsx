@@ -4,6 +4,8 @@ import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import { supabase } from "../lib/supabase.js";
 import logoPng from "../assets/logo.png";
+import studentRoleSvg from "../assets/role-student.svg";
+import educatorRoleSvg from "../assets/role-educator.svg";
 
 const ROLE_OPTIONS = {
   EN: [
@@ -32,17 +34,6 @@ const ROLE_OPTIONS = {
   ],
 };
 
-const SIGNUP_SCHOOL_OPTIONS = [
-  { value: "", label: "Select school" },
-  { value: "Al - Jinan International School", label: "Al - Jinan International School" },
-  { value: "Azm school", label: "Azm school" },
-  { value: "Canada Educational Center", label: "Canada Educational Center" },
-  { value: "Dar En Nour - Btouratige", label: "Dar En Nour - Btouratige" },
-  { value: "EEC", label: "EEC" },
-  { value: "Ecole Saint Joseph - Miniara", label: "Ecole Saint Joseph - Miniara" },
-  { value: "Saints Coeurs - Andket", label: "Saints Coeurs - Andket" },
-  { value: "Sir El Dinniyeh Secondary Public School", label: "Sir El Dinniyeh Secondary Public School" },
-];
 
 const SIGNUP_GRADE_OPTIONS = [
   { value: "", label: "Select grade" },
@@ -59,6 +50,30 @@ const AVATAR_EDITOR_SIZE = 240;
 const AVATAR_EMPTY_OFFSET_RATIO = 0.5;
 
 const clampValue = (value, min, max) => Math.min(max, Math.max(min, value));
+const formatYmd = (date) => {
+  if (!(date instanceof Date)) return "";
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+const parseYmd = (value) => {
+  if (!value) return null;
+  const parts = value.split("-").map((part) => Number(part));
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts;
+  if (!year || !month || !day) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+};
 const getCoverMetrics = (sourceWidth, sourceHeight, targetSize) => {
   const scale = Math.max(targetSize / sourceWidth, targetSize / sourceHeight);
   const width = sourceWidth * scale;
@@ -77,6 +92,12 @@ const LOGIN_COPY = {
     createAccount: "Create Account",
     signInSubtitle: "Enter your credentials to continue.",
     signUpSubtitle: "Create an account to access results.",
+    stepLabel: "Step {current} of {total}",
+    stepProfile: "Profile",
+    stepSchool: "School",
+    stepAccount: "Account",
+    nextStep: "Next",
+    backStep: "Back",
     roleSelectHeading: "Choose an account type",
     roleSelectBody: "Tell us if you're signing up as a student or an educator.",
     backToSignIn: "Back to sign in",
@@ -96,6 +117,10 @@ const LOGIN_COPY = {
     usernamePlaceholder: "Choose a username",
     phoneLabel: "Phone",
     phonePlaceholder: "e.g., 555 123 4567",
+    dobLabel: "Date of Birth",
+    dobPlaceholder: "YYYY-MM-DD",
+    dobRequired: "Date of birth is required",
+    dobInvalid: "Date of birth must be in the past",
     profilePhotoLabel: "Profile Photo",
     profilePhotoHelper: "Upload a clear photo. Max {max}MB.",
     profilePhotoRequired: "Profile photo is required",
@@ -153,6 +178,12 @@ const LOGIN_COPY = {
     createAccount: "\u0625\u0646\u0634\u0627\u0621 \u062d\u0633\u0627\u0628 \u062c\u062f\u064a\u062f",
     signInSubtitle: "\u0623\u062f\u062e\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0639\u062a\u0645\u0627\u062f\u0643 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.",
     signUpSubtitle: "\u0623\u0646\u0634\u0626 \u062d\u0633\u0627\u0628\u0627\u064b \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 \u0627\u0644\u0646\u062a\u0627\u0626\u062c.",
+    stepLabel: "\u0627\u0644\u062e\u0637\u0648\u0629 {current} \u0645\u0646 {total}",
+    stepProfile: "\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062e\u0635\u064a",
+    stepSchool: "\u0627\u0644\u0645\u062f\u0631\u0633\u0629",
+    stepAccount: "\u0627\u0644\u062d\u0633\u0627\u0628",
+    nextStep: "\u0627\u0644\u062a\u0627\u0644\u064a",
+    backStep: "\u0627\u0644\u0633\u0627\u0628\u0642",
     roleSelectHeading: "\u0627\u062e\u062a\u0631 \u0646\u0648\u0639 \u0627\u0644\u062d\u0633\u0627\u0628",
     roleSelectBody: "\u062d\u062f\u062f \u0625\u0630\u0627 \u0643\u0646\u062a \u062a\u0633\u062c\u0651\u0644 \u0643\u0637\u0627\u0644\u0628 \u0623\u0648 \u0643\u0645\u0639\u0644\u0645.",
     backToSignIn: "\u0627\u0644\u0639\u0648\u062f\u0629 \u0625\u0644\u0649 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644",
@@ -172,6 +203,10 @@ const LOGIN_COPY = {
     usernamePlaceholder: "\u0627\u062e\u062a\u0631 \u0627\u0633\u0645 \u0645\u0633\u062a\u062e\u062f\u0645",
     phoneLabel: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641",
     phonePlaceholder: "\u0645\u062b\u0627\u0644: 555 123 4567",
+    dobLabel: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f",
+    dobPlaceholder: "YYYY-MM-DD",
+    dobRequired: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f \u0645\u0637\u0644\u0648\u0628",
+    dobInvalid: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f \u0641\u064a \u0627\u0644\u0645\u0627\u0636\u064a",
     profilePhotoLabel: "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629",
     profilePhotoHelper: "\u0627\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0648\u0627\u0636\u062d\u0629. \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 {max} \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a.",
     profilePhotoRequired: "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629 \u0645\u0637\u0644\u0648\u0628\u0629",
@@ -229,6 +264,12 @@ const LOGIN_COPY = {
     createAccount: "Cr\xe9er un compte",
     signInSubtitle: "Entrez vos identifiants pour continuer.",
     signUpSubtitle: "Cr\xe9ez un compte pour acc\xe9der aux r\xe9sultats.",
+    stepLabel: "\u00c9tape {current} sur {total}",
+    stepProfile: "Profil",
+    stepSchool: "\u00c9tablissement",
+    stepAccount: "Compte",
+    nextStep: "Suivant",
+    backStep: "Retour",
     roleSelectHeading: "Choisissez un type de compte",
     roleSelectBody: "Indiquez si vous vous inscrivez en tant qu'\xe9tudiant ou enseignant.",
     backToSignIn: "Retour \xe0 la connexion",
@@ -248,6 +289,10 @@ const LOGIN_COPY = {
     usernamePlaceholder: "Choisissez un nom d'utilisateur",
     phoneLabel: "T\xe9l\xe9phone",
     phonePlaceholder: "ex. 06 12 34 56 78",
+    dobLabel: "Date de naissance",
+    dobPlaceholder: "AAAA-MM-JJ",
+    dobRequired: "La date de naissance est obligatoire",
+    dobInvalid: "La date de naissance doit \u00eatre dans le pass\u00e9",
     profilePhotoLabel: "Photo de profil",
     profilePhotoHelper: "T\u00e9l\u00e9versez une photo claire. Max {max} Mo.",
     profilePhotoRequired: "La photo de profil est obligatoire",
@@ -320,6 +365,15 @@ function EyeOffIcon({ size = 18, stroke = "#4b5563" }) {
   );
 }
 
+function CalendarIcon({ size = 18, stroke = "#4b5563" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="4" width="18" height="18" rx="3" />
+      <path d="M8 2v4M16 2v4M3 10h18" />
+    </svg>
+  );
+}
+
 export default function Login({ onNavigate, lang = "EN" }) {
   Login.propTypes = {
     onNavigate: PropTypes.func.isRequired,
@@ -332,6 +386,13 @@ export default function Login({ onNavigate, lang = "EN" }) {
   const avatarInputId = "signup-avatar-upload";
 
   const [isSignUp, setIsSignUp] = useState(false);
+  const [signupStep, setSignupStep] = useState(0);
+  const [pendingRole, setPendingRole] = useState("");
+  const [dobOpen, setDobOpen] = useState(false);
+  const [dobView, setDobView] = useState(() => {
+    const now = new Date();
+    return { month: now.getMonth(), year: now.getFullYear() };
+  });
   const [formData, setFormData] = useState({
     loginId: "",      // email or username (for sign-in)
     email: "",        // email (for sign-up)
@@ -340,12 +401,14 @@ export default function Login({ onNavigate, lang = "EN" }) {
     confirmPassword: "",
     firstName: "",
     lastName: "",
+    dateOfBirth: "",
     phone: "",        // phone (for sign-up, stored in auth metadata)
     school: "",
     className: "",
     certification: "",
     accountType: "",
   });
+  const [schoolNames, setSchoolNames] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -360,6 +423,8 @@ export default function Login({ onNavigate, lang = "EN" }) {
   const dragStartRef = useRef(null);
   const dragStartOffsetRef = useRef({ x: 0, y: 0 });
   const suppressClickRef = useRef(false);
+  const dobPopoverRef = useRef(null);
+  const dobAnchorRef = useRef(null);
   const avatarMetrics = useMemo(() => {
     if (!avatarNatural?.width || !avatarNatural?.height) return null;
     return getCoverMetrics(avatarNatural.width, avatarNatural.height, AVATAR_PREVIEW_SIZE);
@@ -401,8 +466,39 @@ export default function Login({ onNavigate, lang = "EN" }) {
     typeof navigator.credentials.get === "function" &&
     typeof navigator.credentials.store === "function";
   const needsRoleSelection = isSignUp && !formData.accountType;
+  const totalSteps = 3;
+  const stepLabels = [copy.stepProfile, copy.stepSchool, copy.stepAccount];
+  const stepLabelText = (copy.stepLabel || "")
+    .replace("{current}", String(signupStep + 1))
+    .replace("{total}", String(totalSteps));
+  const currentStepLabel = stepLabels[signupStep] || "";
+  const isFinalStep = signupStep >= totalSteps - 1;
+  const maxDob = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const weekdayLabels = useMemo(() => {
+    const locale = lang === "AR" ? "ar-LB" : lang === "FR" ? "fr-FR" : "en-US";
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
+    const base = new Date(2021, 7, 1); // Sunday
+    return Array.from({ length: 7 }, (_, idx) => formatter.format(new Date(base.getFullYear(), base.getMonth(), base.getDate() + idx)));
+  }, [lang]);
+  const schoolOptions = useMemo(() => {
+    const placeholderLabel = copy.schoolPlaceholder || "Select School";
+    const uniqueNames = new Map();
+    for (const name of schoolNames) {
+      const trimmed = (name || "").trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (!uniqueNames.has(key)) uniqueNames.set(key, trimmed);
+    }
+    const sortedNames = Array.from(uniqueNames.values()).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+    return [{ value: "", label: placeholderLabel }, ...sortedNames.map((name) => ({ value: name, label: name }))];
+  }, [schoolNames, copy.schoolPlaceholder]);
 
   const toggleAuthMode = () => {
+    setSignupStep(0);
+    setPendingRole("");
+    setDobOpen(false);
     setErrors({});
     setLoading(false);
     setShowPassword(false);
@@ -430,6 +526,8 @@ export default function Login({ onNavigate, lang = "EN" }) {
   };
 
   const handleAccountTypeSelect = (value) => {
+    setSignupStep(0);
+    setPendingRole("");
     setFormData((prev) => ({
       ...prev,
       accountType: value,
@@ -446,6 +544,9 @@ export default function Login({ onNavigate, lang = "EN" }) {
   };
 
   const handleAccountTypeReset = () => {
+    setSignupStep(0);
+    setPendingRole("");
+    setDobOpen(false);
     setFormData((prev) => ({ ...prev, accountType: "", className: "", certification: "" }));
     setErrors((prev) => ({ ...prev, accountType: "", className: "", certification: "" }));
     setShowPassword(false);
@@ -459,6 +560,19 @@ export default function Login({ onNavigate, lang = "EN" }) {
   }, [avatarPreview]);
 
   useEffect(() => {
+    if (!dobOpen) return undefined;
+    const selected = parseYmd(formData.dateOfBirth) || new Date();
+    setDobView({ month: selected.getMonth(), year: selected.getFullYear() });
+    const handleClick = (event) => {
+      if (!dobAnchorRef.current?.contains(event.target)) {
+        setDobOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [dobOpen, formData.dateOfBirth]);
+
+  useEffect(() => {
     if (!avatarPreview) {
       setAvatarNatural(null);
       setAvatarOffset({ x: 0, y: 0 });
@@ -468,6 +582,29 @@ export default function Login({ onNavigate, lang = "EN" }) {
     img.onload = () => setAvatarNatural({ width: img.width, height: img.height });
     img.src = avatarPreview;
   }, [avatarPreview]);
+
+  useEffect(() => {
+    let active = true;
+    const loadSchools = async () => {
+      const { data, error } = await supabase
+        .from("schools")
+        .select("name")
+        .order("name", { ascending: true });
+      if (!active) return;
+      if (error) {
+        if (import.meta?.env?.DEV) {
+          console.info("School list fetch failed.", error);
+        }
+        return;
+      }
+      const names = (data || []).map((row) => row?.name).filter(Boolean);
+      if (names.length) setSchoolNames(names);
+    };
+    loadSchools();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -649,6 +786,64 @@ export default function Login({ onNavigate, lang = "EN" }) {
     });
   }, [avatarPreview, avatarNatural, avatarOffset]);
 
+  const validateStep = (step) => {
+    const newErrors = {};
+    const email = formData.email.trim();
+    const password = formData.password;
+    const confirmPassword = formData.confirmPassword;
+    const firstName = (formData.firstName || "").trim();
+    const lastName = (formData.lastName || "").trim();
+    const phone = (formData.phone || "").trim();
+    const dateOfBirth = (formData.dateOfBirth || "").trim();
+    const username = formData.username.trim();
+    const school = formData.school.trim();
+    const className = formData.className.trim();
+    const certification = formData.certification.trim();
+    const accountType = (formData.accountType || "").toLowerCase();
+    const usernamePattern = /^[a-zA-Z0-9_\-\.]{3,30}$/;
+    const phoneDigits = phone.replace(/\D/g, "");
+
+    if (step === 0) {
+      if (avatarError) newErrors.avatar = avatarError;
+      else if (!avatarFile) newErrors.avatar = copy.profilePhotoRequired;
+      if (!firstName) newErrors.firstName = copy.firstNameRequired;
+      if (!lastName) newErrors.lastName = copy.lastNameRequired;
+      if (!dateOfBirth) newErrors.dateOfBirth = copy.dobRequired;
+      else {
+        const dobDate = new Date(dateOfBirth);
+        if (Number.isNaN(dobDate.getTime()) || dobDate > new Date()) {
+          newErrors.dateOfBirth = copy.dobInvalid;
+        }
+      }
+      if (!username) newErrors.username = copy.usernameRequired;
+      else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
+      if (!phone) newErrors.phone = copy.phoneRequired;
+      else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
+    }
+
+    if (step === 1) {
+      if (!["student", "educator"].includes(accountType)) newErrors.accountType = copy.accountTypeRequired;
+      if (!school) newErrors.school = copy.schoolRequired;
+      if (accountType === "student") {
+        if (!className) newErrors.className = copy.classRequired;
+      } else if (accountType === "educator") {
+        if (!certification) newErrors.certification = copy.certificationRequired;
+      }
+    }
+
+    if (step === 2) {
+      if (!email) newErrors.email = copy.emailRequired;
+      else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = copy.emailInvalid;
+      if (!password) newErrors.password = copy.passwordRequired;
+      else if (password.length < 6) newErrors.password = copy.passwordTooShort;
+      if (!confirmPassword) newErrors.confirmPassword = copy.confirmPasswordRequired;
+      else if (password !== confirmPassword) newErrors.confirmPassword = copy.passwordsDontMatch;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const validateForm = () => {
     const newErrors = {};
     const loginId = formData.loginId.trim();
@@ -658,6 +853,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
     const firstName = (formData.firstName || "").trim();
     const lastName = (formData.lastName || "").trim();
     const phone = (formData.phone || "").trim();
+    const dateOfBirth = (formData.dateOfBirth || "").trim();
     const username = formData.username.trim();
     const school = formData.school.trim();
     const className = formData.className.trim();
@@ -684,6 +880,13 @@ export default function Login({ onNavigate, lang = "EN" }) {
       else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
       if (!phone) newErrors.phone = copy.phoneRequired;
       else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
+      if (!dateOfBirth) newErrors.dateOfBirth = copy.dobRequired;
+      else {
+        const dobDate = new Date(dateOfBirth);
+        if (Number.isNaN(dobDate.getTime()) || dobDate > new Date()) {
+          newErrors.dateOfBirth = copy.dobInvalid;
+        }
+      }
       if (!["student", "educator"].includes(accountType)) newErrors.accountType = copy.accountTypeRequired;
       if (!school) newErrors.school = copy.schoolRequired;
       if (accountType === "student") {
@@ -714,6 +917,12 @@ export default function Login({ onNavigate, lang = "EN" }) {
       setErrors((prev) => ({ ...prev, accountType: copy.accountTypeRequired }));
       return;
     }
+    if (isSignUp && !isFinalStep) {
+      const okStep = validateStep(signupStep);
+      if (!okStep) return;
+      setSignupStep((prev) => Math.min(prev + 1, totalSteps - 1));
+      return;
+    }
     const ok = validateForm();
     if (!ok) return;
     setLoading(true);
@@ -742,6 +951,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
               name: fullName || username,
               first_name: firstName || undefined,
               last_name: lastName || undefined,
+              date_of_birth: dateOfBirth || undefined,
               username,
               phone,
               school,
@@ -923,44 +1133,104 @@ export default function Login({ onNavigate, lang = "EN" }) {
                 {copy.roleSelectBody}
               </p>
             </div>
-            <div style={{ display: "grid", gap: 16 }}>
-              {roleOptions.map((role) => (
-                <button
-                  key={role.value}
-                  type="button"
-                  onClick={() => handleAccountTypeSelect(role.value)}
-                  style={{
-                    textAlign: isRTL ? "right" : "left",
-                    border: "1px solid #d1d5db",
-                    borderRadius: 12,
-                    padding: "16px 18px",
-                    background: "#ffffff",
-                    cursor: "pointer",
-                    transition: "border 120ms ease, box-shadow 120ms ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.border = "1px solid #6366f1";
-                    e.currentTarget.style.boxShadow = "0 6px 18px rgba(99,102,241,0.1)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.border = "1px solid #d1d5db";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.border = "1px solid #6366f1";
-                    e.currentTarget.style.boxShadow = "0 6px 18px rgba(99,102,241,0.1)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.border = "1px solid #d1d5db";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-                  <div style={{ fontWeight: 600, color: "#111827", fontSize: 16 }}>{role.label}</div>
-                  <div style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>{role.description}</div>
-                </button>
-              ))}
+            <div
+              style={{
+                display: "grid",
+                gap: 16,
+                gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                alignItems: "stretch",
+              }}
+            >
+              {roleOptions.map((role) => {
+                const isStudent = role.value === "student";
+                const isSelected = pendingRole === role.value;
+                const accentBorder = isStudent ? "#2563eb" : "#16a34a";
+                const accentBg = isStudent ? "#eff6ff" : "#f0fdf4";
+                const accentShadow = isStudent ? "rgba(37,99,235,0.2)" : "rgba(22,163,74,0.2)";
+                return (
+                  <button
+                    key={role.value}
+                    type="button"
+                    onClick={() => {
+                      setPendingRole(role.value);
+                      setErrors((prev) => ({ ...prev, accountType: "" }));
+                    }}
+                    style={{
+                      textAlign: "center",
+                      border: isSelected ? `2px solid ${accentBorder}` : "2px solid #d1d5db",
+                      borderRadius: 12,
+                      padding: "16px 18px",
+                      background: isSelected ? accentBg : "#ffffff",
+                      cursor: "pointer",
+                      transition: "border 120ms ease, box-shadow 120ms ease, background 120ms ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 12,
+                      flexDirection: "column",
+                      aspectRatio: "1 / 1",
+                      boxShadow: isSelected ? `0 8px 22px ${accentShadow}` : "none",
+                      boxSizing: "border-box",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (isSelected) return;
+                      e.currentTarget.style.border = `2px solid ${accentBorder}`;
+                      e.currentTarget.style.boxShadow = `0 6px 18px ${accentShadow}`;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (isSelected) {
+                        e.currentTarget.style.border = `2px solid ${accentBorder}`;
+                        e.currentTarget.style.boxShadow = `0 8px 22px ${accentShadow}`;
+                        e.currentTarget.style.background = accentBg;
+                        return;
+                      }
+                      e.currentTarget.style.border = "2px solid #d1d5db";
+                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.background = "#ffffff";
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.border = `2px solid ${accentBorder}`;
+                      e.currentTarget.style.boxShadow = `0 6px 18px ${accentShadow}`;
+                    }}
+                    onBlur={(e) => {
+                      if (isSelected) {
+                        e.currentTarget.style.border = `2px solid ${accentBorder}`;
+                        e.currentTarget.style.boxShadow = `0 8px 22px ${accentShadow}`;
+                        e.currentTarget.style.background = accentBg;
+                        return;
+                      }
+                      e.currentTarget.style.border = "2px solid #d1d5db";
+                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.background = "#ffffff";
+                    }}
+                  >
+                    <img
+                      src={isStudent ? studentRoleSvg : educatorRoleSvg}
+                      alt={role.label}
+                      style={{ width: 96, height: 96 }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#111827", fontSize: 16 }}>{role.label}</div>
+                      <div style={{ marginTop: 6, color: "#6b7280", fontSize: 14 }}>{role.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <div style={{ marginTop: 24 }}>
+            <div style={{ marginTop: 24, display: "grid", gap: 12 }}>
+              <Btn
+                variant="primary"
+                onClick={() => {
+                  if (!pendingRole) {
+                    setErrors((prev) => ({ ...prev, accountType: copy.accountTypeRequired }));
+                    return;
+                  }
+                  handleAccountTypeSelect(pendingRole);
+                }}
+                style={{ width: "100%" }}
+              >
+                {copy.nextStep}
+              </Btn>
               <Btn variant="secondary" onClick={toggleAuthMode} style={{ width: "100%" }}>
                 {copy.backToSignIn}
               </Btn>
@@ -985,6 +1255,23 @@ export default function Login({ onNavigate, lang = "EN" }) {
                 {isSignUp ? copy.signUpSubtitle : copy.signInSubtitle}
               </p>
             </div>
+
+            {isSignUp && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginBottom: 12,
+                  flexDirection: isRTL ? "row-reverse" : "row",
+                }}
+              >
+                <span style={{ fontSize: 12, color: "#6b7280" }}>{stepLabelText}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{currentStepLabel}</span>
+              </div>
+            )}
 
             {isSignUp && formData.accountType && (
               <div
@@ -1025,7 +1312,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
               <p style={accountTypeErrorStyle}>{errors.accountType}</p>
             )}
 
-            {isSignUp && (
+            {isSignUp && signupStep === 0 && (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
                   <button
@@ -1210,6 +1497,186 @@ export default function Login({ onNavigate, lang = "EN" }) {
                     )}
                   </div>
                 </div>
+                <div ref={dobAnchorRef} style={{ position: "relative" }}>
+                  <Field
+                    label={copy.dobLabel}
+                    value={formData.dateOfBirth}
+                    onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                    placeholder={copy.dobPlaceholder}
+                    invalid={!!errors.dateOfBirth}
+                    type="text"
+                    autoComplete="bday"
+                    name="dateOfBirth"
+                    readOnly
+                    style={fieldStyle}
+                    endAdornment={
+                      <button
+                        type="button"
+                        onClick={() => setDobOpen((open) => !open)}
+                        aria-label={copy.dobLabel}
+                        title={copy.dobLabel}
+                        style={{
+                          border: "none",
+                          background: "none",
+                          padding: 0,
+                          margin: 0,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          color: "#4b5563",
+                        }}
+                      >
+                        <CalendarIcon />
+                      </button>
+                    }
+                    onFocus={() => setDobOpen(true)}
+                  />
+                  {dobOpen && (
+                    <div
+                      ref={dobPopoverRef}
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        marginTop: 8,
+                        zIndex: 50,
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 14,
+                        padding: 12,
+                        boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
+                        minWidth: 280,
+                        right: isRTL ? 0 : "auto",
+                        left: isRTL ? "auto" : 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: 10,
+                          gap: 8,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDobView((prev) => {
+                              const nextMonth = prev.month - 1;
+                              if (nextMonth < 0) return { month: 11, year: prev.year - 1 };
+                              return { month: nextMonth, year: prev.year };
+                            })
+                          }
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            background: "#ffffff",
+                            borderRadius: 8,
+                            width: 32,
+                            height: 32,
+                            cursor: "pointer",
+                            fontSize: 18,
+                            lineHeight: "28px",
+                          }}
+                        >
+                          {isRTL ? "›" : "‹"}
+                        </button>
+                        <div style={{ fontWeight: 600, color: "#111827" }}>
+                          {new Date(dobView.year, dobView.month, 1).toLocaleString(
+                            lang === "AR" ? "ar-LB" : lang === "FR" ? "fr-FR" : "en-US",
+                            { month: "long", year: "numeric" }
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDobView((prev) => {
+                              const nextMonth = prev.month + 1;
+                              if (nextMonth > 11) return { month: 0, year: prev.year + 1 };
+                              return { month: nextMonth, year: prev.year };
+                            })
+                          }
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            background: "#ffffff",
+                            borderRadius: 8,
+                            width: 32,
+                            height: 32,
+                            cursor: "pointer",
+                            fontSize: 18,
+                            lineHeight: "28px",
+                          }}
+                        >
+                          {isRTL ? "‹" : "›"}
+                        </button>
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(7, 1fr)",
+                          gap: 6,
+                          marginBottom: 8,
+                          fontSize: 11,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {weekdayLabels.map((label) => (
+                          <div key={label} style={{ textAlign: "center" }}>
+                            {label}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
+                        {(() => {
+                          const cells = [];
+                          const first = new Date(dobView.year, dobView.month, 1);
+                          const startDay = first.getDay();
+                          const totalCells = 42;
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          const selectedDate = parseYmd(formData.dateOfBirth);
+                          const selectedKey = selectedDate ? formatYmd(selectedDate) : "";
+                          for (let i = 0; i < totalCells; i += 1) {
+                            const dayOffset = i - startDay + 1;
+                            const cellDate = new Date(dobView.year, dobView.month, dayOffset);
+                            const isCurrentMonth = cellDate.getMonth() === dobView.month;
+                            const isFuture = cellDate > today;
+                            const key = formatYmd(cellDate);
+                            const isSelected = key && key === selectedKey;
+                            cells.push(
+                              <button
+                                key={`${dobView.year}-${dobView.month}-${i}`}
+                                type="button"
+                                disabled={isFuture}
+                                onClick={() => {
+                                  if (isFuture) return;
+                                  handleInputChange("dateOfBirth", key);
+                                  setDobOpen(false);
+                                }}
+                                style={{
+                                  border: isSelected ? "2px solid #2563eb" : "1px solid #e5e7eb",
+                                  background: isSelected ? "#dbeafe" : "#ffffff",
+                                  color: isCurrentMonth ? "#111827" : "#9ca3af",
+                                  borderRadius: 10,
+                                  padding: "8px 0",
+                                  fontSize: 12,
+                                  cursor: isFuture ? "not-allowed" : "pointer",
+                                  opacity: isFuture ? 0.4 : 1,
+                                }}
+                              >
+                                {cellDate.getDate()}
+                              </button>
+                            );
+                          }
+                          return cells;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {errors.dateOfBirth && (
+                  <p style={errorStyle}>{errors.dateOfBirth}</p>
+                )}
                 <Field
                   label={copy.usernameLabel}
                   value={formData.username}
@@ -1236,6 +1703,11 @@ export default function Login({ onNavigate, lang = "EN" }) {
                 {errors.phone && (
                   <p style={errorStyle}>{errors.phone}</p>
                 )}
+              </>
+            )}
+
+            {isSignUp && signupStep === 1 && (
+              <>
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#374151" }}>
                     {copy.schoolLabel}
@@ -1245,7 +1717,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
                     onChange={(e) => handleInputChange("school", e.target.value)}
                     style={{ ...selectBaseStyle, ...(fieldStyle || {}), paddingRight: 30 }}
                   >
-                    {SIGNUP_SCHOOL_OPTIONS.map((opt) => (
+                    {schoolOptions.map((opt) => (
                       <option key={opt.value || "blank"} value={opt.value}>
                         {opt.label}
                       </option>
@@ -1298,7 +1770,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
               </>
             )}
 
-            {!isSignUp ? (
+            {!isSignUp && (
               <>
                 <Field
                   label={copy.emailOrUsername}
@@ -1315,7 +1787,9 @@ export default function Login({ onNavigate, lang = "EN" }) {
                   <p style={errorStyle}>{errors.loginId}</p>
                 )}
               </>
-            ) : (
+            )}
+
+            {isSignUp && signupStep === 2 && (
               <>
                 <Field
                   label={copy.email}
@@ -1334,59 +1808,24 @@ export default function Login({ onNavigate, lang = "EN" }) {
               </>
             )}
 
-            <Field
-              label={copy.password}
-              value={formData.password}
-              onChange={(e) => handleInputChange("password", e.target.value)}
-              placeholder={copy.enterPassword}
-              invalid={!!errors.password}
-              type={showPassword ? "text" : "password"}
-              autoComplete={isSignUp ? "new-password" : "current-password"}
-              name={isSignUp ? "new-password" : "password"}
-              style={fieldStyle}
-              endAdornment={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? copy.hidePassword : copy.showPassword}
-                  title={showPassword ? copy.hidePassword : copy.showPassword}
-                  style={{
-                    border: "none",
-                    background: "none",
-                    padding: 0,
-                    margin: 0,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    color: "#4b5563",
-                  }}
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              }
-            />
-            {errors.password && (
-              <p style={errorStyle}>{errors.password}</p>
-            )}
-
-            {isSignUp && (
+            {(!isSignUp || signupStep === 2) && (
               <>
                 <Field
-                  label={copy.confirmPassword}
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
-                  placeholder={copy.confirmYourPassword}
-                  invalid={!!errors.confirmPassword}
-                  type={showConfirmPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  name="new-password-confirm"
+                  label={copy.password}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange("password", e.target.value)}
+                  placeholder={copy.enterPassword}
+                  invalid={!!errors.password}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
+                  name={isSignUp ? "new-password" : "password"}
                   style={fieldStyle}
                   endAdornment={
                     <button
                       type="button"
-                      onClick={() => setShowConfirmPassword((v) => !v)}
-                      aria-label={showConfirmPassword ? copy.hideConfirmPassword : copy.showConfirmPassword}
-                      title={showConfirmPassword ? copy.hideConfirmPassword : copy.showConfirmPassword}
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? copy.hidePassword : copy.showPassword}
+                      title={showPassword ? copy.hidePassword : copy.showPassword}
                       style={{
                         border: "none",
                         background: "none",
@@ -1398,37 +1837,97 @@ export default function Login({ onNavigate, lang = "EN" }) {
                         color: "#4b5563",
                       }}
                     >
-                      {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                      {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                     </button>
                   }
                 />
-                {errors.confirmPassword && (
-                  <p style={errorStyle}>
-                    {errors.confirmPassword}
-                  </p>
+                {errors.password && (
+                  <p style={errorStyle}>{errors.password}</p>
+                )}
+
+                {isSignUp && (
+                  <>
+                    <Field
+                      label={copy.confirmPassword}
+                      value={formData.confirmPassword}
+                      onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                      placeholder={copy.confirmYourPassword}
+                      invalid={!!errors.confirmPassword}
+                      type={showConfirmPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      name="new-password-confirm"
+                      style={fieldStyle}
+                      endAdornment={
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((v) => !v)}
+                          aria-label={showConfirmPassword ? copy.hideConfirmPassword : copy.showConfirmPassword}
+                          title={showConfirmPassword ? copy.hideConfirmPassword : copy.showConfirmPassword}
+                          style={{
+                            border: "none",
+                            background: "none",
+                            padding: 0,
+                            margin: 0,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            color: "#4b5563",
+                          }}
+                        >
+                          {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+                        </button>
+                      }
+                    />
+                    {errors.confirmPassword && (
+                      <p style={errorStyle}>
+                        {errors.confirmPassword}
+                      </p>
+                    )}
+                  </>
                 )}
               </>
             )}
 
-            {errors.submit && (
+            {errors.submit && (!isSignUp || isFinalStep) && (
               <p style={submitErrorStyle}>{errors.submit}</p>
             )}
 
             <div style={{ marginTop: 24 }}>
-              <Btn
-                variant="primary"
-                type="submit"
-                style={{ width: "100%", opacity: loading ? 0.7 : 1 }}
-                disabled={loading}
-              >
-                {loading
-                  ? isSignUp
-                    ? copy.signingUp
-                    : copy.signingIn
-                  : isSignUp
-                    ? copy.signUp
-                    : copy.signIn}
-              </Btn>
+              {isSignUp ? (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  {signupStep > 0 && (
+                    <Btn
+                      variant="secondary"
+                      type="button"
+                      onClick={() => {
+                        setErrors({});
+                        setSignupStep((prev) => Math.max(prev - 1, 0));
+                      }}
+                      style={{ flex: 1 }}
+                      disabled={loading}
+                    >
+                      {copy.backStep}
+                    </Btn>
+                  )}
+                  <Btn
+                    variant="primary"
+                    type="submit"
+                    style={{ flex: 1, opacity: loading ? 0.7 : 1 }}
+                    disabled={loading}
+                  >
+                    {loading ? copy.signingUp : isFinalStep ? copy.signUp : copy.nextStep}
+                  </Btn>
+                </div>
+              ) : (
+                <Btn
+                  variant="primary"
+                  type="submit"
+                  style={{ width: "100%", opacity: loading ? 0.7 : 1 }}
+                  disabled={loading}
+                >
+                  {loading ? copy.signingIn : copy.signIn}
+                </Btn>
+              )}
             </div>
 
             <div style={{ marginTop: 16 }}>

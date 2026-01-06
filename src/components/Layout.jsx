@@ -636,6 +636,7 @@ export function HeaderBar({ title, right, lang = "EN" }) {
   const toggleTheme = () => setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   const themeToggle = (
     <button
+      key="theme-toggle"
       type="button"
       onClick={toggleTheme}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
@@ -674,6 +675,7 @@ export function HeaderBar({ title, right, lang = "EN" }) {
       </svg>
     </button>
   );
+  const themeToggleWithKey = React.cloneElement(themeToggle, { key: "theme-toggle" });
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -762,17 +764,17 @@ export function HeaderBar({ title, right, lang = "EN" }) {
   if (right) {
     if (React.isValidElement(right)) {
       const children = React.Children.toArray(right.props.children);
-      rightContent = React.cloneElement(right, right.props, [...children, themeToggle]);
+      rightContent = React.cloneElement(right, right.props, [...children, themeToggleWithKey]);
     } else {
       rightContent = (
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {right}
-          {themeToggle}
+          {themeToggleWithKey}
         </div>
       );
     }
   } else {
-    rightContent = themeToggle;
+    rightContent = themeToggleWithKey;
   }
 
   let mobilePanel = rightContent;

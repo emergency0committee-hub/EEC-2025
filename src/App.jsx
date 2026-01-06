@@ -30,6 +30,7 @@ import SolvingEquationsInteractive from "./pages/sat/lessons/SolvingEquationsInt
 import QuadraticEquationsInteractive from "./pages/sat/lessons/QuadraticEquationsInteractive.jsx";
 import WordProblemsInteractive from "./pages/sat/lessons/WordProblemsInteractive.jsx";
 import SchoolTraining from "./pages/SchoolTraining.jsx";
+import FeatureIntro from "./pages/FeatureIntro.jsx";
 import OccupationScaleFull from "./pages/results/OccupationScaleFull.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import { AppProviders } from "./components/AppProviders.jsx";
@@ -169,6 +170,24 @@ export default function App() {
     switch (route) {
       case "home":
         pageTitle = "Home";
+        break;
+      case "intro-career":
+        pageTitle = "Career Guidance Intro";
+        break;
+      case "intro-sat-testing":
+        pageTitle = "SAT Testing Intro";
+        break;
+      case "intro-sat-training":
+        pageTitle = "SAT Training Intro";
+        break;
+      case "intro-school-training":
+        pageTitle = "School Training Intro";
+        break;
+      case "intro-ai-educator":
+        pageTitle = "AI Educator Intro";
+        break;
+      case "intro-verify-certificate":
+        pageTitle = "Verify Certificate Intro";
         break;
       case "career":
         pageTitle = "Career Guidance";
@@ -440,6 +459,12 @@ const currentUser = (() => {
     if (route === "sat-exam") return <SATExam onNavigate={onNavigate} {...(resultsPayload || {})} />;
     if (route === "sat-assignment") return <SATAssignment onNavigate={onNavigate} {...(resultsPayload || {})} />;
     if (route === "sat-training") return <SATTraining onNavigate={onNavigate} {...(resultsPayload || {})} />;
+    if (route === "intro-career") return <FeatureIntro onNavigate={onNavigate} lang={lang} feature="career" />;
+    if (route === "intro-sat-testing") return <FeatureIntro onNavigate={onNavigate} lang={lang} feature="satTesting" />;
+    if (route === "intro-sat-training") return <FeatureIntro onNavigate={onNavigate} lang={lang} feature="satTraining" />;
+    if (route === "intro-school-training") return <FeatureIntro onNavigate={onNavigate} lang={lang} feature="schoolTraining" />;
+    if (route === "intro-ai-educator") return <FeatureIntro onNavigate={onNavigate} lang={lang} feature="aiEducator" />;
+    if (route === "intro-verify-certificate") return <FeatureIntro onNavigate={onNavigate} lang={lang} feature="verify" />;
     if (route === "sat-lesson-functions-decimals") return <FunctionsAndDecimalsInteractive onNavigate={onNavigate} />;
     if (["sat-lesson-polynomials", "sat-lesson-polynomial", "sat-lesson-polynomail", "sat-lesson-polynomails"].includes(route)) {
       return <PolynomialsInteractive onNavigate={onNavigate} />;

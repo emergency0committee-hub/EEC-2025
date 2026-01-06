@@ -114,7 +114,6 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
     careerDashboard: strings.menuCareerDashboard || "Career Dashboard",
     satDashboard: strings.menuSatDashboard || "SAT Dashboard",
     competitionMode: strings.menuCompetitionMode || "Competition Mode",
-    liveMonitor: strings.menuLiveMonitor || "Live Monitor",
     manageUsers: strings.menuManageUsers || "Manage Users",
     questions: strings.menuQuestions || "Question Bank",
     certificates: strings.menuCertificates || "Certificates",
@@ -256,9 +255,6 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
           </MenuItem>
           <MenuItem to="career-dashboard" onSelect={handleMenuSelect("career-dashboard")}>
             {menuLabels.careerDashboard}
-          </MenuItem>
-          <MenuItem to="admin-live-monitor" onSelect={handleMenuSelect("admin-live-monitor")}>
-            {menuLabels.liveMonitor}
           </MenuItem>
           <MenuItem to="admin-sat" onSelect={handleMenuSelect("admin-sat")}>
             {menuLabels.satDashboard}
