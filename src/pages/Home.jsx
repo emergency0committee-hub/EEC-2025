@@ -207,7 +207,7 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
   const [now, setNow] = useState(() => new Date());
   const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
   const { theme: homeTheme } = useTheme();
-  const { animationsEnabled } = useAppSettings();
+  const { animationsEnabled, homeOrbitEnabled, weatherEnabled } = useAppSettings();
   const {
     weather,
     status: weatherStatus,
@@ -1075,7 +1075,8 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
               position: "absolute",
               inset: 0,
               transformOrigin: "50% 50%",
-              animation: animationsEnabled ? "homeRingSpin 44s linear infinite" : "none",
+              animation:
+                animationsEnabled && homeOrbitEnabled ? "homeRingSpin 44s linear infinite" : "none",
             }}
           >
             {featureItems.map((item, idx) => {
@@ -1109,7 +1110,14 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
                     transform: `translate(-50%, -50%) rotate(${angle}deg) translate(var(--radial-radius)) rotate(${-angle}deg)`,
                   }}
                 >
-                  <div style={{ animation: animationsEnabled ? "homeRingCounter 44s linear infinite" : "none" }}>
+                  <div
+                    style={{
+                      animation:
+                        animationsEnabled && homeOrbitEnabled
+                          ? "homeRingCounter 44s linear infinite"
+                          : "none",
+                    }}
+                  >
                     <button
                       onClick={item.onClick}
                       disabled={item.disabled}
@@ -1222,6 +1230,7 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
                 {timeParts.dayPeriod ? <span> {timeParts.dayPeriod}</span> : null}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: theme.textMuted }}>
+                {weatherStatus === "disabled" && "Weather: disabled"}
                 {weatherStatus === "loading" && "Weather: loading..."}
                 {weatherStatus === "unsupported" && "Weather: not supported"}
                 {weatherStatus === "denied" && "Weather: location blocked"}
@@ -1240,7 +1249,7 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
                     )}
                   </>
                 ) : null}
-                {(weatherStatus === "error" || weatherStatus === "denied") && (
+                {(weatherStatus === "error" || weatherStatus === "denied") && weatherEnabled && (
                   <button
                     type="button"
                     onClick={requestWeather}

@@ -772,7 +772,7 @@ export default function QuadraticEquationsInteractive({ onNavigate }) {
             <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(2, minmax(140px, 1fr))", gap: 10 }}>
               {factorSlots.map((slot, idx) => (
                 <button
-                  // eslint-disable-next-line react/no-array-index-key
+                   
                   key={idx}
                   type="button"
                   onClick={() => clearSlot(idx)}

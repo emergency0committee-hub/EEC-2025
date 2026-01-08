@@ -23,6 +23,22 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
   const {
     animationsEnabled,
     setAnimationsEnabled,
+    backgroundMotionEnabled,
+    setBackgroundMotionEnabled,
+    snowEnabled,
+    setSnowEnabled,
+    cloudsEnabled,
+    setCloudsEnabled,
+    celestialEnabled,
+    setCelestialEnabled,
+    cardLightEnabled,
+    setCardLightEnabled,
+    helperBotEnabled,
+    setHelperBotEnabled,
+    weatherEnabled,
+    setWeatherEnabled,
+    homeOrbitEnabled,
+    setHomeOrbitEnabled,
     settingsLoading,
     settingsSaving,
     settingsError,
@@ -124,6 +140,14 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
     weeklyReport: strings.menuWeeklyReport || "Weekly Report",
     globalSettings: strings.menuGlobalSettings || "Global Settings",
     animations: strings.menuAnimations || "Animations",
+    backgroundMotion: strings.menuBackgroundMotion || "Background motion",
+    snow: strings.menuSnow || "Snow overlay",
+    clouds: strings.menuClouds || "Cloud layer",
+    celestial: strings.menuCelestial || "Sun & moon effects",
+    cardLight: strings.menuCardLight || "Card light effect",
+    helperBot: strings.menuHelperBot || "Helper bot",
+    weather: strings.menuWeather || "Weather widget",
+    homeOrbit: strings.menuHomeOrbit || "Welcome orbit motion",
     toggleOn: strings.menuToggleOn || "On",
     toggleOff: strings.menuToggleOff || "Off",
     signOut: strings.menuSignOut || strings.signOut || "Sign Out",
@@ -131,6 +155,14 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
   };
   const settingsBusy = settingsLoading || settingsSaving;
   const animationsLabel = animationsEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const backgroundMotionLabel = backgroundMotionEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const snowLabel = snowEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const cloudsLabel = cloudsEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const celestialLabel = celestialEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const cardLightLabel = cardLightEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const helperBotLabel = helperBotEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const weatherLabel = weatherEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
+  const homeOrbitLabel = homeOrbitEnabled ? menuLabels.toggleOn : menuLabels.toggleOff;
 
   if (!currentUser) {
     return (
@@ -209,6 +241,63 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
     </div>
   );
 
+  const settingRows = [
+    {
+      key: "animations",
+      label: menuLabels.animations,
+      valueLabel: animationsLabel,
+      onToggle: () => setAnimationsEnabled(!animationsEnabled),
+    },
+    {
+      key: "backgroundMotion",
+      label: menuLabels.backgroundMotion,
+      valueLabel: backgroundMotionLabel,
+      onToggle: () => setBackgroundMotionEnabled(!backgroundMotionEnabled),
+    },
+    {
+      key: "snow",
+      label: menuLabels.snow,
+      valueLabel: snowLabel,
+      onToggle: () => setSnowEnabled(!snowEnabled),
+    },
+    {
+      key: "clouds",
+      label: menuLabels.clouds,
+      valueLabel: cloudsLabel,
+      onToggle: () => setCloudsEnabled(!cloudsEnabled),
+    },
+    {
+      key: "celestial",
+      label: menuLabels.celestial,
+      valueLabel: celestialLabel,
+      onToggle: () => setCelestialEnabled(!celestialEnabled),
+    },
+    {
+      key: "cardLight",
+      label: menuLabels.cardLight,
+      valueLabel: cardLightLabel,
+      onToggle: () => setCardLightEnabled(!cardLightEnabled),
+    },
+    {
+      key: "helperBot",
+      label: menuLabels.helperBot,
+      valueLabel: helperBotLabel,
+      onToggle: () => setHelperBotEnabled(!helperBotEnabled),
+    },
+    {
+      key: "weather",
+      label: menuLabels.weather,
+      valueLabel: weatherLabel,
+      onToggle: () => setWeatherEnabled(!weatherEnabled),
+    },
+    {
+      key: "homeOrbit",
+      label: menuLabels.homeOrbit,
+      valueLabel: homeOrbitLabel,
+      onToggle: () => setHomeOrbitEnabled(!homeOrbitEnabled),
+    },
+  ];
+
   const menuContent = (
     <>
       {menuHeader}
@@ -222,32 +311,35 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
           </MenuItem>
           {globalSettingsOpen && (
             <div style={{ display: "grid", gap: 6, padding: "0 6px 6px" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (settingsBusy) return;
-                  setAnimationsEnabled(!animationsEnabled);
-                }}
-                disabled={settingsBusy}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "9px 10px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255, 255, 255, 0.35)",
-                  background: "rgba(255, 255, 255, 0.2)",
-                  color: "#0f172a",
-                  fontFamily: "inherit",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: settingsBusy ? "not-allowed" : "pointer",
-                  opacity: settingsBusy ? 0.6 : 1,
-                }}
-              >
-                <span>{menuLabels.animations}</span>
-                <span>{animationsLabel}</span>
-              </button>
+              {settingRows.map((row) => (
+                <button
+                  key={row.key}
+                  type="button"
+                  onClick={() => {
+                    if (settingsBusy) return;
+                    row.onToggle();
+                  }}
+                  disabled={settingsBusy}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "9px 10px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255, 255, 255, 0.35)",
+                    background: "rgba(255, 255, 255, 0.2)",
+                    color: "#0f172a",
+                    fontFamily: "inherit",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: settingsBusy ? "not-allowed" : "pointer",
+                    opacity: settingsBusy ? 0.6 : 1,
+                  }}
+                >
+                  <span>{row.label}</span>
+                  <span>{row.valueLabel}</span>
+                </button>
+              ))}
               {settingsError && (
                 <div style={{ color: "#b91c1c", fontSize: 12 }}>
                   {settingsError}

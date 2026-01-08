@@ -1134,7 +1134,7 @@ export default function PolynomialsInteractive({ onNavigate }) {
             <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 10 }}>
               {factorSlots.map((slot, idx) => (
                 <button
-                  // eslint-disable-next-line react/no-array-index-key
+                   
                   key={idx}
                   type="button"
                   onClick={() => clearSlot(idx)}

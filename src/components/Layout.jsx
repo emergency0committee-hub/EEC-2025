@@ -170,10 +170,20 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
     clouds: PropTypes.bool,
   };
   const { theme } = useTheme();
-  const { animationsEnabled } = useAppSettings();
-  const { weather, status } = useWeather();
+  const {
+    animationsEnabled,
+    backgroundMotionEnabled,
+    snowEnabled,
+    cloudsEnabled,
+    celestialEnabled,
+  } = useAppSettings();
+  const { weather, status, enabled: weatherEnabled } = useWeather();
   const isDark = theme === "dark";
   const allowMotion = animationsEnabled !== false;
+  const allowBackgroundMotion = allowMotion && backgroundMotionEnabled !== false;
+  const allowSnow = allowMotion && snowEnabled !== false;
+  const allowClouds = allowMotion && cloudsEnabled !== false;
+  const allowCelestial = allowMotion && celestialEnabled !== false;
   const pageText = isDark ? "#e2e8f0" : "#111827";
   const pageMuted = isDark ? "#cbd5f5" : "#6b7280";
   const themeStyle = isDark
@@ -188,10 +198,12 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         backgroundBlendMode: "screen, screen, screen, screen, normal",
       }
     : {};
-  const showSnow = allowMotion && snow !== false;
+  const showSnow = allowSnow && snow !== false;
   const autoClouds =
-    status === "ready" && weather && typeof weather.code === "number" ? weather.code !== 0 : false;
-  const showClouds = allowMotion && (typeof clouds === "boolean" ? clouds : autoClouds);
+    weatherEnabled && status === "ready" && weather && typeof weather.code === "number"
+      ? weather.code !== 0
+      : false;
+  const showClouds = allowClouds && (typeof clouds === "boolean" ? clouds : autoClouds);
   const coords = weather?.coords || DEFAULT_COORDS;
   const [now, setNow] = useState(() => new Date());
   const [celestialDrag, setCelestialDrag] = useState(null);
@@ -241,8 +253,8 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
   }
 
   const isDaytime = nowMinutes >= sunrise && nowMinutes < sunset;
-  const showSun = allowMotion && theme !== "dark" && isDaytime;
-  const showMoon = allowMotion && theme === "dark" && !isDaytime;
+  const showSun = allowCelestial && theme !== "dark" && isDaytime;
+  const showMoon = allowCelestial && theme === "dark" && !isDaytime;
   const baseProgress = showSun ? sunProgress : showMoon ? nightProgress : sunProgress;
   const arcProgress = clampProgress(
     typeof celestialDrag === "number" ? celestialDrag : baseProgress
@@ -256,7 +268,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
     return { left, top };
   }, [arcProgress]);
   const celestialVars = useMemo(() => {
-    if (!allowMotion) {
+    if (!allowCelestial) {
       return {
         "--celestial-on": 0,
         "--celestial-x": "50%",
@@ -290,7 +302,7 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
       "--celestial-glow": glowColor,
       "--celestial-haze": hazeColor,
     };
-  }, [allowMotion, showSun, showMoon, moonArc.left, moonArc.top]);
+  }, [allowCelestial, showSun, showMoon, moonArc.left, moonArc.top]);
 
   const handleCelestialDown = (event) => {
     event.preventDefault();
@@ -448,12 +460,12 @@ export function PageWrap({ children, style = {}, className = "", snow = true, cl
         backgroundSize: "170% 170%, 170% 170%, 165% 165%, 160% 160%, 100% 100%",
         backgroundPosition: "0% 0%, 100% 0%, 50% 100%, 80% 40%, 0 0",
         backgroundBlendMode: "screen, screen, screen, screen, normal",
-        animation: allowMotion ? "appBgShift 32s ease-in-out infinite" : "none",
+        animation: allowBackgroundMotion ? "appBgShift 32s ease-in-out infinite" : "none",
         color: pageText,
         ["--app-text"]: pageText,
         ["--app-muted"]: pageMuted,
-        transitionProperty: !allowMotion || isDragging ? "none" : "--celestial-x, --celestial-y",
-        transitionDuration: allowMotion ? "0.8s" : "0s",
+        transitionProperty: !allowCelestial || isDragging ? "none" : "--celestial-x, --celestial-y",
+        transitionDuration: allowCelestial ? "0.8s" : "0s",
         transitionTimingFunction: "linear",
         ...themeStyle,
         ...style,
@@ -1016,8 +1028,9 @@ export function Card({ children, style = {} }) {
     children: PropTypes.node.isRequired,
     style: PropTypes.object,
   };
-  const { animationsEnabled } = useAppSettings();
+  const { animationsEnabled, cardLightEnabled } = useAppSettings();
   const allowMotion = animationsEnabled !== false;
+  const allowLight = allowMotion && cardLightEnabled !== false;
   const hoveredRef = React.useRef(false);
   const rectRef = React.useRef(null);
   const toGlassColor = (color, alpha = 0.45) => {
@@ -1062,8 +1075,8 @@ export function Card({ children, style = {} }) {
       ? rawBackground
       : style?.backgroundColor;
   const glassFill = customFill ? toGlassColor(customFill, 0.42) : customFill;
-  const highlightOpacity = hovered && allowMotion ? 0.55 : 0;
-  const hazeOpacity = hovered && allowMotion ? 0.28 : 0;
+  const highlightOpacity = hovered && allowLight ? 0.55 : 0;
+  const hazeOpacity = hovered && allowLight ? 0.28 : 0;
   const highlightGradient = `radial-gradient(180px 180px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, ${highlightOpacity}), rgba(255, 255, 255, 0) 70%)`;
   const hazeGradient = `radial-gradient(360px 360px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, ${hazeOpacity}), rgba(255, 255, 255, 0) 75%)`;
   const celestialGlow = `radial-gradient(220px 220px at var(--celestial-x, 50vw) var(--celestial-y, 0px), var(--celestial-glow, rgba(255, 255, 255, 0)), transparent 70%)`;
@@ -1081,7 +1094,7 @@ export function Card({ children, style = {} }) {
     : `${baseLayer}, ${borderGradient}`;
 
   const updateLightPosition = (clientX, clientY) => {
-    if (!allowMotion) return;
+    if (!allowLight) return;
     if (!cardRef.current) return;
     const rect = rectRef.current || cardRef.current.getBoundingClientRect();
     rectRef.current = rect;
@@ -1120,7 +1133,7 @@ export function Card({ children, style = {} }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    if (!allowMotion) {
+    if (!allowLight) {
       hoveredRef.current = false;
       setHovered(false);
       return undefined;
@@ -1135,7 +1148,7 @@ export function Card({ children, style = {} }) {
       },
     });
     return unsubscribe;
-  }, [allowMotion]);
+  }, [allowLight]);
 
   return (
     <div

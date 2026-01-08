@@ -8016,7 +8016,7 @@ var DefaultLegendContent = function(_PureComponent) {
         warn(
           !(0, import_isFunction2.default)(entry.value),
           `The name property is also required when using a function for the dataKey of a chart's cartesian components. Ex: <Bar name="Name of my Data"/>`
-          // eslint-disable-line max-len
+           
         );
         var color2 = entry.inactive ? inactiveColor : entry.color;
         return import_react6.default.createElement("li", _extends4({
@@ -8540,7 +8540,7 @@ var DefaultTooltipContent = function DefaultTooltipContent2(props) {
           }
         }
         return (
-          // eslint-disable-next-line react/no-array-index-key
+           
           import_react8.default.createElement("li", {
             className: "recharts-tooltip-item",
             key: "tooltip-item-".concat(i),
@@ -10025,7 +10025,7 @@ var Text = function Text2(_ref5) {
     var words = line.words.join(breakAll ? "" : " ");
     return (
       // duplicate words will cause duplicate keys
-      // eslint-disable-next-line react/no-array-index-key
+       
       import_react12.default.createElement("tspan", {
         x: x2,
         dy: index2 === 0 ? startDy : lineHeight,
@@ -16796,7 +16796,7 @@ var renderCallByParent = function renderCallByParent2(parentProps, viewBox) {
   var explicitChildren = findAllByType(children2, Label).map(function(child, index2) {
     return (0, import_react15.cloneElement)(child, {
       viewBox: viewBox || parentViewBox,
-      // eslint-disable-next-line react/no-array-index-key
+       
       key: "label-".concat(index2)
     });
   });
@@ -16998,7 +16998,7 @@ function renderCallByParent3(parentProps, data) {
   var explicitChildren = findAllByType(children2, LabelList).map(function(child, index2) {
     return (0, import_react16.cloneElement)(child, {
       data,
-      // eslint-disable-next-line react/no-array-index-key
+       
       key: "labelList-".concat(index2)
     });
   });
@@ -20468,7 +20468,7 @@ function AnimateGroup(props) {
       enterOptions: enter,
       leaveOptions: leave,
       key: "child-".concat(index2)
-      // eslint-disable-line
+       
     }, child);
   }));
 }
@@ -22479,7 +22479,7 @@ var Pie = function(_PureComponent) {
           realDataKey = valueKey;
         }
         return (
-          // eslint-disable-next-line react/no-array-index-key
+           
           import_react37.default.createElement(Layer, {
             key: "label-".concat(entry.startAngle, "-").concat(entry.endAngle, "-").concat(entry.midAngle, "-").concat(i)
           }, labelLine && Pie2.renderLabelLineItem(labelLine, lineProps, "line"), Pie2.renderLabelItem(label, labelProps, getValueByDataKey(entry, realDataKey)))
@@ -22512,7 +22512,7 @@ var Pie = function(_PureComponent) {
           tabIndex: -1,
           className: "recharts-pie-sector"
         }, adaptEventsOfChild(_this2.props, entry, i), {
-          // eslint-disable-next-line react/no-array-index-key
+           
           key: "sector-".concat(entry === null || entry === void 0 ? void 0 : entry.startAngle, "-").concat(entry === null || entry === void 0 ? void 0 : entry.endAngle, "-").concat(entry.midAngle, "-").concat(i)
         }), import_react37.default.createElement(Shape, _extends22({
           option: sectorOptions,
@@ -24896,7 +24896,7 @@ var Bar = function(_PureComponent) {
           className: "recharts-bar-rectangle"
         }, adaptEventsOfChild(_this2.props, entry, i), {
           // https://github.com/recharts/recharts/issues/5415
-          // eslint-disable-next-line react/no-array-index-key
+           
           key: "rectangle-".concat(entry === null || entry === void 0 ? void 0 : entry.x, "-").concat(entry === null || entry === void 0 ? void 0 : entry.y, "-").concat(entry === null || entry === void 0 ? void 0 : entry.value, "-").concat(i)
         }), import_react43.default.createElement(BarRectangle, props));
       });

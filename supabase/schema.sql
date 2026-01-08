@@ -309,8 +309,17 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 insert into public.cg_site_settings (key, value)
-values ('animations_enabled', true)
-on conflict (key) do nothing;
+  values
+    ('animations_enabled', true),
+    ('background_motion_enabled', true),
+    ('snow_enabled', true),
+    ('clouds_enabled', true),
+    ('celestial_enabled', true),
+    ('card_light_enabled', true),
+    ('helper_bot_enabled', true),
+    ('weather_enabled', true),
+    ('home_orbit_enabled', true)
+  on conflict (key) do nothing;
 
 -- Live test monitoring sessions (Career + SAT)
 create table if not exists public.cg_live_test_sessions (

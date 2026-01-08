@@ -37,7 +37,7 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
   const panelRef = useRef(null);
   const isInline = placement === "inline";
   const isRoam = placement === "roam";
-  const { animationsEnabled } = useAppSettings();
+  const { animationsEnabled, helperBotEnabled } = useAppSettings();
   const allowMotion = animationsEnabled !== false;
   const [flyOffset, setFlyOffset] = useState({ x: 0, y: 0, r: 0, d: 2200 });
   const [roamPos, setRoamPos] = useState({ x: 0, y: 0, r: 0, d: 2200 });
@@ -109,6 +109,8 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
     return "Navigate to Career Guidance, SAT, or admin tools if you have access.";
   }, [currentRoute]);
 
+  const shouldRender = helperBotEnabled !== false;
+
   const handleGo = (route) => {
     setOpen(false);
     onNavigate(route);
@@ -126,6 +128,10 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
     }
     alert("Sorry, I didn't recognize that. Try: Career Guidance, SAT Training, Career Dashboard, etc.");
   };
+
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <>

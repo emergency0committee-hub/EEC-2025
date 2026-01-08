@@ -8,10 +8,27 @@ const WeatherContext = React.createContext({
   status: "idle",
   error: "",
   refresh: () => {},
+  enabled: true,
 });
 const AppSettingsContext = React.createContext({
   animationsEnabled: true,
   setAnimationsEnabled: async () => {},
+  backgroundMotionEnabled: true,
+  setBackgroundMotionEnabled: async () => {},
+  snowEnabled: true,
+  setSnowEnabled: async () => {},
+  cloudsEnabled: true,
+  setCloudsEnabled: async () => {},
+  celestialEnabled: true,
+  setCelestialEnabled: async () => {},
+  cardLightEnabled: true,
+  setCardLightEnabled: async () => {},
+  helperBotEnabled: true,
+  setHelperBotEnabled: async () => {},
+  weatherEnabled: true,
+  setWeatherEnabled: async () => {},
+  homeOrbitEnabled: true,
+  setHomeOrbitEnabled: async () => {},
   settingsLoading: false,
   settingsSaving: false,
   settingsError: "",
@@ -22,6 +39,29 @@ const THEME_KEY = "cg_theme";
 const LEGACY_THEME_KEY = "cg_home_theme";
 const SETTINGS_TABLE = "cg_site_settings";
 const ANIMATIONS_KEY = "animations_enabled";
+const SETTINGS_CONFIG = {
+  animationsEnabled: { key: ANIMATIONS_KEY, default: true },
+  backgroundMotionEnabled: { key: "background_motion_enabled", default: true },
+  snowEnabled: { key: "snow_enabled", default: true },
+  cloudsEnabled: { key: "clouds_enabled", default: true },
+  celestialEnabled: { key: "celestial_enabled", default: true },
+  cardLightEnabled: { key: "card_light_enabled", default: true },
+  helperBotEnabled: { key: "helper_bot_enabled", default: true },
+  weatherEnabled: { key: "weather_enabled", default: true },
+  homeOrbitEnabled: { key: "home_orbit_enabled", default: true },
+};
+const SETTINGS_KEYS = Object.values(SETTINGS_CONFIG).map((config) => config.key);
+const SETTINGS_BY_DB_KEY = Object.entries(SETTINGS_CONFIG).reduce((acc, [stateKey, config]) => {
+  acc[config.key] = stateKey;
+  return acc;
+}, {});
+const buildSettingsState = (overrides = {}) => {
+  const initial = {};
+  Object.entries(SETTINGS_CONFIG).forEach(([stateKey, config]) => {
+    initial[stateKey] = config.default;
+  });
+  return { ...initial, ...overrides };
+};
 
 export function useTheme() {
   return React.useContext(ThemeContext);
@@ -52,10 +92,21 @@ export function AppProviders({ children }) {
   const [weather, setWeather] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
-  const [animationsEnabled, setAnimationsEnabledState] = useState(true);
+  const [settings, setSettings] = useState(() => buildSettingsState({ animationsEnabled: false }));
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState("");
+  const {
+    animationsEnabled,
+    backgroundMotionEnabled,
+    snowEnabled,
+    cloudsEnabled,
+    celestialEnabled,
+    cardLightEnabled,
+    helperBotEnabled,
+    weatherEnabled,
+    homeOrbitEnabled,
+  } = settings;
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -176,22 +227,32 @@ export function AppProviders({ children }) {
     try {
       const { data, error: fetchError } = await supabase
         .from(SETTINGS_TABLE)
-        .select("value")
-        .eq("key", ANIMATIONS_KEY)
-        .maybeSingle();
+        .select("key,value")
+        .in("key", SETTINGS_KEYS);
       if (fetchError) throw fetchError;
-      const value = data?.value;
-      setAnimationsEnabledState(value == null ? true : Boolean(value));
+      const nextSettings = buildSettingsState();
+      (data || []).forEach((row) => {
+        const stateKey = SETTINGS_BY_DB_KEY[row.key];
+        if (!stateKey) return;
+        nextSettings[stateKey] = Boolean(row.value);
+      });
+      setSettings((prev) => ({ ...prev, ...nextSettings }));
     } catch (err) {
       console.error("settings load", err);
       setSettingsError(err?.message || "Unable to load settings.");
-      setAnimationsEnabledState(true);
+      setSettings((prev) => ({ ...prev, ...buildSettingsState() }));
     } finally {
       setSettingsLoading(false);
     }
   }, []);
 
   const refresh = useCallback(() => {
+    if (!weatherEnabled) {
+      setWeather(null);
+      setStatus("disabled");
+      setError("Weather disabled.");
+      return;
+    }
     if (typeof window === "undefined" || !navigator?.geolocation) {
       setStatus("unsupported");
       setError("Location not supported.");
@@ -240,7 +301,7 @@ export function AppProviders({ children }) {
       },
       { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
     );
-  }, []);
+  }, [weatherEnabled]);
 
   useEffect(() => {
     refresh();
@@ -250,44 +311,122 @@ export function AppProviders({ children }) {
     refreshSettings();
   }, [refreshSettings]);
 
-  const setAnimationsEnabled = useCallback(
-    async (nextValue) => {
+  const updateSetting = useCallback(
+    async (stateKey, nextValue) => {
+      const config = SETTINGS_CONFIG[stateKey];
+      if (!config) return;
       const resolved = Boolean(nextValue);
-      const prev = animationsEnabled;
-      setAnimationsEnabledState(resolved);
+      const prevValue = settings[stateKey];
+      setSettings((prev) => ({ ...prev, [stateKey]: resolved }));
       setSettingsSaving(true);
       setSettingsError("");
       try {
         const { error: saveError } = await supabase
           .from(SETTINGS_TABLE)
-          .upsert({ key: ANIMATIONS_KEY, value: resolved }, { onConflict: "key" });
+          .upsert({ key: config.key, value: resolved }, { onConflict: "key" });
         if (saveError) throw saveError;
       } catch (err) {
         console.error("settings save", err);
-        setAnimationsEnabledState(prev);
+        setSettings((prev) => ({ ...prev, [stateKey]: prevValue }));
         setSettingsError(err?.message || "Unable to save settings.");
       } finally {
         setSettingsSaving(false);
       }
     },
-    [animationsEnabled]
+    [settings]
+  );
+
+  const setAnimationsEnabled = useCallback(
+    (nextValue) => updateSetting("animationsEnabled", nextValue),
+    [updateSetting]
+  );
+  const setBackgroundMotionEnabled = useCallback(
+    (nextValue) => updateSetting("backgroundMotionEnabled", nextValue),
+    [updateSetting]
+  );
+  const setSnowEnabled = useCallback(
+    (nextValue) => updateSetting("snowEnabled", nextValue),
+    [updateSetting]
+  );
+  const setCloudsEnabled = useCallback(
+    (nextValue) => updateSetting("cloudsEnabled", nextValue),
+    [updateSetting]
+  );
+  const setCelestialEnabled = useCallback(
+    (nextValue) => updateSetting("celestialEnabled", nextValue),
+    [updateSetting]
+  );
+  const setCardLightEnabled = useCallback(
+    (nextValue) => updateSetting("cardLightEnabled", nextValue),
+    [updateSetting]
+  );
+  const setHelperBotEnabled = useCallback(
+    (nextValue) => updateSetting("helperBotEnabled", nextValue),
+    [updateSetting]
+  );
+  const setWeatherEnabled = useCallback(
+    (nextValue) => updateSetting("weatherEnabled", nextValue),
+    [updateSetting]
+  );
+  const setHomeOrbitEnabled = useCallback(
+    (nextValue) => updateSetting("homeOrbitEnabled", nextValue),
+    [updateSetting]
   );
 
   const themeValue = useMemo(() => ({ theme, setTheme }), [theme]);
   const weatherValue = useMemo(
-    () => ({ weather, status, error, refresh }),
-    [weather, status, error, refresh]
+    () => ({ weather, status, error, refresh, enabled: weatherEnabled }),
+    [weather, status, error, refresh, weatherEnabled]
   );
   const settingsValue = useMemo(
     () => ({
       animationsEnabled,
       setAnimationsEnabled,
+      backgroundMotionEnabled,
+      setBackgroundMotionEnabled,
+      snowEnabled,
+      setSnowEnabled,
+      cloudsEnabled,
+      setCloudsEnabled,
+      celestialEnabled,
+      setCelestialEnabled,
+      cardLightEnabled,
+      setCardLightEnabled,
+      helperBotEnabled,
+      setHelperBotEnabled,
+      weatherEnabled,
+      setWeatherEnabled,
+      homeOrbitEnabled,
+      setHomeOrbitEnabled,
       settingsLoading,
       settingsSaving,
       settingsError,
       refreshSettings,
     }),
-    [animationsEnabled, setAnimationsEnabled, settingsLoading, settingsSaving, settingsError, refreshSettings]
+    [
+      animationsEnabled,
+      setAnimationsEnabled,
+      backgroundMotionEnabled,
+      setBackgroundMotionEnabled,
+      snowEnabled,
+      setSnowEnabled,
+      cloudsEnabled,
+      setCloudsEnabled,
+      celestialEnabled,
+      setCelestialEnabled,
+      cardLightEnabled,
+      setCardLightEnabled,
+      helperBotEnabled,
+      setHelperBotEnabled,
+      weatherEnabled,
+      setWeatherEnabled,
+      homeOrbitEnabled,
+      setHomeOrbitEnabled,
+      settingsLoading,
+      settingsSaving,
+      settingsError,
+      refreshSettings,
+    ]
   );
 
   return (
