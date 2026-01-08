@@ -5,7 +5,6 @@ import PropTypes from "prop-types";
 import Btn from "../components/Btn.jsx";
 import { PageWrap, HeaderBar, Card, Field, ProgressBar } from "../components/Layout.jsx";
 import useCountdown from "../hooks/useCountdown.js";
-import { STR } from "../i18n/strings.js";
 import PaletteOverlay from "./test/PaletteOverlay.jsx";
 
 import {
@@ -204,7 +203,7 @@ function pillarAggAndCountsFromAnswers(questions, ansTF) {
 // Using PaletteOverlay component for question navigation
 
 /* ====================== MAIN COMPONENT ====================== */
-export default function Test({ onNavigate, lang = "EN", setLang, preview = false }) {
+export default function Test({ onNavigate, lang = "EN", preview = false }) {
   const [riasecQuestions, setRiasecQuestions] = useState([]);
   const [riasecLoading, setRiasecLoading] = useState(false);
   const [riasecError, setRiasecError] = useState("");
@@ -529,12 +528,30 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
 
   const [shuffledRIASEC, setShuffledRIASEC] = useState([]);
 
-  // Local minimal i18n for the new language selector copy
-  const localeKey = String(lang || "EN").toUpperCase();
-  const strings = STR[localeKey] || STR.EN;
-  const loginLabel = strings.signIn || "Sign In";
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const allow = ["AR", "FR"].includes(String(examLang || lang || "EN").toUpperCase());
+    if (allow) {
+      document.documentElement.dataset.allowNonEnglish = "true";
+    } else {
+      delete document.documentElement.dataset.allowNonEnglish;
+    }
+    return () => {
+      delete document.documentElement.dataset.allowNonEnglish;
+    };
+  }, [examLang, lang]);
+
+  // Local minimal i18n for the test UI (Career Guidance only)
   const UI = {
     EN: {
+      signInLabel: "Sign In",
+      signInTitle: "Sign In",
+      signInSubtitle: "Enter your credentials to continue.",
+      continueLabel: "Continue",
+      nameRequired: "Name is required",
+      schoolRequired: "School is required",
+      classRequired: "Class is required",
+      phoneInvalid: "Please enter a valid phone number",
       chooseLang: "Select the language for this test",
       lockedNote: "This choice will be locked during the exam.",
       accessTitle: "Access Code Required",
@@ -564,6 +581,14 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       participantError: "Please enter your name, school, class, phone number, and a valid email to continue.",
     },
     AR: {
+      signInLabel: "Sign In",
+      signInTitle: "Sign In",
+      signInSubtitle: "Enter your credentials to continue.",
+      continueLabel: "Continue",
+      nameRequired: "Name is required",
+      schoolRequired: "School is required",
+      classRequired: "Class is required",
+      phoneInvalid: "Please enter a valid phone number",
       chooseLang: "اختر لغة هذا الاختبار",
       lockedNote: "سيتم تثبيت هذا الاختيار أثناء الامتحان.",
       accessTitle: "رمز الدخول مطلوب",
@@ -593,6 +618,14 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       participantError: "يجب إدخال الاسم والمدرسة والصف ورقم الهاتف وبريد إلكتروني صالح للمتابعة.",
     },
     FR: {
+      signInLabel: "Connexion",
+      signInTitle: "Connexion",
+      signInSubtitle: "Saisissez vos identifiants pour continuer.",
+      continueLabel: "Continuer",
+      nameRequired: "Le nom est requis",
+      schoolRequired: "L'ecole est requise",
+      classRequired: "La classe est requise",
+      phoneInvalid: "Veuillez saisir un numero de telephone valide",
       chooseLang: "Sélectionnez la langue de ce test",
       lockedNote: "Ce choix sera verrouillé pendant l'examen.",
       accessTitle: "Code d'accès requis",
@@ -628,9 +661,10 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   const rtlPageStyle = isRTL ? { direction: "rtl", textAlign: "right" } : undefined;
   const LANG_LABELS = { EN: "English", FR: "Français", AR: "العربية" };
   const EXAM_LANG_CODES = ["EN", "FR", "AR"];
-  const signInTitle = strings.signInTitle || loginLabel;
-  const signInPrompt = strings.signInSubtitle || ui.accessDesc || "Please sign in to continue.";
-  const backHomeLabel = ui.backHome || strings.backToHome || "Back Home";
+  const signInLabel = ui.signInLabel || "Sign In";
+  const signInTitle = ui.signInTitle || signInLabel;
+  const signInPrompt = ui.signInSubtitle || ui.accessDesc || "Please sign in to continue.";
+  const backHomeLabel = ui.backHome || "Back Home";
   const handleUnlock = useCallback(async () => {
     if (codeLoading) return;
     setCgErr("");
@@ -718,10 +752,10 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     const trimmedClass = toPlainString(accountForm.className).trim();
     const trimmedPhone = toPlainString(accountForm.phone).trim();
     const nextErrors = {};
-    if (!trimmedName) nextErrors.name = strings.nameRequired || "Name is required";
-    if (!trimmedSchool) nextErrors.school = strings.schoolRequired || "School is required";
-    if (isStudentAccount && !trimmedClass) nextErrors.className = strings.classRequired || "Class is required";
-    if (!isValidPhone(trimmedPhone)) nextErrors.phone = strings.phoneInvalid || "Please enter a valid phone number";
+    if (!trimmedName) nextErrors.name = ui.nameRequired || "Name is required";
+    if (!trimmedSchool) nextErrors.school = ui.schoolRequired || "School is required";
+    if (isStudentAccount && !trimmedClass) nextErrors.className = ui.classRequired || "Class is required";
+    if (!isValidPhone(trimmedPhone)) nextErrors.phone = ui.phoneInvalid || "Please enter a valid phone number";
     setAccountFormErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     setSavingAccount(true);
@@ -849,6 +883,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       answered_count: answeredCount,
       total_questions: totalQuestions,
       status: "in_progress",
+      pause_reason: null,
+      paused_at: null,
     }).catch((err) => {
       console.warn("live session update", err);
     });
@@ -862,6 +898,8 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
     if (!pauseRequestedRef.current) return;
     updateLiveTestSession(liveSessionId, {
       status: "paused",
+      pause_reason: pauseReason || null,
+      paused_at: new Date().toISOString(),
     })
       .then(() => {
         pauseRequestedRef.current = false;
@@ -869,7 +907,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       .catch((err) => {
         console.warn("live session pause", err);
       });
-  }, [sessionPaused, liveSessionId, isPreview]);
+  }, [sessionPaused, liveSessionId, isPreview, pauseReason]);
 
   useEffect(() => {
     if (isPreview || !liveSessionId) return;
@@ -944,7 +982,6 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
       return;
     }
     try { localStorage.setItem("cg_exam_lang", chosen); } catch {}
-      if (typeof setLang === "function" && (chosen === "EN" || chosen === "FR")) setLang(chosen);
       setExamLocked(true);
       // Shuffle questions each time the test starts
       hasEndedRef.current = false;
@@ -1068,6 +1105,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   }, [page, R_START, LAST, shuffledRIASEC, next, prev, endTest]);
 
   if (!isPreview && sessionPaused) {
+    const isTabPause = pauseReason === "tab" || pauseReason === "blur";
     return (
       <PageWrap style={rtlPageStyle}>
         <Card>
@@ -1079,11 +1117,13 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
               ? "You left the test. The session is locked until an admin allows you to continue."
               : "This session is paused. Waiting for admin approval to continue."}
           </p>
-          <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "flex-start" }}>
-            <Btn variant="back" onClick={() => onNavigate("home")}>
-              Back Home
-            </Btn>
-          </div>
+          {!isTabPause && (
+            <div style={{ marginTop: 12, display: "flex", gap: 10, justifyContent: "flex-start" }}>
+              <Btn variant="back" onClick={() => onNavigate("home")}>
+                Back Home
+              </Btn>
+            </div>
+          )}
         </Card>
       </PageWrap>
     );
@@ -1109,7 +1149,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
         <Card>
           <p style={{ color: "#6b7280" }}>{signInPrompt}</p>
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="primary" onClick={() => onNavigate("login")}>{loginLabel}</Btn>
+            <Btn variant="primary" onClick={() => onNavigate("login")}>{signInLabel}</Btn>
             <Btn variant="back" onClick={() => onNavigate("home")}>{backHomeLabel}</Btn>
           </div>
         </Card>
@@ -1146,7 +1186,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
   if (needsProfileUpdate) {
     const gateTitle = ui.participantTitle || "Participant Information";
     const gateDesc = ui.participantDesc || "Please complete the following before beginning.";
-    const continueLabel = strings.agreeBegin || strings.takeTest || "Continue";
+    const continueLabel = ui.continueLabel || ui.startTest || "Continue";
     const helperText = isStudentAccount
       ? "We need your school, class, and phone number on file before you can start the assessment."
       : "We need your school and phone number on file before you can start the assessment.";
@@ -1469,3 +1509,7 @@ export default function Test({ onNavigate, lang = "EN", setLang, preview = false
 
   return null;
 }
+
+
+
+

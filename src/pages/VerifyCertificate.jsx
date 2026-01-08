@@ -86,13 +86,12 @@ const STATUS_COLORS = {
   expired: "#d97706",
 };
 
-export default function VerifyCertificate({ onNavigate, lang = "EN" }) {
+export default function VerifyCertificate({ onNavigate }) {
   VerifyCertificate.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
   };
 
-  const copy = COPY[lang] || COPY.EN;
+  const copy = COPY.EN;
   const [code, setCode] = useState("");
   const [result, setResult] = useState(null);
   const [pending, setPending] = useState(false);
@@ -183,7 +182,7 @@ export default function VerifyCertificate({ onNavigate, lang = "EN" }) {
     if (!value) return "—";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString(lang === "AR" ? "ar-LB" : lang === "FR" ? "fr-FR" : "en-US", {
+    return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -201,11 +200,10 @@ export default function VerifyCertificate({ onNavigate, lang = "EN" }) {
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         title={copy.title}
         right={
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <UserMenu lang={lang} onNavigate={onNavigate} />
+            <UserMenu onNavigate={onNavigate} />
           </div>
         }
       />

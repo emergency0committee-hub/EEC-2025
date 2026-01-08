@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { jsPDF } from "jspdf";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
+import DateTimePicker from "../components/DateTimePicker.jsx";
 
 const MAIN_TABS = [
   { key: "planning", label: "Planning" },
@@ -1567,7 +1568,12 @@ function FeedbackAssessmentWorkspace() {
                 style={inputStyle}
               />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <input type="date" value={assessmentDate} onChange={(e) => setAssessmentDate(e.target.value)} style={inputStyle} />
+                <DateTimePicker
+                  mode="date"
+                  value={assessmentDate}
+                  onChange={setAssessmentDate}
+                  inputStyle={inputStyle}
+                />
                 <input
                   type="number"
                   min="1"
@@ -1664,11 +1670,11 @@ function FeedbackAssessmentWorkspace() {
                   </label>
                   <label style={{ display: "grid", gap: 4 }}>
                     <span style={{ fontSize: 12, color: "#6b7280" }}>Date</span>
-                    <input
-                      type="date"
+                    <DateTimePicker
+                      mode="date"
                       value={activeAssessment.date || ""}
-                      onChange={(e) => updateAssessmentMeta(activeAssessment.id, { date: e.target.value })}
-                      style={{ ...inputStyle, width: 160, fontSize: 13 }}
+                      onChange={(nextValue) => updateAssessmentMeta(activeAssessment.id, { date: nextValue })}
+                      inputStyle={{ ...inputStyle, width: 160, fontSize: 13 }}
                     />
                   </label>
                 </div>

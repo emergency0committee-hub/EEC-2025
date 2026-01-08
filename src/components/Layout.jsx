@@ -801,9 +801,6 @@ export function HeaderBar({ title, right, lang = "EN" }) {
           return child;
         }
         const childType = child.type;
-        const isLanguageButton =
-          childType &&
-          (childType.displayName === "LanguageButton" || childType.name === "LanguageButton");
         const isUserMenu =
           childType && (childType.displayName === "UserMenu" || childType.name === "UserMenu");
         // Stack nav links vertically
@@ -840,21 +837,6 @@ export function HeaderBar({ title, right, lang = "EN" }) {
               });
             })
           );
-        }
-        if (isLanguageButton) {
-          const animation =
-            drawerVisible && itemAnimationName
-              ? `${itemAnimationName} 260ms ease ${index * 60}ms both`
-              : "none";
-          return React.cloneElement(child, {
-            key: child.key ?? `header-item-${index}`,
-            context: "drawer",
-            style: {
-              ...(child.props.style || {}),
-              width: "100%",
-              animation,
-            },
-          });
         }
         const isIconControl =
           childType === "button" && child.props?.["data-header-control"] === "icon";

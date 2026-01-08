@@ -26,6 +26,8 @@ const mapRowToSession = (row) => {
     email: row?.user_email || "",
     school: row?.school || "",
     status: row?.status || "in_progress",
+    pauseReason: row?.pause_reason || "",
+    pausedAt: row?.paused_at || null,
     startedAt: row?.started_at || row?.created_at || null,
     answered,
     totalQuestions,
@@ -144,6 +146,31 @@ export default function LiveTestSessionsPanel({ testType, title, description }) 
           {error}
         </div>
       )}
+      {(() => {
+        const tabPaused = sessions.filter(
+          (s) => s.status === "paused" && ["tab", "blur"].includes(String(s.pauseReason || ""))
+        );
+        if (!tabPaused.length) return null;
+        return (
+          <div
+            style={{
+              marginTop: 12,
+              borderRadius: 12,
+              border: "1px solid #fecaca",
+              background: "#fee2e2",
+              padding: "10px 12px",
+              color: "#7f1d1d",
+              fontSize: 13,
+            }}
+          >
+            <strong>Alert:</strong> {tabPaused.length} student{tabPaused.length > 1 ? "s" : ""} left the test tab.
+            <div style={{ marginTop: 6, color: "#7f1d1d" }}>
+              {tabPaused.slice(0, 5).map((s) => s.name).join(", ")}
+              {tabPaused.length > 5 ? `, +${tabPaused.length - 5} more` : ""}
+            </div>
+          </div>
+        );
+      })()}
       {loading ? (
         <p style={{ color: "#6b7280" }}>Loading live sessions...</p>
       ) : sessions.length > 0 ? (

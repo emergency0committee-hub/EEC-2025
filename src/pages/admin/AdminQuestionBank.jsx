@@ -654,13 +654,13 @@ const normalizeQType = (row) => {
   return "mcq";
 };
 
-export default function AdminQuestionBank({ onNavigate, lang = "EN" }) {
+export default function AdminQuestionBank({ onNavigate }) {
   AdminQuestionBank.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
   };
 
-  const copy = COPY[lang] || COPY.EN;
+  const lang = "EN";
+  const copy = COPY.EN;
   const storedRole = (() => {
     try {
       if (typeof window === "undefined") return "";
@@ -1700,14 +1700,13 @@ const validate = () => {
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         title={copy.title}
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Btn variant="back" onClick={() => onNavigate("home")}>
               Back to Home
             </Btn>
-            <UserMenu lang={lang} onNavigate={onNavigate} />
+            <UserMenu onNavigate={onNavigate} />
           </div>
         }
       />

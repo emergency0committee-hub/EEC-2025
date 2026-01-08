@@ -105,7 +105,10 @@ export default function SATTestInterface({
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
     const onVis = () => { if (document.hidden) requestPause("tab"); };
-    const onBlur = () => requestPause("blur");
+    const onBlur = () => {
+      if (calculatorOpenRef.current) return;
+      requestPause("blur");
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
     return () => {
@@ -575,6 +578,15 @@ export default function SATTestInterface({
   const [sectionActive, setSectionActive] = useState(true);
   const [finalTimeout, setFinalTimeout] = useState(false);
   const [showCalculator, setShowCalculator] = useState(false);
+  const calculatorOpenRef = useRef(false);
+  const openCalculator = useCallback(() => {
+    calculatorOpenRef.current = true;
+    setShowCalculator(true);
+  }, []);
+  const closeCalculator = useCallback(() => {
+    calculatorOpenRef.current = false;
+    setShowCalculator(false);
+  }, []);
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleResize = () => {
@@ -704,6 +716,8 @@ export default function SATTestInterface({
         answered_count: answeredCount,
         total_questions: totalQuestionsCount,
         status: "in_progress",
+        pause_reason: null,
+        paused_at: null,
       }).catch((err) => {
         console.warn("live session update", err);
       });
@@ -717,6 +731,8 @@ export default function SATTestInterface({
       if (!pauseRequestedRef.current) return;
       updateLiveTestSession(liveSessionId, {
         status: "paused",
+        pause_reason: pauseReason || null,
+        paused_at: new Date().toISOString(),
       })
         .then(() => {
           pauseRequestedRef.current = false;
@@ -724,7 +740,7 @@ export default function SATTestInterface({
         .catch((err) => {
           console.warn("live session pause", err);
         });
-    }, [enableLiveSession, liveSessionId, sessionPaused]);
+    }, [enableLiveSession, liveSessionId, sessionPaused, pauseReason]);
 
     useEffect(() => {
       if (!enableLiveSession || !liveSessionId) return;
@@ -840,9 +856,9 @@ export default function SATTestInterface({
 
   useEffect(() => {
     if (!isMathSection) {
-      setShowCalculator(false);
+      closeCalculator();
     }
-  }, [isMathSection, modIdx]);
+  }, [isMathSection, modIdx, closeCalculator]);
 
     useEffect(() => {
       if (!mod) return;
@@ -1431,6 +1447,7 @@ export default function SATTestInterface({
   }
 
     if (!previewMode && sessionPaused) {
+      const isTabPause = pauseReason === "tab" || pauseReason === "blur";
       return (
         <PageWrap>
           <Card>
@@ -1442,11 +1459,13 @@ export default function SATTestInterface({
                 ? "You left the test. The session is locked until an admin allows you to continue."
                 : "This session is paused. Waiting for admin approval to continue."}
             </p>
-            <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-              <Btn variant="back" onClick={() => onNavigate("home")}>
-                Back Home
-              </Btn>
-            </div>
+            {!isTabPause && (
+              <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                <Btn variant="back" onClick={() => onNavigate("home")}>
+                  Back Home
+                </Btn>
+              </div>
+            )}
           </Card>
         </PageWrap>
       );
@@ -1460,7 +1479,7 @@ export default function SATTestInterface({
           role="dialog"
           aria-modal="true"
           aria-label="Desmos Calculator"
-          onClick={() => setShowCalculator(false)}
+          onClick={closeCalculator}
           style={{
             position: "fixed",
             inset: 0,
@@ -1496,7 +1515,7 @@ export default function SATTestInterface({
               <strong style={{ fontSize: 16 }}>Desmos Calculator</strong>
               <button
                 type="button"
-                onClick={() => setShowCalculator(false)}
+                onClick={closeCalculator}
                 style={{
                   border: "none",
                   background: "transparent",
@@ -1564,7 +1583,7 @@ export default function SATTestInterface({
             {isMathSection && (
               <button
                 type="button"
-                onClick={() => setShowCalculator(true)}
+                onClick={openCalculator}
                 style={{ border: "1px solid #d1d5db", background: "#fff", color: "#2563eb", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontWeight: 600 }}
               >
                 Calculator

@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Card } from "../../../../components/Layout.jsx";
 import Btn from "../../../../components/Btn.jsx";
+import DateTimePicker from "../../../../components/DateTimePicker.jsx";
 import AdaptiveInsightsCard from "./AdaptiveInsightsCard.jsx";
 import {
   BANKS,
@@ -331,11 +332,17 @@ export default function AdminClassDetail({
                   />
                   {autoAssign.kind === "homework" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <input
-                        type="datetime-local"
+                      <DateTimePicker
+                        label="Deadline"
+                        mode="datetime"
                         value={autoAssign.deadline}
-                        onChange={(e) => handleAutoAssignChange("deadline", e.target.value)}
-                        style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8, minWidth: 220 }}
+                        onChange={(nextValue) => handleAutoAssignChange("deadline", nextValue)}
+                        inputStyle={{
+                          padding: "10px 12px",
+                          border: "1px solid #d1d5db",
+                          borderRadius: 8,
+                          minWidth: 220,
+                        }}
                       />
                       <span style={{ color: "#6b7280", fontSize: 12 }}>Students lose edit access after this time.</span>
                     </div>

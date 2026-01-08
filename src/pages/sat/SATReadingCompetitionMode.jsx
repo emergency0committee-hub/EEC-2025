@@ -5,6 +5,7 @@ import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
 import LiveTestSessionsPanel from "../../components/LiveTestSessionsPanel.jsx";
+import DateTimePicker from "../../components/DateTimePicker.jsx";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const formatTimestamp = (value) => {
@@ -477,24 +478,20 @@ export default function SATReadingCompetitionMode({ onNavigate }) {
                 />
               </div>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>Start</label>
-                  <input
-                    type="datetime-local"
-                    value={eventForm.startsAt}
-                    onChange={(e) => setEventForm((prev) => ({ ...prev, startsAt: e.target.value }))}
-                    style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
-                  />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>End (optional)</label>
-                  <input
-                    type="datetime-local"
-                    value={eventForm.endsAt}
-                    onChange={(e) => setEventForm((prev) => ({ ...prev, endsAt: e.target.value }))}
-                    style={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
-                  />
-                </div>
+                <DateTimePicker
+                  label="Start"
+                  mode="datetime"
+                  value={eventForm.startsAt}
+                  onChange={(nextValue) => setEventForm((prev) => ({ ...prev, startsAt: nextValue }))}
+                  inputStyle={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+                />
+                <DateTimePicker
+                  label="End (optional)"
+                  mode="datetime"
+                  value={eventForm.endsAt}
+                  onChange={(nextValue) => setEventForm((prev) => ({ ...prev, endsAt: nextValue }))}
+                  inputStyle={{ padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}
+                />
               </div>
               <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <div style={{ display: "grid", gap: 6 }}>

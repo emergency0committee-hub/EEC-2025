@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import Btn from "../../components/Btn.jsx";
 import { supabase } from "../../lib/supabase.js";
+import DateTimePicker from "../../components/DateTimePicker.jsx";
 
 const TABLE = import.meta.env.VITE_CERTIFICATES_TABLE || "cg_certificates";
 
@@ -264,15 +265,13 @@ export default function AdminCertificates({ onNavigate }) {
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label style={{ fontWeight: 600 }}>Issued On</label>
-            <input
-              type="datetime-local"
-              value={form.issuedAt}
-              onChange={(e) => handleChange("issuedAt", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
+          <DateTimePicker
+            label="Issued On"
+            mode="datetime"
+            value={form.issuedAt}
+            onChange={(nextValue) => handleChange("issuedAt", nextValue)}
+            inputStyle={inputStyle}
+          />
 
           {error && (
             <div style={alertStyle("error")}>{error}</div>

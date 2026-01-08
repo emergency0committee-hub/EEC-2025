@@ -151,11 +151,37 @@ const PROFILE_PROMPT_COPY = {
   },
 };
 
+const ROLE_FIX_COPY = {
+  EN: {
+    title: "Choose your account type",
+    subtitle: "Your account type is missing or invalid. Select Student or Educator to continue.",
+    studentLabel: "Student",
+    educatorLabel: "Educator",
+    saving: "Saving...",
+    error: "Unable to update account type. Please try again.",
+  },
+  AR: {
+    title: "اختر نوع الحساب",
+    subtitle: "نوع الحساب غير محدد أو غير صحيح. اختر طالب أو معلم للمتابعة.",
+    studentLabel: "طالب",
+    educatorLabel: "معلم",
+    saving: "جارٍ الحفظ...",
+    error: "تعذر تحديث نوع الحساب. حاول مرة أخرى.",
+  },
+  FR: {
+    title: "Choisissez votre type de compte",
+    subtitle: "Le type de compte est manquant ou invalide. Choisissez Étudiant ou Enseignant pour continuer.",
+    studentLabel: "Étudiant",
+    educatorLabel: "Enseignant",
+    saving: "Enregistrement...",
+    error: "Impossible de mettre à jour le type de compte. Réessayez.",
+  },
+};
 
-export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = false }) {
+
+export default function Home({ onNavigate, canAccessAIEducator = false }) {
   Home.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string.isRequired,
     canAccessAIEducator: PropTypes.bool,
   };
 
@@ -164,6 +190,9 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
   const [satTestingPickerOpen, setSatTestingPickerOpen] = useState(false);
   const [profilePromptOpen, setProfilePromptOpen] = useState(false);
   const [profilePromptDismissed, setProfilePromptDismissed] = useState(false);
+  const [roleFixOpen, setRoleFixOpen] = useState(false);
+  const [roleFixSaving, setRoleFixSaving] = useState(false);
+  const [roleFixError, setRoleFixError] = useState("");
   const [profileDraft, setProfileDraft] = useState({
     name: "",
     phone: "",
@@ -186,14 +215,14 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
     refresh: requestWeather,
   } = useWeather();
 
-  const t = STR[lang] || STR.EN;
-  const home = HOME_CARDS[lang] || HOME_CARDS.EN;
-  const promptCopy = PROFILE_PROMPT_COPY[lang] || PROFILE_PROMPT_COPY.EN;
+  const t = STR.EN;
+  const home = HOME_CARDS.EN;
+  const promptCopy = PROFILE_PROMPT_COPY.EN;
+  const roleFixCopy = ROLE_FIX_COPY.EN;
   const promptAvatarHelper = promptCopy.avatarHelper.replace("{max}", MAX_PROFILE_AVATAR_MB);
   const timeFormatter = useMemo(() => {
-    const locale = lang === "FR" ? "fr-FR" : "en-US";
-    return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" });
-  }, [lang]);
+    return new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit" });
+  }, []);
   const timeParts = useMemo(() => {
     const parts = timeFormatter.formatToParts(now);
     const hour = parts.find((part) => part.type === "hour")?.value || "";
@@ -286,13 +315,13 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
       cancel: "Annuler",
     },
   };
-  const satPickerCopy = SAT_TESTING_COPY[lang] || SAT_TESTING_COPY.EN;
+  const satPickerCopy = SAT_TESTING_COPY.EN;
 
   const lockedLabelMap = {
     EN: { label: "Request Access", message: "Limited to approved educators." },
     FR: { label: "Demander l'acc\u00e8s", message: "R\u00e9serv\u00e9 aux enseignants approuv\u00e9s." },
   };
-  const lockedCopy = lockedLabelMap[lang] || lockedLabelMap.EN;
+  const lockedCopy = lockedLabelMap.EN;
   const aiLockedLabel = home.aiEducator.locked || lockedCopy.label;
   const aiLockedMessage = home.aiEducator.lockedMessage || lockedCopy.message;
   const profileErrorStyle = { color: "#dc2626", fontSize: 12, margin: "4px 0 0" };
@@ -406,7 +435,9 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
   }, [profileAvatarPreview]);
 
   const normalizedRole = (currentUser?.role || "").toLowerCase();
+  const allowedRoles = ["student", "educator", "staff", "admin", "administrator", "school"];
   const isPrivilegedRole = ["admin", "administrator", "staff"].includes(normalizedRole);
+  const needsRoleFix = Boolean(isSignedIn && (!normalizedRole || !allowedRoles.includes(normalizedRole)));
   const needsSchool = ["student", "educator", "school"].includes(normalizedRole);
   const needsClass = normalizedRole === "student";
   const missingMap = useMemo(() => {
@@ -429,6 +460,48 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
   useEffect(() => {
     if (!shouldPrompt) setProfilePromptDismissed(false);
   }, [shouldPrompt]);
+
+  useEffect(() => {
+    if (needsRoleFix) {
+      setRoleFixOpen(true);
+    } else {
+      setRoleFixOpen(false);
+      setRoleFixError("");
+    }
+  }, [needsRoleFix]);
+
+  const handleRoleFixSelect = async (nextRole) => {
+    if (!nextRole || roleFixSaving) return;
+    setRoleFixSaving(true);
+    setRoleFixError("");
+    try {
+      let userId = currentUser?.id;
+      if (!userId) {
+        const { data } = await supabase.auth.getUser();
+        userId = data?.user?.id;
+      }
+      if (!userId) throw new Error(roleFixCopy.error);
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ role: nextRole })
+        .eq("id", userId);
+      if (profileError) throw profileError;
+      try {
+        await supabase.auth.updateUser({ data: { accountType: nextRole, role: nextRole } });
+      } catch {}
+      const merged = { ...(currentUser || {}), id: userId, role: nextRole };
+      setCurrentUser(merged);
+      try { localStorage.setItem("cg_current_user_v1", JSON.stringify(merged)); } catch {}
+      if (nextRole !== "admin") {
+        try { localStorage.removeItem("cg_admin_ok_v1"); } catch {}
+      }
+      setRoleFixOpen(false);
+    } catch (err) {
+      setRoleFixError(err?.message || roleFixCopy.error);
+    } finally {
+      setRoleFixSaving(false);
+    }
+  };
 
   const handleProfileDraftChange = (field, value) => {
     setProfileDraft((prev) => ({ ...prev, [field]: value }));
@@ -698,7 +771,6 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto", mixBlendMode: "multiply" }} />
@@ -720,12 +792,74 @@ export default function Home({ onNavigate, lang = "EN", canAccessAIEducator = fa
                 {t.navBlogs}
               </Btn>
             </nav>
-            <UserMenu onNavigate={onNavigate} lang={lang} iconColor={theme.navText} />
+            <UserMenu onNavigate={onNavigate} iconColor={theme.navText} />
           </div>
         }
       />
 
-      {profilePromptOpen && (
+      {roleFixOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={roleFixCopy.title}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 72,
+            background: theme.overlayStrong,
+            padding: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div style={{ width: "min(520px, 92vw)" }}>
+            <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
+              <h3 style={{ marginTop: 0, marginBottom: 6, color: theme.textPrimary }}>{roleFixCopy.title}</h3>
+              <p style={{ marginTop: 0, color: theme.textSecondary }}>{roleFixCopy.subtitle}</p>
+              <div style={{ display: "grid", gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => handleRoleFixSelect("student")}
+                  disabled={roleFixSaving}
+                  style={{
+                    borderRadius: 12,
+                    border: `1px solid ${theme.panelBorder}`,
+                    background: theme.panelBg,
+                    padding: "12px 16px",
+                    textAlign: "left",
+                    cursor: roleFixSaving ? "not-allowed" : "pointer",
+                    color: theme.textPrimary,
+                    fontWeight: 600,
+                  }}
+                >
+                  {roleFixSaving ? roleFixCopy.saving : roleFixCopy.studentLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRoleFixSelect("educator")}
+                  disabled={roleFixSaving}
+                  style={{
+                    borderRadius: 12,
+                    border: `1px solid ${theme.panelBorder}`,
+                    background: theme.panelBg,
+                    padding: "12px 16px",
+                    textAlign: "left",
+                    cursor: roleFixSaving ? "not-allowed" : "pointer",
+                    color: theme.textPrimary,
+                    fontWeight: 600,
+                  }}
+                >
+                  {roleFixSaving ? roleFixCopy.saving : roleFixCopy.educatorLabel}
+                </button>
+              </div>
+              {roleFixError && <p style={{ marginTop: 12, color: "#dc2626", fontSize: 13 }}>{roleFixError}</p>}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {profilePromptOpen && !roleFixOpen && (
         <div
           role="dialog"
           aria-modal="true"

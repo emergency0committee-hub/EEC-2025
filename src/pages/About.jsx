@@ -6,14 +6,13 @@ import Btn from "../components/Btn.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { STR } from "../i18n/strings.js";
 
-export default function About({ onNavigate, lang = "EN" }) {
+export default function About({ onNavigate }) {
   About.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
   };
 
   const navTo = (route, data = null) => (event) => onNavigate(route, data, event);
-  const t = STR[lang] || STR.EN;
+  const t = STR.EN;
 
   const TEAM_MEMBERS = [
     {
@@ -115,12 +114,11 @@ export default function About({ onNavigate, lang = "EN" }) {
       openMap: "Ouvrir la carte",
     },
   };
-  const ui = copy[String(lang || "EN").toUpperCase()] || copy.EN;
+  const ui = copy.EN;
 
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto", mixBlendMode: "multiply" }} />
@@ -140,7 +138,7 @@ export default function About({ onNavigate, lang = "EN" }) {
                 {t.navBlogs}
               </Btn>
             </nav>
-            <UserMenu onNavigate={onNavigate} lang={lang} />
+            <UserMenu onNavigate={onNavigate} />
           </div>
         }
       />
@@ -178,8 +176,8 @@ export default function About({ onNavigate, lang = "EN" }) {
         <div style={{ color: "#4b5563", fontSize: 14, marginBottom: 14 }}>{ui.peopleSubtitle}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
           {TEAM_MEMBERS.map((m, idx) => {
-            const roleText = m?.role?.[String(lang || "EN").toUpperCase()] || m?.role?.EN || "";
-            const bioText = m?.bio?.[String(lang || "EN").toUpperCase()] || m?.bio?.EN || "";
+            const roleText = m?.role?.EN || "";
+            const bioText = m?.bio?.EN || "";
             const hasPhoto = Boolean(String(m.photo || "").trim());
             return (
               <div
@@ -242,10 +240,10 @@ export default function About({ onNavigate, lang = "EN" }) {
         <div style={{ color: "#4b5563", fontSize: 14, marginBottom: 14 }}>{ui.locationSubtitle}</div>
         <div style={{ display: "grid", gap: 12 }}>
           {LOCATIONS.map((loc, idx) => {
-            const locName = loc?.name?.[String(lang || "EN").toUpperCase()] || loc?.name?.EN || "";
+            const locName = loc?.name?.EN || "";
             const lines =
-              loc?.addressLines?.[String(lang || "EN").toUpperCase()] || loc?.addressLines?.EN || [];
-            const hours = loc?.hours?.[String(lang || "EN").toUpperCase()] || loc?.hours?.EN || "";
+              loc?.addressLines?.EN || [];
+            const hours = loc?.hours?.EN || "";
             const hasMap = Boolean(String(loc?.mapHref || "").trim());
             const embedSrc = loc?.coords ? googleEmbedSrcFromCoords(loc.coords) : "";
             return (

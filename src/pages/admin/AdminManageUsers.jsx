@@ -101,13 +101,12 @@ const formatUserLabel = (user) => {
   return parts.join(" ");
 };
 
-export default function AdminManageUsers({ onNavigate, lang = "EN" }) {
+export default function AdminManageUsers({ onNavigate }) {
   AdminManageUsers.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
   };
 
-  const copy = COPY[lang] || COPY.EN;
+  const copy = COPY.EN;
   const [usersLoading, setUsersLoading] = useState(true);
   const [userError, setUserError] = useState("");
   const [users, setUsers] = useState([]);
@@ -415,14 +414,13 @@ export default function AdminManageUsers({ onNavigate, lang = "EN" }) {
 
   const headerRight = (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <UserMenu lang={lang} onNavigate={onNavigate} />
+      <UserMenu onNavigate={onNavigate} />
     </div>
   );
 
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         title={copy.title}
         right={
           <>
@@ -719,7 +717,7 @@ export default function AdminManageUsers({ onNavigate, lang = "EN" }) {
               >
                 {ROLE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label[lang] || opt.label.EN}
+                    {opt.label.EN}
                   </option>
                 ))}
               </select>

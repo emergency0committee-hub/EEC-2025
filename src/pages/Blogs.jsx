@@ -6,41 +6,26 @@ import Btn from "../components/Btn.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { STR } from "../i18n/strings.js";
 
-export default function Blogs({ onNavigate, lang = "EN" }) {
+export default function Blogs({ onNavigate }) {
   Blogs.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
   };
 
-  const t = STR[lang] || STR.EN;
+  const t = STR.EN;
 
-  const UI = {
-    EN: {
-      heroTitle: "Blog",
-      heroSubtitle: "News, resources, and updates from EEC.",
-      searchPlaceholder: "Search posts…",
-      allCategories: "All",
-      featured: "Featured",
-      latest: "Latest posts",
-      read: "Read",
-      close: "Close",
-      noResults: "No posts match your search.",
-      draftNote: "Draft content — replace with real posts when ready.",
-    },
-    FR: {
-      heroTitle: "Blog",
-      heroSubtitle: "Actualités, ressources et mises à jour de l’EEC.",
-      searchPlaceholder: "Rechercher des articles…",
-      allCategories: "Tous",
-      featured: "À la une",
-      latest: "Derniers articles",
-      read: "Lire",
-      close: "Fermer",
-      noResults: "Aucun article ne correspond à votre recherche.",
-      draftNote: "Contenu brouillon — à remplacer par des articles réels.",
-    },
+  const ui = {
+    heroTitle: "Blog",
+    heroSubtitle: "News, resources, and updates from EEC.",
+    searchPlaceholder: "Search posts...",
+    allCategories: "All",
+    featured: "Featured",
+    latest: "Latest posts",
+    read: "Read",
+    close: "Close",
+    noResults: "No posts match your search.",
+    draftNote: "Draft content - replace with real posts when ready.",
   };
-  const ui = UI[String(lang || "EN").toUpperCase()] || UI.EN;
+  const activeLang = "EN";
 
   const POSTS = [
     {
@@ -158,23 +143,23 @@ export default function Blogs({ onNavigate, lang = "EN" }) {
   const categories = useMemo(() => {
     const set = new Set();
     POSTS.forEach((p) => {
-      const c = p?.category?.[String(lang || "EN").toUpperCase()] || p?.category?.EN || "";
+      const c = p?.category?.[activeLang] || p?.category?.EN || "";
       if (c) set.add(c);
     });
     return [ui.allCategories, ...Array.from(set)];
-  }, [lang, ui.allCategories]);
+  }, [activeLang, ui.allCategories]);
 
   const filteredPosts = useMemo(() => {
     const q = String(query || "").trim().toLowerCase();
     return POSTS.filter((p) => {
-      const title = (p?.title?.[String(lang || "EN").toUpperCase()] || p?.title?.EN || "").toLowerCase();
-      const excerpt = (p?.excerpt?.[String(lang || "EN").toUpperCase()] || p?.excerpt?.EN || "").toLowerCase();
-      const cat = p?.category?.[String(lang || "EN").toUpperCase()] || p?.category?.EN || "";
+      const title = (p?.title?.[activeLang] || p?.title?.EN || "").toLowerCase();
+      const excerpt = (p?.excerpt?.[activeLang] || p?.excerpt?.EN || "").toLowerCase();
+      const cat = p?.category?.[activeLang] || p?.category?.EN || "";
       const matchesCategory = activeCategory === ui.allCategories ? true : cat === activeCategory;
       const matchesQuery = !q ? true : title.includes(q) || excerpt.includes(q);
       return matchesCategory && matchesQuery;
     });
-  }, [activeCategory, lang, query, ui.allCategories]);
+  }, [activeCategory, activeLang, query, ui.allCategories]);
 
   const featuredPost = useMemo(() => filteredPosts.find((p) => p.featured) || null, [filteredPosts]);
   const latestPosts = useMemo(() => filteredPosts.filter((p) => !p.featured), [filteredPosts]);
@@ -182,22 +167,20 @@ export default function Blogs({ onNavigate, lang = "EN" }) {
   const formatDate = (iso) => {
     const d = new Date(String(iso || ""));
     if (!Number.isFinite(d.getTime())) return String(iso || "");
-    const locale = String(lang || "EN").toUpperCase() === "FR" ? "fr-FR" : "en-US";
-    return d.toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   };
 
   const openPost = useMemo(() => POSTS.find((p) => p.id === openPostId) || null, [POSTS, openPostId]);
   const openTitle =
-    openPost?.title?.[String(lang || "EN").toUpperCase()] || openPost?.title?.EN || "";
+    openPost?.title?.[activeLang] || openPost?.title?.EN || "";
   const openCategory =
-    openPost?.category?.[String(lang || "EN").toUpperCase()] || openPost?.category?.EN || "";
+    openPost?.category?.[activeLang] || openPost?.category?.EN || "";
   const openContent =
-    openPost?.content?.[String(lang || "EN").toUpperCase()] || openPost?.content?.EN || [];
+    openPost?.content?.[activeLang] || openPost?.content?.EN || [];
 
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <img src="/EEC_Logo.png" alt="Logo" style={{ height: 40, width: "auto", mixBlendMode: "multiply" }} />
@@ -217,7 +200,7 @@ export default function Blogs({ onNavigate, lang = "EN" }) {
                 {t.navBlogs}
               </Btn>
             </nav>
-            <UserMenu onNavigate={onNavigate} lang={lang} />
+            <UserMenu onNavigate={onNavigate} />
           </div>
         }
       />
@@ -274,15 +257,15 @@ export default function Blogs({ onNavigate, lang = "EN" }) {
                 {ui.featured}
               </span>
               <span style={{ color: "#475569", fontSize: 13 }}>
-                {featuredPost?.category?.[String(lang || "EN").toUpperCase()] || featuredPost?.category?.EN || ""} • {formatDate(featuredPost.date)} • {featuredPost.readTime}
+                {featuredPost?.category?.[activeLang] || featuredPost?.category?.EN || ""} • {formatDate(featuredPost.date)} • {featuredPost.readTime}
               </span>
             </div>
           </div>
           <h2 style={{ margin: "10px 0 6px", color: "#111827" }}>
-            {featuredPost?.title?.[String(lang || "EN").toUpperCase()] || featuredPost?.title?.EN || ""}
+            {featuredPost?.title?.[activeLang] || featuredPost?.title?.EN || ""}
           </h2>
           <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
-            {featuredPost?.excerpt?.[String(lang || "EN").toUpperCase()] || featuredPost?.excerpt?.EN || ""}
+            {featuredPost?.excerpt?.[activeLang] || featuredPost?.excerpt?.EN || ""}
           </p>
           <div style={{ marginTop: 12 }}>
             <Btn variant="primary" onClick={() => setOpenPostId(featuredPost.id)}>
@@ -299,9 +282,9 @@ export default function Blogs({ onNavigate, lang = "EN" }) {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
             {latestPosts.map((p) => {
-              const cat = p?.category?.[String(lang || "EN").toUpperCase()] || p?.category?.EN || "";
-              const title = p?.title?.[String(lang || "EN").toUpperCase()] || p?.title?.EN || "";
-              const excerpt = p?.excerpt?.[String(lang || "EN").toUpperCase()] || p?.excerpt?.EN || "";
+              const cat = p?.category?.[activeLang] || p?.category?.EN || "";
+              const title = p?.title?.[activeLang] || p?.title?.EN || "";
+              const excerpt = p?.excerpt?.[activeLang] || p?.excerpt?.EN || "";
               return (
                 <div
                   key={p.id}
@@ -371,3 +354,4 @@ export default function Blogs({ onNavigate, lang = "EN" }) {
     </PageWrap>
   );
 }
+

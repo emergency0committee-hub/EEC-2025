@@ -144,15 +144,14 @@ const INTRO_COPY = {
   },
 };
 
-export default function FeatureIntro({ onNavigate, lang = "EN", feature = "career" }) {
+export default function FeatureIntro({ onNavigate, feature = "career" }) {
   FeatureIntro.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
     feature: PropTypes.string.isRequired,
   };
 
   const { theme } = useTheme();
-  const copySet = INTRO_COPY[lang] || INTRO_COPY.EN;
+  const copySet = INTRO_COPY.EN;
   const entry = copySet[feature] || copySet.career;
   const isDark = theme === "dark";
   const cardStyle = useMemo(
@@ -165,7 +164,7 @@ export default function FeatureIntro({ onNavigate, lang = "EN", feature = "caree
 
   return (
     <PageWrap>
-      <HeaderBar title={entry.title} right={null} lang={lang} />
+      <HeaderBar title={entry.title} right={null} />
       <Card style={cardStyle}>
         <p style={{ marginTop: 0, color: isDark ? "#cbd5f5" : "#4b5563" }}>{entry.subtitle}</p>
         <ul style={{ margin: "0 0 18px", paddingLeft: 18, color: isDark ? "#d1d5db" : "#374151" }}>

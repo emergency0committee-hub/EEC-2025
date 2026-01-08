@@ -58,6 +58,105 @@ export function AppProviders({ children }) {
   const [settingsError, setSettingsError] = useState("");
 
   useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    const nonEnglishPattern = /[^\x09\x0A\x0D\x20-\x7E]/;
+    let toastTimer = null;
+    let toastEl = null;
+
+    const ensureToast = () => {
+      if (toastEl) return toastEl;
+      const el = document.createElement("div");
+      el.id = "english-only-toast";
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      Object.assign(el.style, {
+        position: "fixed",
+        left: "50%",
+        bottom: "22px",
+        transform: "translate(-50%, 12px)",
+        background: "rgba(15, 23, 42, 0.92)",
+        color: "#f8fafc",
+        padding: "8px 14px",
+        borderRadius: "999px",
+        fontSize: "12px",
+        fontWeight: "600",
+        letterSpacing: "0.2px",
+        zIndex: "9999",
+        opacity: "0",
+        transition: "opacity 160ms ease, transform 160ms ease",
+        pointerEvents: "none",
+      });
+      el.textContent = "English input only.";
+      document.body.appendChild(el);
+      toastEl = el;
+      return el;
+    };
+
+    const showToast = () => {
+      const el = ensureToast();
+      el.textContent = "English input only.";
+      el.style.opacity = "1";
+      el.style.transform = "translate(-50%, 0)";
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        if (!toastEl) return;
+        toastEl.style.opacity = "0";
+        toastEl.style.transform = "translate(-50%, 12px)";
+      }, 1800);
+    };
+
+    const isTextTarget = (target) => {
+      if (!target || !(target instanceof Element)) return false;
+      if (target.isContentEditable) return true;
+      const tag = target.tagName;
+      if (tag === "TEXTAREA") return true;
+      if (tag !== "INPUT") return false;
+      const type = (target.getAttribute("type") || "text").toLowerCase();
+      if (["button", "submit", "checkbox", "radio", "range", "file", "color"].includes(type)) return false;
+      return true;
+    };
+
+    const allowNonEnglish = (target) => {
+      if (document.documentElement?.dataset?.allowNonEnglish === "true") return true;
+      return Boolean(target?.closest?.('[data-allow-non-english="true"]'));
+    };
+
+    const handleBeforeInput = (event) => {
+      if (event.defaultPrevented) return;
+      const target = event.target;
+      if (!isTextTarget(target)) return;
+      if (allowNonEnglish(target)) return;
+      const text = event.data;
+      if (!text) return;
+      if (nonEnglishPattern.test(text)) {
+        event.preventDefault();
+        showToast();
+      }
+    };
+
+    const handlePaste = (event) => {
+      const target = event.target;
+      if (!isTextTarget(target)) return;
+      if (allowNonEnglish(target)) return;
+      const text = event.clipboardData?.getData?.("text") || "";
+      if (!text) return;
+      if (nonEnglishPattern.test(text)) {
+        event.preventDefault();
+        showToast();
+      }
+    };
+
+    document.addEventListener("beforeinput", handleBeforeInput, true);
+    document.addEventListener("paste", handlePaste, true);
+    return () => {
+      document.removeEventListener("beforeinput", handleBeforeInput, true);
+      document.removeEventListener("paste", handlePaste, true);
+      if (toastTimer) clearTimeout(toastTimer);
+      if (toastEl && toastEl.parentNode) toastEl.parentNode.removeChild(toastEl);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       localStorage.setItem(THEME_KEY, theme);
       localStorage.setItem(LEGACY_THEME_KEY, theme);

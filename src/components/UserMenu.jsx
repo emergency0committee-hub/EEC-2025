@@ -6,10 +6,9 @@ import { supabase } from "../lib/supabase.js";
 import { routeHref, isModifiedEvent } from "../lib/routes.js";
 import { STR } from "../i18n/strings.js";
 
-export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", style = {}, iconColor }) {
+export default function UserMenu({ onNavigate, variant = "icon", style = {}, iconColor }) {
   UserMenu.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string,
     variant: PropTypes.oneOf(["icon", "drawer"]),
     style: PropTypes.object,
     iconColor: PropTypes.string,
@@ -40,6 +39,7 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
   const role = (currentUser?.role || "").toLowerCase();
   const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1" || role === "admin" || role === "administrator";
   const canAccessQuestionBank = isAdmin || role === "staff";
+  const canAccessTickets = isAdmin || role === "staff";
   const displayName = (currentUser?.name || currentUser?.username || currentUser?.email || "Account").trim();
   const displayEmail = (currentUser?.email || "").trim();
   const avatarUrl = currentUser?.avatar_url || "";
@@ -107,7 +107,7 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
     onNavigate(route, null, event);
   };
 
-  const strings = STR[lang] || STR.EN;
+  const strings = STR.EN;
   const loginLabel = strings.signIn || "Login";
   const menuLabels = {
     profile: strings.menuProfile || "Profile",
@@ -117,6 +117,7 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
     manageUsers: strings.menuManageUsers || "Manage Users",
     questions: strings.menuQuestions || "Question Bank",
     certificates: strings.menuCertificates || "Certificates",
+    tickets: strings.menuTickets || "Internal Tickets",
     globalSettings: strings.menuGlobalSettings || "Global Settings",
     animations: strings.menuAnimations || "Animations",
     toggleOn: strings.menuToggleOn || "On",
@@ -266,6 +267,11 @@ export default function UserMenu({ onNavigate, lang = "EN", variant = "icon", st
             {menuLabels.certificates}
           </MenuItem>
         </>
+      )}
+      {canAccessTickets && (
+        <MenuItem to="internal-tickets" onSelect={handleMenuSelect("internal-tickets")}>
+          {menuLabels.tickets}
+        </MenuItem>
       )}
       {canAccessQuestionBank && (
         <MenuItem to="admin-question-bank" onSelect={handleMenuSelect("admin-question-bank")}>

@@ -88,7 +88,21 @@ export async function updateLiveTestSession(sessionId, patch = {}) {
   });
   if (Object.keys(updateRow).length === 0) return { ok: true };
   const { error } = await supabase.from(table).update(updateRow).eq("id", sessionId);
-  if (error) throw error;
+  if (error) {
+    if (
+      error.code === "42703" &&
+      (Object.prototype.hasOwnProperty.call(updateRow, "pause_reason") ||
+        Object.prototype.hasOwnProperty.call(updateRow, "paused_at"))
+    ) {
+      const fallback = { ...updateRow };
+      delete fallback.pause_reason;
+      delete fallback.paused_at;
+      const retry = await supabase.from(table).update(fallback).eq("id", sessionId);
+      if (retry.error) throw retry.error;
+    } else {
+      throw error;
+    }
+  }
   return { ok: true };
 }
 

@@ -3,17 +3,14 @@ import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
-import LanguageButton from "../components/LanguageButton.jsx";
 import UserMenu from "../components/UserMenu.jsx";
-import { STR, LANGS } from "../i18n/strings.js";
+import { STR } from "../i18n/strings.js";
 
-export default function Career({ onNavigate, lang = "EN", setLang }) {
+export default function Career({ onNavigate }) {
   Career.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string.isRequired,
-    setLang: PropTypes.func.isRequired,
   };
-  const t = STR[lang] || STR.EN;
+  const t = STR.EN;
   const [showRules, setShowRules] = useState(false);
   const [agree, setAgree] = useState(false);
 
@@ -30,7 +27,6 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
   return (
     <PageWrap>
       <HeaderBar
-        lang={lang}
         // Left: Logo + Title
         title={
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -44,7 +40,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
             </span>
           </div>
         }
-        // Right: Language button + Admin button
+        // Right: navigation + account menu
         right={
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <nav style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -58,8 +54,7 @@ export default function Career({ onNavigate, lang = "EN", setLang }) {
                 {t.navBlogs}
               </Btn>
             </nav>
-            <LanguageButton lang={lang} setLang={setLang} langs={LANGS} />
-            <UserMenu onNavigate={onNavigate} lang={lang} />
+            <UserMenu onNavigate={onNavigate} />
           </div>
         }
       />

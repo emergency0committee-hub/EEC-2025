@@ -50,6 +50,8 @@ const AVATAR_EDITOR_SIZE = 240;
 const AVATAR_EMPTY_OFFSET_RATIO = 0.5;
 
 const clampValue = (value, min, max) => Math.min(max, Math.max(min, value));
+const hasNonEnglishChars = (value) => /[^\x20-\x7E]/.test(value);
+const isEnglishInput = (value) => !hasNonEnglishChars(value);
 const formatYmd = (date) => {
   if (!(date instanceof Date)) return "";
   const yyyy = date.getFullYear();
@@ -136,6 +138,7 @@ const LOGIN_COPY = {
     certificationRequired: "Certification is required",
     phoneRequired: "Phone number is required",
     phoneInvalid: "Please enter a valid phone number",
+    englishOnly: "Please use English letters, numbers, and symbols only",
     firstName: "First Name",
     enterFirstName: "e.g., Amina",
     lastName: "Last Name",
@@ -222,6 +225,7 @@ const LOGIN_COPY = {
     certificationRequired: "\u0627\u0644\u0645\u0624\u0647\u0644 \u0627\u0644\u062c\u0627\u0645\u0639\u064a \u0645\u0637\u0644\u0648\u0628",
     phoneRequired: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641 \u0645\u0637\u0644\u0648\u0628",
     phoneInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0631\u0642\u0645 \u0647\u0627\u062a\u0641 \u0635\u0627\u0644\u062d",
+    englishOnly: "\u064a\u0631\u062c\u0649 \u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0623\u062d\u0631\u0641 \u0648\u0623\u0631\u0642\u0627\u0645 \u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629 \u0641\u0642\u0637",
     firstName: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0623\u0648\u0644",
     enterFirstName: "\u0645\u062b\u0627\u0644: \u0622\u0645\u0646\u0629",
     lastName: "\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0626\u0644\u0629",
@@ -308,6 +312,7 @@ const LOGIN_COPY = {
     certificationRequired: "La certification universitaire est obligatoire",
     phoneRequired: "Le num\xe9ro de t\xe9l\xe9phone est obligatoire",
     phoneInvalid: "Veuillez saisir un num\xe9ro de t\xe9l\xe9phone valide",
+    englishOnly: "Veuillez utiliser uniquement des caract\u00e8res anglais",
     firstName: "Pr\xe9nom",
     enterFirstName: "ex. Amina",
     lastName: "Nom de famille",
@@ -374,13 +379,12 @@ function CalendarIcon({ size = 18, stroke = "#4b5563" }) {
   );
 }
 
-export default function Login({ onNavigate, lang = "EN" }) {
+export default function Login({ onNavigate }) {
   Login.propTypes = {
     onNavigate: PropTypes.func.isRequired,
-    lang: PropTypes.string.isRequired,
   };
-  const copy = LOGIN_COPY[lang] || LOGIN_COPY.EN;
-  const roleOptions = ROLE_OPTIONS[lang] || ROLE_OPTIONS.EN;
+  const copy = LOGIN_COPY.EN;
+  const roleOptions = ROLE_OPTIONS.EN;
   const isRTL = copy.isRTL;
   const photoHelper = (copy.profilePhotoHelper || "").replace("{max}", MAX_AVATAR_MB);
   const avatarInputId = "signup-avatar-upload";
@@ -475,11 +479,10 @@ export default function Login({ onNavigate, lang = "EN" }) {
   const isFinalStep = signupStep >= totalSteps - 1;
   const maxDob = useMemo(() => new Date().toISOString().split("T")[0], []);
   const weekdayLabels = useMemo(() => {
-    const locale = lang === "AR" ? "ar-LB" : lang === "FR" ? "fr-FR" : "en-US";
-    const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
+    const formatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
     const base = new Date(2021, 7, 1); // Sunday
     return Array.from({ length: 7 }, (_, idx) => formatter.format(new Date(base.getFullYear(), base.getMonth(), base.getDate() + idx)));
-  }, [lang]);
+  }, []);
   const schoolOptions = useMemo(() => {
     const placeholderLabel = copy.schoolPlaceholder || "Select School";
     const uniqueNames = new Map();
@@ -807,7 +810,9 @@ export default function Login({ onNavigate, lang = "EN" }) {
       if (avatarError) newErrors.avatar = avatarError;
       else if (!avatarFile) newErrors.avatar = copy.profilePhotoRequired;
       if (!firstName) newErrors.firstName = copy.firstNameRequired;
+      else if (!isEnglishInput(firstName)) newErrors.firstName = copy.englishOnly;
       if (!lastName) newErrors.lastName = copy.lastNameRequired;
+      else if (!isEnglishInput(lastName)) newErrors.lastName = copy.englishOnly;
       if (!dateOfBirth) newErrors.dateOfBirth = copy.dobRequired;
       else {
         const dobDate = new Date(dateOfBirth);
@@ -816,8 +821,10 @@ export default function Login({ onNavigate, lang = "EN" }) {
         }
       }
       if (!username) newErrors.username = copy.usernameRequired;
+      else if (!isEnglishInput(username)) newErrors.username = copy.englishOnly;
       else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
       if (!phone) newErrors.phone = copy.phoneRequired;
+      else if (!isEnglishInput(phone)) newErrors.phone = copy.englishOnly;
       else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
     }
 
@@ -828,11 +835,13 @@ export default function Login({ onNavigate, lang = "EN" }) {
         if (!className) newErrors.className = copy.classRequired;
       } else if (accountType === "educator") {
         if (!certification) newErrors.certification = copy.certificationRequired;
+        else if (!isEnglishInput(certification)) newErrors.certification = copy.englishOnly;
       }
     }
 
     if (step === 2) {
       if (!email) newErrors.email = copy.emailRequired;
+      else if (!isEnglishInput(email)) newErrors.email = copy.englishOnly;
       else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = copy.emailInvalid;
       if (!password) newErrors.password = copy.passwordRequired;
       else if (password.length < 6) newErrors.password = copy.passwordTooShort;
@@ -875,10 +884,13 @@ export default function Login({ onNavigate, lang = "EN" }) {
     // Sign-up requires email, username, password, confirm, first/last name
     if (isSignUp) {
       if (!email) newErrors.email = copy.emailRequired;
+      else if (!isEnglishInput(email)) newErrors.email = copy.englishOnly;
       else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = copy.emailInvalid;
       if (!username) newErrors.username = copy.usernameRequired;
+      else if (!isEnglishInput(username)) newErrors.username = copy.englishOnly;
       else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
       if (!phone) newErrors.phone = copy.phoneRequired;
+      else if (!isEnglishInput(phone)) newErrors.phone = copy.englishOnly;
       else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
       if (!dateOfBirth) newErrors.dateOfBirth = copy.dobRequired;
       else {
@@ -893,6 +905,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
         if (!className) newErrors.className = copy.classRequired;
       } else if (accountType === "educator") {
         if (!certification) newErrors.certification = copy.certificationRequired;
+        else if (!isEnglishInput(certification)) newErrors.certification = copy.englishOnly;
       }
       if (!avatarFile) newErrors.avatar = copy.profilePhotoRequired;
       else if (avatarError) newErrors.avatar = avatarError;
@@ -902,7 +915,9 @@ export default function Login({ onNavigate, lang = "EN" }) {
     else if (password.length < 6) newErrors.password = copy.passwordTooShort;
     if (isSignUp) {
       if (!firstName) newErrors.firstName = copy.firstNameRequired;
+      else if (!isEnglishInput(firstName)) newErrors.firstName = copy.englishOnly;
       if (!lastName) newErrors.lastName = copy.lastNameRequired;
+      else if (!isEnglishInput(lastName)) newErrors.lastName = copy.englishOnly;
       if (!confirmPassword) newErrors.confirmPassword = copy.confirmPasswordRequired;
       else if (password !== confirmPassword) newErrors.confirmPassword = copy.passwordsDontMatch;
     }
@@ -1122,7 +1137,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
 
   return (
     <PageWrap>
-      <HeaderBar title={isSignUp ? copy.signUpTitle : copy.signInTitle} right={null} lang={lang} />
+      <HeaderBar title={isSignUp ? copy.signUpTitle : copy.signInTitle} right={null} />
 
       <Card style={{ direction: isRTL ? "rtl" : "ltr", textAlign: isRTL ? "right" : "left" }}>
         {needsRoleSelection ? (
@@ -1582,7 +1597,7 @@ export default function Login({ onNavigate, lang = "EN" }) {
                         </button>
                         <div style={{ fontWeight: 600, color: "#111827" }}>
                           {new Date(dobView.year, dobView.month, 1).toLocaleString(
-                            lang === "AR" ? "ar-LB" : lang === "FR" ? "fr-FR" : "en-US",
+                            "en-US",
                             { month: "long", year: "numeric" }
                           )}
                         </div>
