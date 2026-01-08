@@ -135,13 +135,15 @@ export default function AdminTickets({ onNavigate }) {
       return null;
     }
   })();
-  const role = (currentUser?.role || "").toLowerCase();
-  const isAdmin =
+  const initialRole = (currentUser?.role || "").toLowerCase();
+  const initialIsAdmin =
     localStorage.getItem("cg_admin_ok_v1") === "1" ||
-    role === "admin" ||
-    role === "administrator";
+    initialRole === "admin" ||
+    initialRole === "administrator";
 
   const [authUser, setAuthUser] = useState(null);
+  const [role, setRole] = useState(initialRole);
+  const [isAdmin, setIsAdmin] = useState(initialIsAdmin);
   const [tickets, setTickets] = useState([]);
   const [messages, setMessages] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -151,7 +153,7 @@ export default function AdminTickets({ onNavigate }) {
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [statusFilter, setStatusFilter] = useState("open");
-  const [scopeFilter, setScopeFilter] = useState(isAdmin ? "all" : "mine");
+  const [scopeFilter, setScopeFilter] = useState(initialIsAdmin ? "all" : "mine");
   const [statusDraft, setStatusDraft] = useState("open");
   const [priorityDraft, setPriorityDraft] = useState("medium");
   const [updateNotice, setUpdateNotice] = useState("");
@@ -179,7 +181,34 @@ export default function AdminTickets({ onNavigate }) {
   }, []);
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!authUser?.id) return;
+    let active = true;
+    supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", authUser.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error || !data?.role) return;
+        const normalized = String(data.role || "").toLowerCase();
+        setRole(normalized);
+        setIsAdmin(
+          normalized === "admin" ||
+            normalized === "administrator" ||
+            localStorage.getItem("cg_admin_ok_v1") === "1"
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [authUser?.id]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setScopeFilter("all");
+    } else {
       setScopeFilter("mine");
     }
   }, [isAdmin]);

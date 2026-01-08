@@ -193,6 +193,9 @@ export default function App() {
         pageTitle = "Career Dashboard";
         break;
       case "internal-tickets":
+      case "internal-ticket":
+      case "admin-tickets":
+      case "tickets":
         pageTitle = "Internal Tickets";
         break;
       case "admin-sat":
@@ -489,7 +492,7 @@ const currentUser = (() => {
     if (route === "thanks") return <Thanks onNavigate={onNavigate} />;
     if (route === "career-dashboard") return <AdminDashboard onNavigate={onNavigate} />;
     if (route === "admin-live-monitor") return <AdminLiveMonitor onNavigate={onNavigate} />;
-    if (route === "internal-tickets") {
+    if (["internal-tickets", "internal-ticket", "admin-tickets", "tickets"].includes(route)) {
       if (!canAccessTickets) {
         return (
           <PageWrap>

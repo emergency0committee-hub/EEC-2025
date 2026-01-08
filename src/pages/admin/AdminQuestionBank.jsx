@@ -32,6 +32,7 @@ const DEFAULT_TABLE_COLS = 2;
 const MAX_TABLE_ROWS = 10;
 const MAX_TABLE_COLS = 6;
 const FILTERS_PAGE_SIZE = 5;
+const MAX_QUESTION_BANK_LIMIT = Number(import.meta.env.VITE_QUESTION_BANK_LIMIT || 20000);
 const RESOURCE_BUCKET = import.meta.env.VITE_CLASS_RESOURCE_BUCKET || "assignment-media";
 const RESOURCE_LIBRARY_TABLE = import.meta.env.VITE_RESOURCE_LIBRARY_TABLE || "cg_resource_library";
 const BANK_VISIBILITY_TABLE = import.meta.env.VITE_BANK_VISIBILITY_TABLE || "cg_bank_tab_visibility";
@@ -1036,18 +1037,35 @@ export default function AdminQuestionBank({ onNavigate }) {
             : [{ column: "created_at", ascending: false }];
         let data;
         if (bank.id === "reading_competition") {
-          const limit = Number(import.meta.env.VITE_SAT_RW_LIMIT || 500);
-          let query = supabase.from(bank.table).select("*").ilike("subject", "english");
-          (Array.isArray(order) ? order : []).forEach((rule) => {
-            if (!rule?.column) return;
-            query = query.order(rule.column, { ascending: Boolean(rule.ascending) });
-          });
-          query = query.limit(limit);
-          const { data: rows, error } = await query;
-          if (error) throw error;
-          data = rows || [];
+          const rawLimit = Number(import.meta.env.VITE_SAT_RW_LIMIT || MAX_QUESTION_BANK_LIMIT);
+          const safeLimit =
+            Number.isFinite(rawLimit) && rawLimit > 0
+              ? Math.min(rawLimit, MAX_QUESTION_BANK_LIMIT)
+              : MAX_QUESTION_BANK_LIMIT;
+          const pageSize = Math.min(1000, safeLimit);
+          const rows = [];
+          for (let offset = 0; offset < safeLimit; offset += pageSize) {
+            const to = Math.min(offset + pageSize - 1, safeLimit - 1);
+            let query = supabase.from(bank.table).select("*").ilike("subject", "english");
+            (Array.isArray(order) ? order : []).forEach((rule) => {
+              if (!rule?.column) return;
+              query = query.order(rule.column, { ascending: Boolean(rule.ascending) });
+            });
+            query = query.range(offset, to);
+            const { data: page, error } = await query;
+            if (error) throw error;
+            const chunk = Array.isArray(page) ? page : [];
+            if (chunk.length === 0) break;
+            rows.push(...chunk);
+            if (chunk.length < to - offset + 1) break;
+          }
+          data = rows;
         } else {
-          data = await listAssignmentQuestions({ table: bank.table, order });
+          data = await listAssignmentQuestions({
+            table: bank.table,
+            order,
+            limit: MAX_QUESTION_BANK_LIMIT,
+          });
         }
         if (!ignore) setQuestions(data);
       } catch (err) {

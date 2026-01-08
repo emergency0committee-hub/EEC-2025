@@ -3,25 +3,57 @@ import { supabase } from "./supabase.js";
 
 const DEFAULT_TABLE = import.meta.env.VITE_ASSIGNMENT_QUESTIONS_TABLE || "assignment_questions";
 const BUCKET = import.meta.env.VITE_ASSIGNMENT_MEDIA_BUCKET || "assignment-media";
+const DEFAULT_LIST_LIMIT = Number(import.meta.env.VITE_QUESTION_BANK_LIMIT || 20000);
+const LIST_PAGE_SIZE = 1000;
+const HARD_ROW_LIMIT = 20000;
 
 const resolveTable = (table) => table || DEFAULT_TABLE;
 
 export async function listAssignmentQuestions({
   table,
-  limit = 200,
+  limit = DEFAULT_LIST_LIMIT,
   signal,
   order = [{ column: "created_at", ascending: false }],
 } = {}) {
-  let query = supabase.from(resolveTable(table)).select("*");
-  (Array.isArray(order) ? order : []).forEach((rule) => {
-    if (!rule?.column) return;
-    query = query.order(rule.column, { ascending: Boolean(rule.ascending) });
-  });
-  query = query.limit(limit);
-  if (signal) query.abortSignal(signal);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+  const target = resolveTable(table);
+  const safeLimit = Number.isFinite(limit)
+    ? Math.max(0, Math.min(limit, HARD_ROW_LIMIT))
+    : HARD_ROW_LIMIT;
+
+  if (safeLimit <= 0) return [];
+
+  if (safeLimit <= LIST_PAGE_SIZE) {
+    let query = supabase.from(target).select("*");
+    (Array.isArray(order) ? order : []).forEach((rule) => {
+      if (!rule?.column) return;
+      query = query.order(rule.column, { ascending: Boolean(rule.ascending) });
+    });
+    query = query.limit(safeLimit);
+    if (signal) query.abortSignal(signal);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  const rows = [];
+  for (let offset = 0; offset < safeLimit; offset += LIST_PAGE_SIZE) {
+    const to = Math.min(offset + LIST_PAGE_SIZE - 1, safeLimit - 1);
+    let query = supabase.from(target).select("*");
+    (Array.isArray(order) ? order : []).forEach((rule) => {
+      if (!rule?.column) return;
+      query = query.order(rule.column, { ascending: Boolean(rule.ascending) });
+    });
+    query = query.range(offset, to);
+    if (signal) query.abortSignal(signal);
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = Array.isArray(data) ? data : [];
+    if (page.length === 0) break;
+    rows.push(...page);
+    if (page.length < to - offset + 1) break;
+  }
+
+  return rows;
 }
 
 export async function createAssignmentQuestion(payload, { table } = {}) {
