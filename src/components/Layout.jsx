@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { useAppSettings, useTheme, useWeather } from "./AppProviders.jsx";
+import NotificationBell from "./NotificationBell.jsx";
 
 const KEYFRAME_ID = "__hb_slide_keyframes__";
 const THEME_KEYFRAME_ID = "__app_theme_keyframes__";
@@ -676,6 +677,8 @@ export function HeaderBar({ title, right, lang = "EN" }) {
     </button>
   );
   const themeToggleWithKey = React.cloneElement(themeToggle, { key: "theme-toggle" });
+  const bellWithKey = React.cloneElement(<NotificationBell />, { key: "internal-bell" });
+  const extraControls = [bellWithKey, themeToggleWithKey];
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -762,19 +765,23 @@ export function HeaderBar({ title, right, lang = "EN" }) {
 
   let rightContent = right;
   if (right) {
-    if (React.isValidElement(right)) {
+    if (React.isValidElement(right) && typeof right.type === "string") {
       const children = React.Children.toArray(right.props.children);
-      rightContent = React.cloneElement(right, right.props, [...children, themeToggleWithKey]);
+      rightContent = React.cloneElement(right, right.props, [...children, ...extraControls]);
     } else {
       rightContent = (
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {right}
-          {themeToggleWithKey}
+          {extraControls}
         </div>
       );
     }
   } else {
-    rightContent = themeToggleWithKey;
+    rightContent = (
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {extraControls}
+      </div>
+    );
   }
 
   let mobilePanel = rightContent;
@@ -803,6 +810,9 @@ export function HeaderBar({ title, right, lang = "EN" }) {
         const childType = child.type;
         const isUserMenu =
           childType && (childType.displayName === "UserMenu" || childType.name === "UserMenu");
+        const isNotificationBell =
+          childType &&
+          (childType.displayName === "NotificationBell" || childType.name === "NotificationBell");
         // Stack nav links vertically
         if (child.type === "nav") {
           const navStyle = {
@@ -841,6 +851,26 @@ export function HeaderBar({ title, right, lang = "EN" }) {
         const isIconControl =
           childType === "button" && child.props?.["data-header-control"] === "icon";
         if (isIconControl) {
+          const animation =
+            drawerVisible && itemAnimationName
+              ? `${itemAnimationName} 260ms ease ${index * 60}ms both`
+              : "none";
+          return React.cloneElement(child, {
+            key: child.key ?? `header-item-${index}`,
+            style: {
+              ...(child.props.style || {}),
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              border: "none",
+              background: "transparent",
+              boxShadow: "none",
+              alignSelf: "center",
+              animation,
+            },
+          });
+        }
+        if (isNotificationBell) {
           const animation =
             drawerVisible && itemAnimationName
               ? `${itemAnimationName} 260ms ease ${index * 60}ms both`

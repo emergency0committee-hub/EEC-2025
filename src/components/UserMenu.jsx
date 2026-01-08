@@ -40,6 +40,8 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
   const isAdmin = localStorage.getItem("cg_admin_ok_v1") === "1" || role === "admin" || role === "administrator";
   const canAccessQuestionBank = isAdmin || role === "staff";
   const canAccessTickets = isAdmin || role === "staff";
+  const canAccessWeeklyReports = isAdmin || role === "staff";
+  const canAccessComms = isAdmin || role === "staff";
   const displayName = (currentUser?.name || currentUser?.username || currentUser?.email || "Account").trim();
   const displayEmail = (currentUser?.email || "").trim();
   const avatarUrl = currentUser?.avatar_url || "";
@@ -118,6 +120,8 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
     questions: strings.menuQuestions || "Question Bank",
     certificates: strings.menuCertificates || "Certificates",
     tickets: strings.menuTickets || "Internal Tickets",
+    comms: strings.menuInternalComms || "Internal Communication",
+    weeklyReport: strings.menuWeeklyReport || "Weekly Report",
     globalSettings: strings.menuGlobalSettings || "Global Settings",
     animations: strings.menuAnimations || "Animations",
     toggleOn: strings.menuToggleOn || "On",
@@ -271,6 +275,16 @@ export default function UserMenu({ onNavigate, variant = "icon", style = {}, ico
       {canAccessTickets && (
         <MenuItem to="internal-tickets" onSelect={handleMenuSelect("internal-tickets")}>
           {menuLabels.tickets}
+        </MenuItem>
+      )}
+      {canAccessComms && (
+        <MenuItem to="internal-comms" onSelect={handleMenuSelect("internal-comms")}>
+          {menuLabels.comms}
+        </MenuItem>
+      )}
+      {canAccessWeeklyReports && (
+        <MenuItem to="weekly-report" onSelect={handleMenuSelect("weekly-report")}>
+          {menuLabels.weeklyReport}
         </MenuItem>
       )}
       {canAccessQuestionBank && (

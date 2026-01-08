@@ -340,6 +340,10 @@ export default function AdminTickets({ onNavigate }) {
     event.preventDefault();
     setFormError("");
     setFormSuccess("");
+    if (!isAdmin) {
+      setFormError("Only administrators can create tickets.");
+      return;
+    }
     if (!authUser) {
       setFormError("Please sign in before creating a ticket.");
       return;
@@ -498,65 +502,65 @@ export default function AdminTickets({ onNavigate }) {
         >
           <div>
             <h3 style={{ marginTop: 0 }}>Create Ticket</h3>
-            <form onSubmit={handleCreateTicket} style={{ display: "grid", gap: 12 }}>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Title</span>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, title: e.target.value }));
+            {isAdmin ? (
+              <form onSubmit={handleCreateTicket} style={{ display: "grid", gap: 12 }}>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Title</span>
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, title: e.target.value }));
+                      setFormError("");
+                      setFormSuccess("");
+                    }}
+                    placeholder="Short summary"
+                    style={inputStyle}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Category</span>
+                  <input
+                    type="text"
+                    value={form.category}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, category: e.target.value }));
+                      setFormError("");
+                      setFormSuccess("");
+                    }}
+                    placeholder="Optional (e.g., Reports)"
+                    style={inputStyle}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Priority</span>
+                  <select
+                    value={form.priority}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, priority: e.target.value }));
+                      setFormError("");
+                      setFormSuccess("");
+                    }}
+                    style={inputStyle}
+                  >
+                    {PRIORITY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <DateTimePicker
+                  label="Deadline"
+                  mode="datetime"
+                  value={form.dueAt}
+                  onChange={(nextValue) => {
+                    setForm((prev) => ({ ...prev, dueAt: nextValue }));
                     setFormError("");
                     setFormSuccess("");
                   }}
-                  placeholder="Short summary"
-                  style={inputStyle}
+                  inputStyle={inputStyle}
                 />
-              </label>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Category</span>
-                <input
-                  type="text"
-                  value={form.category}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, category: e.target.value }));
-                    setFormError("");
-                    setFormSuccess("");
-                  }}
-                  placeholder="Optional (e.g., Reports)"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Priority</span>
-                <select
-                  value={form.priority}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, priority: e.target.value }));
-                    setFormError("");
-                    setFormSuccess("");
-                  }}
-                  style={inputStyle}
-                >
-                  {PRIORITY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <DateTimePicker
-                label="Deadline"
-                mode="datetime"
-                value={form.dueAt}
-                onChange={(nextValue) => {
-                  setForm((prev) => ({ ...prev, dueAt: nextValue }));
-                  setFormError("");
-                  setFormSuccess("");
-                }}
-                inputStyle={inputStyle}
-              />
-              {isAdmin && (
                 <label style={{ display: "grid", gap: 6 }}>
                   <span style={{ fontWeight: 600 }}>Assign to staff</span>
                   <select
@@ -582,38 +586,42 @@ export default function AdminTickets({ onNavigate }) {
                     <span style={{ color: "#b91c1c", fontSize: 12 }}>{staffError}</span>
                   )}
                 </label>
-              )}
-              <label style={{ display: "grid", gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Description</span>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, description: e.target.value }));
-                    setFormError("");
-                    setFormSuccess("");
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Description</span>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => {
+                      setForm((prev) => ({ ...prev, description: e.target.value }));
+                      setFormError("");
+                      setFormSuccess("");
+                    }}
+                    placeholder="Describe the work needed and current context."
+                    style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
+                  />
+                </label>
+                {formError && <div style={alertStyle("error")}>{formError}</div>}
+                {formSuccess && <div style={alertStyle("success")}>{formSuccess}</div>}
+                <button
+                  type="submit"
+                  disabled={savingTicket}
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: savingTicket ? "#c7d2fe" : "#4f46e5",
+                    color: "#fff",
+                    fontWeight: 600,
+                    cursor: savingTicket ? "not-allowed" : "pointer",
                   }}
-                  placeholder="Describe the work needed and current context."
-                  style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
-                />
-              </label>
-              {formError && <div style={alertStyle("error")}>{formError}</div>}
-              {formSuccess && <div style={alertStyle("success")}>{formSuccess}</div>}
-              <button
-                type="submit"
-                disabled={savingTicket}
-                style={{
-                  padding: "12px 16px",
-                  borderRadius: 10,
-                  border: "none",
-                  background: savingTicket ? "#c7d2fe" : "#4f46e5",
-                  color: "#fff",
-                  fontWeight: 600,
-                  cursor: savingTicket ? "not-allowed" : "pointer",
-                }}
-              >
-                {savingTicket ? "Saving..." : "Create Ticket"}
-              </button>
-            </form>
+                >
+                  {savingTicket ? "Saving..." : "Create Ticket"}
+                </button>
+              </form>
+            ) : (
+              <div style={{ color: "#64748b" }}>
+                Only administrators can create tickets. You can still view and update assigned work.
+              </div>
+            )}
           </div>
 
           <div>

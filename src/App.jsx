@@ -14,6 +14,8 @@ import AdminManageUsers from "./pages/admin/AdminManageUsers.jsx";
 import AdminCertificates from "./pages/admin/AdminCertificates.jsx";
 import AdminLiveMonitor from "./pages/admin/AdminLiveMonitor.jsx";
 import AdminTickets from "./pages/admin/AdminTickets.jsx";
+import WeeklyReports from "./pages/admin/WeeklyReports.jsx";
+import InternalComms from "./pages/admin/InternalComms.jsx";
 import SATAdmin from "./pages/admin/SATDashboard.jsx";
 import SATResults from "./pages/sat/SATResults.jsx";
 import SATTrainingAdmin from "./pages/admin/SATTrainingDashboard.jsx";
@@ -197,6 +199,14 @@ export default function App() {
       case "admin-tickets":
       case "tickets":
         pageTitle = "Internal Tickets";
+        break;
+      case "weekly-report":
+      case "weekly-reports":
+        pageTitle = "Weekly Report";
+        break;
+      case "internal-comms":
+      case "internal-communications":
+        pageTitle = "Internal Communication";
         break;
       case "admin-sat":
         pageTitle = "SAT Dashboard";
@@ -513,6 +523,50 @@ const currentUser = (() => {
         );
       }
       return <AdminTickets onNavigate={onNavigate} />;
+    }
+    if (["weekly-report", "weekly-reports"].includes(route)) {
+      if (!canAccessTickets) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                Weekly reports are limited to staff and administrators.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <WeeklyReports onNavigate={onNavigate} />;
+    }
+    if (["internal-comms", "internal-communications"].includes(route)) {
+      if (!canAccessTickets) {
+        return (
+          <PageWrap>
+            <HeaderBar title="Not Authorized" right={null} />
+            <Card>
+              <p style={{ color: "#6b7280" }}>
+                Internal communication is limited to staff and administrators.
+              </p>
+              <Btn
+                variant="primary"
+                to="home"
+                onClick={(e) => onNavigate("home", null, e)}
+              >
+                Back to Home
+              </Btn>
+            </Card>
+          </PageWrap>
+        );
+      }
+      return <InternalComms onNavigate={onNavigate} />;
     }
     if (route === "admin-manage-users") {
       if (!canViewResults && !canViewOwnResult) {
