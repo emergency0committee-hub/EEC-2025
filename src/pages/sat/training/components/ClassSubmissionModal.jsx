@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { renderMathText } from "../../../../lib/mathText.jsx";
 import { sanitizeRichTextHtml } from "../../../../lib/richText.js";
+import ModalPortal from "../../../../components/ModalPortal.jsx";
 
 export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuration, resolveQuestionText, resolveQuestionData }) {
   if (!log) return null;
@@ -56,33 +57,33 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
   addSummaryCard("Math", log.summary?.math);
 
   return (
-    <>
-    <div
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        zIndex: 1200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         style={{
-          background: "#ffffff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          width: "min(820px, 94vw)",
-          maxHeight: "85vh",
-          overflowY: "auto",
-          padding: 20,
+          position: "fixed",
+          inset: 0,
+          background: "rgba(15, 23, 42, 0.78)",
+          zIndex: 2000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
+        onClick={onClose}
       >
+        <div
+          onClick={(event) => event.stopPropagation()}
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            width: "min(820px, 94vw)",
+            maxHeight: "85vh",
+            overflowY: "auto",
+            padding: 20,
+          }}
+        >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <h3 style={{ margin: 0 }}>Submission Details</h3>
           <button
@@ -272,9 +273,9 @@ export default function ClassSubmissionModal({ log, onClose, fmtDate, fmtDuratio
             )}
           </div>
         </div>
+        </div>
       </div>
-    </div>
-    </>
+    </ModalPortal>
   );
 }
 

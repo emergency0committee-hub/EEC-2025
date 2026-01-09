@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import PropTypes from "prop-types";
+import ModalPortal from "./ModalPortal.jsx";
 import { InlineMath, BlockMath } from "react-katex";
 import {
   HIGHLIGHT_COLOR,
@@ -579,34 +580,35 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
       </div>
       {variant !== "compact" && <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>Toolbar applies formatting directly; HTML is stored automatically.</p>}
 
-      {equationModal.open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: 12,
-          }}
-          onClick={closeEquationModal}
-        >
+      {equationModal.open ? (
+        <ModalPortal>
           <div
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
             style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: 16,
-              width: "min(760px, 96vw)",
-              boxShadow: "0 15px 40px rgba(0,0,0,0.14)",
-              display: "grid",
-              gap: 12,
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 2000,
+              padding: 12,
             }}
+            onClick={closeEquationModal}
           >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                padding: 16,
+                width: "min(760px, 96vw)",
+                boxShadow: "0 15px 40px rgba(0,0,0,0.14)",
+                display: "grid",
+                gap: 12,
+              }}
+            >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <h3 style={{ margin: 0 }}>Insert equation</h3>
               <button type="button" onClick={closeEquationModal} style={{ border: "none", background: "transparent", cursor: "pointer", fontWeight: 700 }}>
@@ -699,9 +701,10 @@ function RichTextEditor({ value, onChange, placeholder = "Start typing...", vari
                 Insert
               </button>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
     </div>
   );
 }

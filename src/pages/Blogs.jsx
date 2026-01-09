@@ -5,6 +5,7 @@ import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { STR } from "../i18n/strings.js";
+import ModalPortal from "../components/ModalPortal.jsx";
 
 export default function Blogs({ onNavigate }) {
   Blogs.propTypes = {
@@ -317,22 +318,23 @@ export default function Blogs({ onNavigate }) {
       </Card>
 
       {openPost ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setOpenPostId(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(17, 24, 39, 0.55)",
-            zIndex: 250,
-            padding: 16,
-            display: "grid",
-            placeItems: "center",
-          }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(760px, 96vw)" }}>
-            <Card style={{ marginBottom: 0, padding: 20 }}>
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setOpenPostId(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              zIndex: 2000,
+              padding: 16,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "min(760px, 96vw)" }}>
+              <Card style={{ marginBottom: 0, padding: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                 <div>
                   <div style={{ color: "#1e3a8a", fontWeight: 800, fontSize: 12, marginBottom: 6 }}>
@@ -347,9 +349,10 @@ export default function Blogs({ onNavigate }) {
               <div style={{ marginTop: 14, display: "grid", gap: 10, color: "#374151", lineHeight: 1.7 }}>
                 {Array.isArray(openContent) ? openContent.map((p) => <p key={p} style={{ margin: 0 }}>{p}</p>) : null}
               </div>
-            </Card>
+              </Card>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       ) : null}
     </PageWrap>
   );

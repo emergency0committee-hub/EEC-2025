@@ -4,6 +4,7 @@ import { Card } from "../../../../components/Layout.jsx";
 import Btn from "../../../../components/Btn.jsx";
 import DateTimePicker from "../../../../components/DateTimePicker.jsx";
 import AdaptiveInsightsCard from "./AdaptiveInsightsCard.jsx";
+import ModalPortal from "../../../../components/ModalPortal.jsx";
 import {
   BANKS,
   SUBJECT_OPTIONS,
@@ -808,19 +809,20 @@ export default function AdminClassDetail({
           </>
         )}
           </Card>
-        {previewResourceQuestions && (
-          <div
+        {previewResourceQuestions ? (
+          <ModalPortal>
+            <div
             role="dialog"
             aria-modal="true"
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(0,0,0,0.65)",
+              background: "rgba(15, 23, 42, 0.78)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               padding: 16,
-              zIndex: 10000,
+              zIndex: 2000,
             }}
             onClick={() => setPreviewResourceQuestions(null)}
           >
@@ -965,27 +967,29 @@ export default function AdminClassDetail({
               </div>
             </div>
           </div>
-        )}
-        {libraryOpen && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.45)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 9999,
-              padding: 12,
-            }}
-            onClick={() => setLibraryOpen(false)}
-          >
+          </ModalPortal>
+        ) : null}
+        {libraryOpen ? (
+          <ModalPortal>
             <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 12, padding: 16, width: "min(720px, 95vw)", boxShadow: "0 15px 40px rgba(0,0,0,0.12)", display: "grid", gap: 12 }}
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(15, 23, 42, 0.78)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 2000,
+                padding: 12,
+              }}
+              onClick={() => setLibraryOpen(false)}
             >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ background: "#fff", borderRadius: 12, padding: 16, width: "min(720px, 95vw)", boxShadow: "0 15px 40px rgba(0,0,0,0.12)", display: "grid", gap: 12 }}
+              >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <h3 style={{ margin: 0 }}>Resource Library</h3>
                 <Btn variant="back" onClick={() => setLibraryOpen(false)}>Close</Btn>
@@ -1058,39 +1062,44 @@ export default function AdminClassDetail({
                   )}
                 </>
               )}
-            </div>
-          </div>
-        )}
-        {previewUrl && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.65)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 16,
-              zIndex: 9999,
-            }}
-            onClick={() => setPreviewUrl("")}
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: "#ffffff", borderRadius: 12, width: "90%", height: "90%", display: "grid", gridTemplateRows: "auto 1fr" }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>
-                <div style={{ fontWeight: 700 }}>Preview</div>
-                <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
               </div>
-              <iframe
-                title="Lesson File"
-                src={previewUrl}
-                style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }}
-              />
             </div>
-          </div>
-        )}
+          </ModalPortal>
+        ) : null}
+        {previewUrl ? (
+          <ModalPortal>
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(15, 23, 42, 0.78)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+                zIndex: 2000,
+              }}
+              onClick={() => setPreviewUrl("")}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ background: "#ffffff", borderRadius: 12, width: "90%", height: "90%", display: "grid", gridTemplateRows: "auto 1fr" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>
+                  <div style={{ fontWeight: 700 }}>Preview</div>
+                  <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
+                </div>
+                <iframe
+                  title="Lesson File"
+                  src={previewUrl}
+                  style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }}
+                />
+              </div>
+            </div>
+          </ModalPortal>
+        ) : null}
     </>
   );
 }

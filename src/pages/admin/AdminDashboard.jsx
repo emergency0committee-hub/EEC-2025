@@ -9,6 +9,7 @@ import LiveTestSessionsPanel from "../../components/LiveTestSessionsPanel.jsx";
 import { supabase } from "../../lib/supabase.js";
 import Results from "../Results.jsx";
 import { renderSubmissionToPdfA3 } from "../../lib/exportResults.jsx";
+import ModalPortal from "../../components/ModalPortal.jsx";
 
 const PROFILE_FIELDS =
   "id,email,name,full_name,username,school,class_name,phone,role";
@@ -1372,34 +1373,35 @@ export default function AdminDashboard({ onNavigate }) {
         </Card>
       </div>
 
-      {canManageSubmissions && bulkModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1400,
-            padding: 12,
-          }}
-          onClick={() => setBulkModalOpen(false)}
-        >
+      {canManageSubmissions && bulkModalOpen ? (
+        <ModalPortal>
           <div
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
             style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: 16,
-              width: "min(720px, 95vw)",
-              boxShadow: "0 15px 40px rgba(0,0,0,0.12)",
-              display: "grid",
-              gap: 10,
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 2000,
+              padding: 12,
             }}
+            onClick={() => setBulkModalOpen(false)}
           >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                padding: 16,
+                width: "min(720px, 95vw)",
+                boxShadow: "0 15px 40px rgba(0,0,0,0.12)",
+                display: "grid",
+                gap: 10,
+              }}
+            >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <h3 style={{ margin: 0 }}>Select submissions</h3>
               <Btn variant="back" onClick={() => setBulkModalOpen(false)}>Close</Btn>
@@ -1487,9 +1489,10 @@ export default function AdminDashboard({ onNavigate }) {
                 {bulkActive ? "Working..." : "Export"}
               </Btn>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
       <div
         className="bulk-print-wrap"
@@ -1517,18 +1520,19 @@ export default function AdminDashboard({ onNavigate }) {
         })}
       </div>
 
-      {canManageSubmissions && bulkPreviewOpen && (
+      {canManageSubmissions && bulkPreviewOpen ? (
+        <ModalPortal>
         <div
           role="dialog"
           aria-modal="true"
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.45)",
+            background: "rgba(15, 23, 42, 0.78)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1500,
+            zIndex: 2000,
             padding: 12,
           }}
           onClick={() => {
@@ -1611,7 +1615,8 @@ export default function AdminDashboard({ onNavigate }) {
             </div>
           </div>
         </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
     </PageWrap>
   );

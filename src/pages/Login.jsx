@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase.js";
 import logoPng from "../assets/logo.png";
 import studentRoleSvg from "../assets/role-student.svg";
 import educatorRoleSvg from "../assets/role-educator.svg";
+import ModalPortal from "../components/ModalPortal.jsx";
 
 const ROLE_OPTIONS = {
   EN: [
@@ -1389,21 +1390,22 @@ export default function Login({ onNavigate }) {
                     {errors.avatar && <p style={errorStyle}>{errors.avatar}</p>}
                   </div>
                 </div>
-                {showAvatarPreview && avatarPreview && (
-                  <div
-                    role="dialog"
-                    aria-modal="true"
-                    onClick={() => setShowAvatarPreview(false)}
-                    style={{
-                      position: "fixed",
-                      inset: 0,
-                      background: "rgba(15, 23, 42, 0.6)",
-                      display: "grid",
-                      placeItems: "center",
-                      zIndex: 2000,
-                    }}
-                  >
+                {showAvatarPreview && avatarPreview ? (
+                  <ModalPortal>
                     <div
+                      role="dialog"
+                      aria-modal="true"
+                      onClick={() => setShowAvatarPreview(false)}
+                      style={{
+                        position: "fixed",
+                        inset: 0,
+                        background: "rgba(15, 23, 42, 0.78)",
+                        display: "grid",
+                        placeItems: "center",
+                        zIndex: 2000,
+                      }}
+                    >
+                      <div
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         background: "#ffffff",
@@ -1472,8 +1474,9 @@ export default function Login({ onNavigate }) {
                         Close
                       </button>
                     </div>
-                  </div>
-                )}
+                    </div>
+                  </ModalPortal>
+                ) : null}
                 <div
                   style={{
                     display: "grid",

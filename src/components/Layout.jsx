@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { useAppSettings, useTheme, useWeather } from "./AppProviders.jsx";
 import NotificationBell from "./NotificationBell.jsx";
+import ModalPortal from "./ModalPortal.jsx";
 
 const KEYFRAME_ID = "__hb_slide_keyframes__";
 const THEME_KEYFRAME_ID = "__app_theme_keyframes__";
@@ -972,53 +973,55 @@ export function HeaderBar({ title, right, lang = "EN" }) {
         </div>
         {isMobile ? (rightContent ? renderBurger() : null) : rightContent}
       </div>
-      {isMobile && rightContent && menuOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setMenuOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(17, 24, 39, 0.45)",
-            zIndex: 200,
-          }}
-        >
+      {isMobile && rightContent && menuOpen ? (
+        <ModalPortal>
           <div
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setMenuOpen(false)}
             style={{
-            position: "absolute",
-            top: 0,
-            right: isRTL ? "auto" : 0,
-            left: isRTL ? 0 : "auto",
-            width: "min(260px, 78vw)",
-            height: "100%",
-            background: "linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2))",
-            border: "1px solid rgba(255, 255, 255, 0.45)",
-            borderRadius: isRTL ? "0 16px 16px 0" : "16px 0 0 16px",
-            boxShadow: isRTL
-              ? "8px 0 24px rgba(15, 23, 42, 0.2)"
-              : "-8px 0 24px rgba(15, 23, 42, 0.2)",
-            backdropFilter: "blur(10px) saturate(140%)",
-            WebkitBackdropFilter: "blur(10px) saturate(140%)",
-            padding: "24px 18px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            alignItems: "center",
-            transform: drawerVisible
-              ? "translateX(0)"
-              : isRTL
-                ? "translateX(-100%)"
-                : "translateX(100%)",
-            transition: "transform 220ms ease",
-            overflowY: "auto",
-          }}
-        >
-            {mobilePanel}
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              zIndex: 2000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                top: 0,
+                right: isRTL ? "auto" : 0,
+                left: isRTL ? 0 : "auto",
+                width: "min(260px, 78vw)",
+                height: "100%",
+                background: "linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2))",
+                border: "1px solid rgba(255, 255, 255, 0.45)",
+                borderRadius: isRTL ? "0 16px 16px 0" : "16px 0 0 16px",
+                boxShadow: isRTL
+                  ? "8px 0 24px rgba(15, 23, 42, 0.2)"
+                  : "-8px 0 24px rgba(15, 23, 42, 0.2)",
+                backdropFilter: "blur(10px) saturate(140%)",
+                WebkitBackdropFilter: "blur(10px) saturate(140%)",
+                padding: "24px 18px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+                alignItems: "center",
+                transform: drawerVisible
+                  ? "translateX(0)"
+                  : isRTL
+                    ? "translateX(-100%)"
+                    : "translateX(100%)",
+                transition: "transform 220ms ease",
+                overflowY: "auto",
+              }}
+            >
+              {mobilePanel}
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
     </>
   );
 }

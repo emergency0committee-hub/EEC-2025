@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import Btn from "./Btn.jsx";
 import robotPng from "../assets/robot.png";
 import { useAppSettings } from "./AppProviders.jsx";
+import ModalPortal from "./ModalPortal.jsx";
 
 const ROUTE_HINTS = [
   { label: "Career Guidance", route: "career" },
@@ -275,43 +276,44 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
         </button>
       )}
 
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            display: "grid",
-            alignItems: "end",
-            justifyItems: isInline || isRoam ? "center" : "end",
-            padding: 12,
-            zIndex: 1501,
-          }}
-          onClick={() => setOpen(false)}
-        >
+      {open ? (
+        <ModalPortal>
           <div
+            role="dialog"
+            aria-modal="true"
             style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-end",
-              paddingRight: isInline || isRoam ? 0 : 90,
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              display: "grid",
+              alignItems: "end",
+              justifyItems: isInline || isRoam ? "center" : "end",
+              padding: 12,
+              zIndex: 2000,
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setOpen(false)}
           >
             <div
-              ref={panelRef}
               style={{
-                width: "min(360px, 95vw)",
-                background: "#fff",
-                borderRadius: 14,
-                boxShadow: "0 20px 40px rgba(0,0,0,0.18)",
-                padding: 14,
-                display: "grid",
+                display: "flex",
                 gap: 10,
+                alignItems: "flex-end",
+                paddingRight: isInline || isRoam ? 0 : 90,
               }}
+              onClick={(e) => e.stopPropagation()}
             >
+              <div
+                ref={panelRef}
+                style={{
+                  width: "min(360px, 95vw)",
+                  background: "#fff",
+                  borderRadius: 14,
+                  boxShadow: "0 20px 40px rgba(0,0,0,0.18)",
+                  padding: 14,
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
               <div>
                 <div style={{ fontWeight: 700 }}>Need a hand?</div>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>{contextTips}</div>
@@ -357,9 +359,10 @@ export default function HelperBot({ currentRoute, onNavigate, recentRoutes = [],
                 Tips: Try “Open SAT Training”, “Go to Career Dashboard”, or use the search above.
               </div>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
     </>
   );
 }

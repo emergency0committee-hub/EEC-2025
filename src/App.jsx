@@ -38,6 +38,7 @@ import OccupationScaleFull from "./pages/results/OccupationScaleFull.jsx";
 import { PageWrap, HeaderBar, Card } from "./components/Layout.jsx";
 import { AppProviders } from "./components/AppProviders.jsx";
 import AIEducator from "./pages/AIEducator.jsx";
+import AIEducatorForm from "./pages/aiEducator/AIEducatorForm.jsx";
 import VerifyCertificate from "./pages/VerifyCertificate.jsx";
 import Btn from "./components/Btn.jsx";
 import { normalizeRoute, routeHref, isModifiedEvent } from "./lib/routes.js";
@@ -260,6 +261,9 @@ export default function App() {
         break;
       case "ai-educator":
         pageTitle = "AI Educator";
+        break;
+      case "ai-form":
+        pageTitle = "Student Form";
         break;
       case "sat-assignment":
         pageTitle = "SAT Assignment";
@@ -498,6 +502,7 @@ const currentUser = (() => {
       }
       return <AIEducator onNavigate={onNavigate} />;
     }
+    if (route === "ai-form") return <AIEducatorForm onNavigate={onNavigate} />;
     if (route === "test")   return <Test onNavigate={onNavigate} {...(resultsPayload || {})} />;
     if (route === "thanks") return <Thanks onNavigate={onNavigate} />;
     if (route === "career-dashboard") return <AdminDashboard onNavigate={onNavigate} />;

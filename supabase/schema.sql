@@ -908,6 +908,284 @@ create trigger trg_cg_class_live_sessions_updated_at
 before update on public.cg_class_live_sessions for each row
 execute function public.cg_class_live_sessions_set_updated_at();
 
+-- AI Educator: Google Forms-style instructional materials
+create table if not exists public.cg_ai_forms (
+  id uuid primary key default gen_random_uuid(),
+  created_by uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  description text null,
+  category text not null default 'quiz',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.cg_ai_form_questions (
+  id uuid primary key default gen_random_uuid(),
+  form_id uuid not null references public.cg_ai_forms(id) on delete cascade,
+  label text null,
+  prompt text null,
+  question_type text not null default 'short',
+  options jsonb null,
+  correct_options jsonb null,
+  skill text null,
+  max_points numeric null,
+  required boolean not null default false,
+  sort_index integer null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.cg_ai_form_submissions (
+  id uuid primary key default gen_random_uuid(),
+  form_id uuid not null references public.cg_ai_forms(id) on delete cascade,
+  respondent_id uuid not null references auth.users(id) on delete cascade,
+  respondent_email text null,
+  respondent_name text null,
+  respondent_school text null,
+  respondent_class text null,
+  respondent_phone text null,
+  answers jsonb null,
+  scores jsonb null,
+  total_score numeric null,
+  max_score numeric null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (form_id, respondent_id)
+);
+
+create index if not exists cg_ai_form_questions_form_idx
+  on public.cg_ai_form_questions (form_id);
+
+create index if not exists cg_ai_form_submissions_form_idx
+  on public.cg_ai_form_submissions (form_id);
+
+create or replace function public.cg_ai_forms_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function public.cg_ai_form_questions_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create or replace function public.cg_ai_form_submissions_set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_cg_ai_forms_updated_at on public.cg_ai_forms;
+create trigger trg_cg_ai_forms_updated_at
+before update on public.cg_ai_forms for each row
+execute function public.cg_ai_forms_set_updated_at();
+
+drop trigger if exists trg_cg_ai_form_questions_updated_at on public.cg_ai_form_questions;
+create trigger trg_cg_ai_form_questions_updated_at
+before update on public.cg_ai_form_questions for each row
+execute function public.cg_ai_form_questions_set_updated_at();
+
+drop trigger if exists trg_cg_ai_form_submissions_updated_at on public.cg_ai_form_submissions;
+create trigger trg_cg_ai_form_submissions_updated_at
+before update on public.cg_ai_form_submissions for each row
+execute function public.cg_ai_form_submissions_set_updated_at();
+
+alter table public.cg_ai_forms enable row level security;
+alter table public.cg_ai_form_questions enable row level security;
+alter table public.cg_ai_form_submissions enable row level security;
+
+do $$ begin
+  create policy "cg_ai_forms_owner_select"
+  on public.cg_ai_forms for select
+  using (auth.uid() = created_by);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_forms_owner_insert"
+  on public.cg_ai_forms for insert
+  with check (auth.uid() = created_by);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_forms_owner_update"
+  on public.cg_ai_forms for update
+  using (auth.uid() = created_by)
+  with check (auth.uid() = created_by);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_forms_owner_delete"
+  on public.cg_ai_forms for delete
+  using (auth.uid() = created_by);
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_forms_admin_all"
+  on public.cg_ai_forms for all
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_forms_read_auth"
+  on public.cg_ai_forms for select
+  using (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_questions_owner_select"
+  on public.cg_ai_form_questions for select
+  using (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_questions_owner_insert"
+  on public.cg_ai_form_questions for insert
+  with check (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_questions_owner_update"
+  on public.cg_ai_form_questions for update
+  using (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_questions_owner_delete"
+  on public.cg_ai_form_questions for delete
+  using (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_questions_admin_all"
+  on public.cg_ai_form_questions for all
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_questions_read_auth"
+  on public.cg_ai_form_questions for select
+  using (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_submissions_owner_select"
+  on public.cg_ai_form_submissions for select
+  using (
+    respondent_id = auth.uid()
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_submissions_owner_insert"
+  on public.cg_ai_form_submissions for insert
+  with check (
+    respondent_id = auth.uid()
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_submissions_owner_update"
+  on public.cg_ai_form_submissions for update
+  using (respondent_id = auth.uid())
+  with check (respondent_id = auth.uid());
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_submissions_teacher_select"
+  on public.cg_ai_form_submissions for select
+  using (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_submissions_admin_all"
+  on public.cg_ai_form_submissions for all
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
 -- Storage bucket for profile avatars
 insert into storage.buckets (id, name, public)
 values ('profile-avatars', 'profile-avatars', true)

@@ -6,6 +6,7 @@ import { PageWrap, HeaderBar, Card } from "../../../components/Layout.jsx";
 import { supabase } from "../../../lib/supabase.js";
 import { routeHref } from "../../../lib/routes.js";
 import { fetchQuestionBankSample, fetchQuestionBankByIds } from "../../../lib/assignmentQuestions.js";
+import ModalPortal from "../../../components/ModalPortal.jsx";
 import {
   BANKS,
   mapBankQuestionToResource,
@@ -2471,18 +2472,19 @@ export default function SATTraining({ onNavigate }) {
             resolveQuestionData={resolveQuestionData}
           />
         )}
-        {bulkModalOpen && (
+        {bulkModalOpen ? (
+          <ModalPortal>
           <div
             role="dialog"
             aria-modal="true"
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(0,0,0,0.45)",
+              background: "rgba(15, 23, 42, 0.78)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              zIndex: 1400,
+              zIndex: 2000,
               padding: 12,
             }}
             onClick={() => setBulkModalOpen(false)}
@@ -2649,7 +2651,8 @@ export default function SATTraining({ onNavigate }) {
               </div>
             </div>
           </div>
-        )}
+        </ModalPortal>
+      ) : null}
       </PageWrap>
     );
   }

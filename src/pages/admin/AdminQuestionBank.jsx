@@ -5,6 +5,7 @@ import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import RichTextEditor from "../../components/RichTextEditor.jsx";
 import UserMenu from "../../components/UserMenu.jsx";
 import Btn from "../../components/Btn.jsx";
+import ModalPortal from "../../components/ModalPortal.jsx";
 import { BlockMath, InlineMath } from "react-katex";
 import { supabase } from "../../lib/supabase.js";
 import { renderMathText } from "../../lib/mathText.jsx";
@@ -2421,9 +2422,10 @@ const validate = () => {
       </Card>
       )}
 
-      {activeBank !== "resources" && previewRow && (
-        <div style={modalOverlayStyle} role="dialog" aria-modal="true" aria-labelledby="question-bank-preview-title" onClick={closePreview}>
-          <div style={modalContentStyle} onClick={(event) => event.stopPropagation()}>
+      {activeBank !== "resources" && previewRow ? (
+        <ModalPortal>
+          <div style={modalOverlayStyle} role="dialog" aria-modal="true" aria-labelledby="question-bank-preview-title" onClick={closePreview}>
+            <div style={modalContentStyle} onClick={(event) => event.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
               <h2 id="question-bank-preview-title" style={{ margin: 0 }}>{copy.previewTitle}</h2>
               <button type="button" onClick={closePreview} style={modalCloseButtonStyle}>
@@ -2599,9 +2601,10 @@ const validate = () => {
                 </>
               )}
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
     </PageWrap>
   );
@@ -3441,12 +3444,12 @@ function getBankTabIcon(id) {
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
-  background: "rgba(17, 24, 39, 0.65)",
+  background: "rgba(15, 23, 42, 0.78)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   padding: 24,
-  zIndex: 1000,
+  zIndex: 2000,
 };
 
 const modalContentStyle = {

@@ -5,6 +5,7 @@ import { PageWrap, HeaderBar, Card } from "../components/Layout.jsx";
 import Btn from "../components/Btn.jsx";
 import UserMenu from "../components/UserMenu.jsx";
 import { STR } from "../i18n/strings.js";
+import ModalPortal from "../components/ModalPortal.jsx";
 
 export default function Career({ onNavigate }) {
   Career.propTypes = {
@@ -175,33 +176,34 @@ export default function Career({ onNavigate }) {
       </div>
 
       {/* Rules Modal */}
-      {showRules && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(17,24,39,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-            zIndex: 50,
-          }}
-          onClick={() => setShowRules(false)}
-        >
+      {showRules ? (
+        <ModalPortal>
           <div
+            role="dialog"
+            aria-modal="true"
             style={{
-              width: "min(720px, 96vw)",
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               padding: 16,
-              boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+              zIndex: 2000,
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setShowRules(false)}
           >
+            <div
+              style={{
+                width: "min(720px, 96vw)",
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                padding: 16,
+                boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
             <h2 style={{ margin: 0, color: "#111827" }}>{t.rulesTitle}</h2>
             <p style={{ color: "#374151", marginTop: 6 }}>{t.rulesLead}</p>
             <ul style={{ margin: "8px 0 0 18px", color: "#374151" }}>
@@ -248,9 +250,10 @@ export default function Career({ onNavigate }) {
                 {t.agreeBegin}
               </Btn>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
     </PageWrap>
   );
 }

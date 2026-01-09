@@ -8,6 +8,7 @@ import { PageWrap, HeaderBar, Card, Field } from "../components/Layout.jsx";
 import { useAppSettings, useTheme, useWeather } from "../components/AppProviders.jsx";
 import { STR } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
+import ModalPortal from "../components/ModalPortal.jsx";
 
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 const MAX_PROFILE_AVATAR_MB = 3;
@@ -797,24 +798,25 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
         }
       />
 
-      {roleFixOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={roleFixCopy.title}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 72,
-            background: theme.overlayStrong,
-            padding: 16,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div style={{ width: "min(520px, 92vw)" }}>
-            <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
+      {roleFixOpen ? (
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={roleFixCopy.title}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2000,
+              background: "rgba(15, 23, 42, 0.78)",
+              padding: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div style={{ width: "min(520px, 92vw)" }}>
+              <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
               <h3 style={{ marginTop: 0, marginBottom: 6, color: theme.textPrimary }}>{roleFixCopy.title}</h3>
               <p style={{ marginTop: 0, color: theme.textSecondary }}>{roleFixCopy.subtitle}</p>
               <div style={{ display: "grid", gap: 12 }}>
@@ -854,29 +856,31 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
                 </button>
               </div>
               {roleFixError && <p style={{ marginTop: 12, color: "#dc2626", fontSize: 13 }}>{roleFixError}</p>}
-            </Card>
+              </Card>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
-      {profilePromptOpen && !roleFixOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={promptCopy.title}
-          onClick={handleProfileLater}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 70,
-            background: theme.overlayStrong,
-            padding: 16,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(620px, 94vw)" }}>
+      {profilePromptOpen && !roleFixOpen ? (
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={promptCopy.title}
+            onClick={handleProfileLater}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2000,
+              background: "rgba(15, 23, 42, 0.78)",
+              padding: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "min(620px, 94vw)" }}>
             <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
               <h3 style={{ marginTop: 0, marginBottom: 6, color: theme.textPrimary }}>{promptCopy.title}</h3>
               <p style={{ marginTop: 0, color: theme.textSecondary }}>{promptCopy.subtitle}</p>
@@ -1000,9 +1004,10 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
                 </Btn>
               </div>
             </Card>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
       {!isSignedIn && (
         <div
@@ -1271,24 +1276,25 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
         </Card>
       </div>
 
-      {isSignedIn && satTestingPickerOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={satPickerCopy.title}
-          onClick={() => setSatTestingPickerOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 60,
-            background: theme.overlaySoft,
-            padding: 16,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 92vw)" }}>
+      {isSignedIn && satTestingPickerOpen ? (
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={satPickerCopy.title}
+            onClick={() => setSatTestingPickerOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 2000,
+              background: "rgba(15, 23, 42, 0.78)",
+              padding: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 92vw)" }}>
             <Card style={{ padding: 20, background: theme.panelBg, borderColor: theme.panelBorder }}>
               <h3 style={{ marginTop: 0, marginBottom: 6, color: theme.textPrimary }}>{satPickerCopy.title}</h3>
               <p style={{ marginTop: 0, color: theme.textSecondary }}>{satPickerCopy.subtitle}</p>
@@ -1335,9 +1341,10 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
                 </Btn>
               </div>
             </Card>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
           <div
             style={{

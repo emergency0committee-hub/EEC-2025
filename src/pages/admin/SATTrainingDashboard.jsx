@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { PageWrap, HeaderBar, Card } from "../../components/Layout.jsx";
 import { supabase } from "../../lib/supabase.js";
 import Btn from "../../components/Btn.jsx";
+import ModalPortal from "../../components/ModalPortal.jsx";
 
 export default function SATTrainingDashboard({ onNavigate }) {
   SATTrainingDashboard.propTypes = { onNavigate: PropTypes.func.isRequired };
@@ -312,9 +313,34 @@ export default function SATTrainingDashboard({ onNavigate }) {
         </div>
       </Card>
     
-      {viewRow && (
-        <div role="dialog" aria-modal="true" style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={closeView}>
-          <div onClick={(e)=>e.stopPropagation()} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, width:'min(720px,92vw)', maxHeight:'80vh', overflowY:'auto', padding:16 }}>
+      {viewRow ? (
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              zIndex: 2000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={closeView}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                width: "min(720px,92vw)",
+                maxHeight: "80vh",
+                overflowY: "auto",
+                padding: 16,
+              }}
+            >
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <h3 style={{ marginTop:0 }}>Submission Details</h3>
               <button onClick={closeView} style={{ border:'1px solid #d1d5db', background:'#fff', borderRadius:8, padding:'6px 10px', cursor:'pointer' }}>Close</button>
@@ -356,8 +382,9 @@ export default function SATTrainingDashboard({ onNavigate }) {
               </table>
             </div>
           </div>
-        </div>
-      )}
+            </div>
+        </ModalPortal>
+      ) : null}
     </PageWrap>
   );
 }

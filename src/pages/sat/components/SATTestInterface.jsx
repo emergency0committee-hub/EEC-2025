@@ -7,6 +7,7 @@ import { SATFooterBar } from "../SATLayout.jsx";
 import PaletteOverlay from "../../test/PaletteOverlay.jsx";
 import useCountdown from "../../../hooks/useCountdown.js";
 import "katex/dist/katex.min.css";
+import ModalPortal from "../../../components/ModalPortal.jsx";
 
 import { saveSatResult, saveSatTraining, saveSatAnswerRows } from "../../../lib/supabaseStorage.js";
 import { loadRWModules, loadMathModules, MATH_MODULES, normalizeEnglishSkill, normalizeDifficulty } from "../../../sat/questions.js";
@@ -1474,23 +1475,24 @@ export default function SATTestInterface({
   return (
     <PageWrap style={{ userSelect: "none", WebkitUserSelect: "none", MozUserSelect: "none", msUserSelect: "none" }}>
       {previewBanner}
-      {isMathSection && showCalculator && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Desmos Calculator"
-          onClick={closeCalculator}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15,23,42,0.75)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
+      {isMathSection && showCalculator ? (
+        <ModalPortal>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Desmos Calculator"
+            onClick={closeCalculator}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              zIndex: 2000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
           <div
             onClick={(event) => event.stopPropagation()}
             style={{
@@ -1539,8 +1541,9 @@ export default function SATTestInterface({
               allowFullScreen
             />
           </div>
-        </div>
-      )}
+          </div>
+        </ModalPortal>
+      ) : null}
       {/* Bluebook-style header */}
       <div style={{ padding: "6px 0 4px" }}>
         <div style={headerGridStyle}>
@@ -1868,17 +1871,35 @@ export default function SATTestInterface({
         />
       )}
 
-{!reviewOnly && summaryModal.open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.45)", backdropFilter: "blur(2px)", zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={summaryModal.reason === "timeout" ? undefined : cancelSummary}
-        >
+{!reviewOnly && summaryModal.open ? (
+        <ModalPortal>
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 12px 30px rgba(15,23,42,0.25)", width: "min(520px, 92vw)", padding: 20, display: "grid", gap: 14 }}
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              zIndex: 2000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={summaryModal.reason === "timeout" ? undefined : cancelSummary}
           >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                boxShadow: "0 12px 30px rgba(15,23,42,0.25)",
+                width: "min(520px, 92vw)",
+                padding: 20,
+                display: "grid",
+                gap: 14,
+              }}
+            >
             <h3 style={{ margin: 0, color: "#111827" }}>
               {summaryModal.reason === "timeout" ? "Time's Up" : "Ready to Submit?"}
             </h3>
@@ -1916,31 +1937,42 @@ export default function SATTestInterface({
                 {isSubmitting ? "Submittingâ€¦" : "Submit"}
               </button>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
 
       {/* Generic overlay modal for header buttons */}
-      {overlay.open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={closeOverlay}
-        >
+      {overlay.open ? (
+        <ModalPortal>
           <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 10px 24px rgba(0,0,0,0.12)", width: "min(560px, 90vw)", padding: 16 }}
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.78)",
+              zIndex: 2000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onClick={closeOverlay}
           >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 10px 24px rgba(0,0,0,0.12)", width: "min(560px, 90vw)", padding: 16 }}
+            >
             <h3 style={{ marginTop: 0, color: "#111827" }}>{overlay.title}</h3>
             <p style={{ color: "#374151" }}>{overlay.message}</p>
             <p style={{ color: "#6b7280", fontSize: 13 }}>Tap Close to return to your test.</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
               <button onClick={closeOverlay} style={{ border: "1px solid #d1d5db", background: "#fff", color: "#374151", borderRadius: 8, padding: "8px 12px", cursor: "pointer" }}>Close</button>
             </div>
+            </div>
           </div>
-        </div>
-      )}
+        </ModalPortal>
+      ) : null}
     </PageWrap>
   );
 }

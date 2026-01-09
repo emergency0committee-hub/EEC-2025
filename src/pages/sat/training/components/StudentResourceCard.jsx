@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import Btn from "../../../../components/Btn.jsx";
+import ModalPortal from "../../../../components/ModalPortal.jsx";
 
 const pillStyles = {
   base: {
@@ -179,36 +180,40 @@ export default function StudentResourceCard({
             )}
           </div>
         </div>
-        {previewUrl && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.65)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: 16,
-              zIndex: 9999,
-            }}
-            onClick={() => setPreviewUrl("")}
-          >
+        {previewUrl ? (
+          <ModalPortal>
             <div
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: "#ffffff", borderRadius: 12, width: "90%", height: "90%", display: "grid", gridTemplateRows: "auto 1fr" }}
+              role="dialog"
+              aria-modal="true"
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(15, 23, 42, 0.78)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 16,
+                zIndex: 2000,
+              }}
+              onClick={() => setPreviewUrl("")}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>
-                <div style={{ fontWeight: 700 }}>Preview</div>
-                <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ background: "#ffffff", borderRadius: 12, width: "90%", height: "90%", display: "grid", gridTemplateRows: "auto 1fr" }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #e5e7eb" }}>
+                  <div style={{ fontWeight: 700 }}>Preview</div>
+                  <Btn variant="back" onClick={() => setPreviewUrl("")}>Close</Btn>
+                </div>
+                <iframe
+                  title="Lesson File"
+                  src={previewUrl}
+                  style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }}
+                />
               </div>
-              <iframe
-                title="Lesson File"
-                src={previewUrl}
-                style={{ width: "100%", height: "100%", border: "none", borderRadius: "0 0 12px 12px" }}
-              />
             </div>
-          </div>
-        )}
+          </ModalPortal>
+        ) : null}
       </>
     );
   }
