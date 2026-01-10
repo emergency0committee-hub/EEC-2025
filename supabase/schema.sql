@@ -1226,3 +1226,75 @@ do $$ begin
     and split_part(name, '/', 1) = auth.uid()::text
   );
 exception when duplicate_object then null; end $$;
+
+-- AI access requests (educator -> admin notification)
+create table if not exists public.cg_ai_access_requests (
+  id uuid primary key default gen_random_uuid(),
+  requested_by uuid not null references auth.users(id) on delete cascade,
+  requested_by_email text null,
+  requested_by_name text null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  resolved_at timestamptz null,
+  resolved_by uuid null references auth.users(id) on delete set null
+);
+
+create index if not exists cg_ai_access_requests_created_at_idx
+  on public.cg_ai_access_requests (created_at desc);
+
+create index if not exists cg_ai_access_requests_requested_by_idx
+  on public.cg_ai_access_requests (requested_by);
+
+create index if not exists cg_ai_access_requests_status_idx
+  on public.cg_ai_access_requests (status);
+
+create unique index if not exists cg_ai_access_requests_pending_uniq
+  on public.cg_ai_access_requests (requested_by)
+  where status = 'pending';
+
+alter table public.cg_ai_access_requests enable row level security;
+
+do $$ begin
+  create policy "cg_ai_access_requests_select_admin_or_owner"
+  on public.cg_ai_access_requests for select
+  using (
+    requested_by = auth.uid()
+    or exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_access_requests_insert_educator"
+  on public.cg_ai_access_requests for insert
+  with check (
+    requested_by = auth.uid()
+    and exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) = 'educator'
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create policy "cg_ai_access_requests_update_admin"
+  on public.cg_ai_access_requests for update
+  using (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.profiles p
+      where p.id = auth.uid()
+        and lower(coalesce(p.role, '')) in ('admin', 'administrator')
+    )
+  );
+exception when duplicate_object then null; end $$;

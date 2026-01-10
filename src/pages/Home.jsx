@@ -12,6 +12,7 @@ import ModalPortal from "../components/ModalPortal.jsx";
 
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 const MAX_PROFILE_AVATAR_MB = 3;
+const AI_ACCESS_REQUESTS_TABLE = import.meta.env.VITE_AI_ACCESS_REQUESTS_TABLE || "cg_ai_access_requests";
 const WEATHER_LABELS = {
   0: "Clear",
   1: "Mainly clear",
@@ -205,6 +206,8 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
   const [profileAvatarFile, setProfileAvatarFile] = useState(null);
   const [profileAvatarPreview, setProfileAvatarPreview] = useState("");
   const [profileAvatarError, setProfileAvatarError] = useState("");
+  const [aiAccessRequestPending, setAiAccessRequestPending] = useState(false);
+  const [aiAccessRequestBusy, setAiAccessRequestBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const isSchoolAccount = (currentUser?.role || "").toLowerCase() === "school";
   const { theme: homeTheme } = useTheme();
@@ -325,6 +328,14 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
   const lockedCopy = lockedLabelMap.EN;
   const aiLockedLabel = home.aiEducator.locked || lockedCopy.label;
   const aiLockedMessage = home.aiEducator.lockedMessage || lockedCopy.message;
+  const aiRequestCopy = {
+    sent: "AI access request sent to admin.",
+    pending: "AI access request already sent.",
+    error: "Unable to request AI access. Please try again.",
+    notAllowed: "AI access requests are limited to educators.",
+  };
+  const aiRequestStatusLabel = aiAccessRequestBusy ? "Requesting..." : aiAccessRequestPending ? "Request Sent" : aiLockedLabel;
+  const aiRequestStatusMessage = aiAccessRequestPending ? "Awaiting admin approval." : aiLockedMessage;
   const profileErrorStyle = { color: "#dc2626", fontSize: 12, margin: "4px 0 0" };
   const displayName = (currentUser?.name || currentUser?.username || "").trim();
   const welcomeText = displayName
@@ -359,14 +370,70 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
     zIndex: 2,
   };
 
-  const handleAiEducatorClick = canAccessAIEducator
-    ? navTo("ai-educator")
-    : (event) => {
-        event?.preventDefault?.();
+  const requestAiAccess = async (event) => {
+    event?.preventDefault?.();
+    if (aiAccessRequestBusy) return;
+    if (!currentUser?.email) {
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(aiLockedMessage);
+      }
+      return;
+    }
+    const roleValue = (currentUser?.role || "").toLowerCase();
+    if (roleValue && roleValue !== "educator") {
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(aiRequestCopy.notAllowed);
+      }
+      return;
+    }
+    if (aiAccessRequestPending) {
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(aiRequestCopy.pending);
+      }
+      return;
+    }
+    setAiAccessRequestBusy(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id || currentUser?.id;
+      if (!userId) throw new Error("Missing user id");
+      const { data: existing, error: existingError } = await supabase
+        .from(AI_ACCESS_REQUESTS_TABLE)
+        .select("id")
+        .eq("requested_by", userId)
+        .eq("status", "pending")
+        .limit(1);
+      if (existingError) throw existingError;
+      if (Array.isArray(existing) && existing.length > 0) {
+        setAiAccessRequestPending(true);
         if (typeof window !== "undefined" && typeof window.alert === "function") {
-          window.alert(aiLockedMessage);
+          window.alert(aiRequestCopy.pending);
         }
+        return;
+      }
+      const payload = {
+        requested_by: userId,
+        requested_by_email: authData?.user?.email || currentUser?.email || null,
+        requested_by_name: currentUser?.name || currentUser?.username || null,
+        status: "pending",
       };
+      const { error } = await supabase.from(AI_ACCESS_REQUESTS_TABLE).insert(payload);
+      if (error) throw error;
+      setAiAccessRequestPending(true);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(aiRequestCopy.sent);
+      }
+    } catch (err) {
+      console.warn("Failed to request AI access", err);
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert(aiRequestCopy.error);
+      }
+    } finally {
+      setAiAccessRequestBusy(false);
+    }
+  };
+
+  const handleAiEducatorClick = canAccessAIEducator ? navTo("ai-educator") : requestAiAccess;
 
   useEffect(() => {
     let active = true;
@@ -398,6 +465,42 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.email || canAccessAIEducator) {
+      setAiAccessRequestPending(false);
+      return;
+    }
+    const roleValue = (currentUser?.role || "").toLowerCase();
+    if (roleValue && roleValue !== "educator") {
+      setAiAccessRequestPending(false);
+      return;
+    }
+    let active = true;
+    const loadRequest = async () => {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        const userId = authData?.user?.id || currentUser?.id;
+        if (!userId) return;
+        const { data, error } = await supabase
+          .from(AI_ACCESS_REQUESTS_TABLE)
+          .select("id")
+          .eq("requested_by", userId)
+          .eq("status", "pending")
+          .limit(1);
+        if (error) throw error;
+        if (active) {
+          setAiAccessRequestPending(Array.isArray(data) && data.length > 0);
+        }
+      } catch (err) {
+        console.warn("Failed to check AI access request", err);
+      }
+    };
+    loadRequest();
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id, currentUser?.email, currentUser?.role, canAccessAIEducator]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -734,11 +837,11 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
           key: "aiEducator",
           title: home.aiEducator.title,
           desc: home.aiEducator.desc,
-          cta: canAccessAIEducator ? home.aiEducator.cta : aiLockedLabel,
+          cta: canAccessAIEducator ? home.aiEducator.cta : aiRequestStatusLabel,
           onClick: isSignedIn ? handleAiEducatorClick : navTo("intro-ai-educator"),
-          disabled: isSignedIn && !canAccessAIEducator,
+          disabled: isSignedIn && !canAccessAIEducator ? aiAccessRequestBusy : false,
           extra: isSignedIn && !canAccessAIEducator ? (
-            <small style={{ color: theme.textMuted, fontSize: 12 }}>{aiLockedMessage}</small>
+            <small style={{ color: theme.textMuted, fontSize: 12 }}>{aiRequestStatusMessage}</small>
           ) : null,
         },
         {
@@ -760,8 +863,9 @@ export default function Home({ onNavigate, canAccessAIEducator = false }) {
       navTo,
       handleAiEducatorClick,
       canAccessAIEducator,
-      aiLockedLabel,
-      aiLockedMessage,
+      aiRequestStatusLabel,
+      aiRequestStatusMessage,
+      aiAccessRequestBusy,
       setSatTestingPickerOpen,
       isSignedIn,
       normalizedRole,

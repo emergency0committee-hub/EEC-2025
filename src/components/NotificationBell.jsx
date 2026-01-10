@@ -6,6 +6,7 @@ import { routeHref } from "../lib/routes.js";
 
 const MESSAGES_TABLE = import.meta.env.VITE_INTERNAL_MESSAGES_TABLE || "cg_internal_messages";
 const READS_TABLE = import.meta.env.VITE_INTERNAL_MESSAGE_READS_TABLE || "cg_internal_message_reads";
+const AI_REQUESTS_TABLE = import.meta.env.VITE_AI_ACCESS_REQUESTS_TABLE || "cg_ai_access_requests";
 const RECENT_LIMIT = 5;
 
 const formatTime = (value) => {
@@ -31,6 +32,7 @@ export default function NotificationBell({ onNavigate, style = {} }) {
   })();
   const role = (currentUser?.role || "").toLowerCase();
   const allowed = role === "admin" || role === "administrator" || role === "staff";
+  const canSeeAiRequests = role === "admin" || role === "administrator";
 
   const [authUser, setAuthUser] = useState(null);
   const [open, setOpen] = useState(false);
@@ -128,6 +130,25 @@ export default function NotificationBell({ onNavigate, style = {} }) {
           .gt("created_at", lastRead)
           .neq("created_by", userId)
           .or(`message_type.eq.team,recipient_id.eq.${userId}`);
+        let requestCount = 0;
+        let recentRequestRows = [];
+        if (canSeeAiRequests) {
+          const { count: requestCountRaw, error: requestCountError } = await supabase
+            .from(AI_REQUESTS_TABLE)
+            .select("id", { count: "exact", head: true })
+            .eq("status", "pending")
+            .gt("created_at", lastRead);
+          if (requestCountError) throw requestCountError;
+          requestCount = requestCountRaw || 0;
+          const { data: requestRows, error: requestError } = await supabase
+            .from(AI_REQUESTS_TABLE)
+            .select("id, created_at, requested_by, requested_by_email, requested_by_name, status")
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(RECENT_LIMIT);
+          if (requestError) throw requestError;
+          recentRequestRows = requestRows || [];
+        }
         const { data: recentRows, error: recentError } = await supabase
           .from(MESSAGES_TABLE)
           .select(
@@ -138,8 +159,19 @@ export default function NotificationBell({ onNavigate, style = {} }) {
           .limit(RECENT_LIMIT);
         if (recentError) throw recentError;
         if (!active) return;
-        setUnreadCount(count || 0);
-        setRecent(recentRows || []);
+        const mappedMessages = (recentRows || []).map((item) => ({ ...item, kind: "message" }));
+        const mappedRequests = (recentRequestRows || []).map((item) => ({
+          ...item,
+          kind: "ai-access",
+          body: "Requested AI access",
+        }));
+        const combined = [...mappedMessages, ...mappedRequests].sort((a, b) => {
+          const left = new Date(a.created_at).getTime();
+          const right = new Date(b.created_at).getTime();
+          return right - left;
+        });
+        setUnreadCount((count || 0) + requestCount);
+        setRecent(combined.slice(0, RECENT_LIMIT));
       } catch (err) {
         console.error(err);
         if (active) setError(err?.message || "Failed to load notifications.");
@@ -161,9 +193,10 @@ export default function NotificationBell({ onNavigate, style = {} }) {
             return;
           }
           setRecent((prev) => {
-            const exists = prev.some((item) => item.id === row.id);
+            const exists = prev.some((item) => item.id === row.id && (item.kind || "message") === "message");
             if (exists) return prev;
-            return [row, ...prev].slice(0, RECENT_LIMIT);
+            const nextItem = { ...row, kind: "message" };
+            return [nextItem, ...prev].slice(0, RECENT_LIMIT);
           });
           if (row.created_by === userId) return;
           const lastRead = lastReadRef.current;
@@ -173,12 +206,38 @@ export default function NotificationBell({ onNavigate, style = {} }) {
         }
       )
       .subscribe();
+    const requestChannel = canSeeAiRequests
+      ? supabase
+          .channel("ai-access-requests-bell")
+          .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: AI_REQUESTS_TABLE },
+            (payload) => {
+              const row = payload.new;
+              if (!row || row.status !== "pending") return;
+              setRecent((prev) => {
+                const exists = prev.some((item) => item.id === row.id && item.kind === "ai-access");
+                if (exists) return prev;
+                const next = [{ ...row, kind: "ai-access", body: "Requested AI access" }, ...prev];
+                return next
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .slice(0, RECENT_LIMIT);
+              });
+              const lastRead = lastReadRef.current;
+              if (!lastRead || new Date(row.created_at).getTime() > new Date(lastRead).getTime()) {
+                setUnreadCount((prev) => prev + 1);
+              }
+            }
+          )
+          .subscribe()
+      : null;
 
     return () => {
       active = false;
       supabase.removeChannel(channel);
+      if (requestChannel) supabase.removeChannel(requestChannel);
     };
-  }, [allowed, userId]);
+  }, [allowed, userId, canSeeAiRequests]);
 
   useEffect(() => {
     const handler = (event) => {
@@ -298,17 +357,24 @@ export default function NotificationBell({ onNavigate, style = {} }) {
           )}
           <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
             {recent.map((item) => {
-              const name = item.created_by_name || item.created_by_email || "Staff";
-              const scopeLabel = item.message_type === "direct" ? "Private" : "Team";
+              const isAiRequest = item.kind === "ai-access";
+              const name = isAiRequest
+                ? item.requested_by_name || item.requested_by_email || "Educator"
+                : item.created_by_name || item.created_by_email || "Staff";
+              const scopeLabel = isAiRequest
+                ? "AI Access Request"
+                : item.message_type === "direct"
+                  ? "Private"
+                  : "Team";
               return (
-                <div key={item.id} style={{ fontSize: 12 }}>
+                <div key={`${item.kind || "message"}-${item.id}`} style={{ fontSize: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                     <span style={{ fontWeight: 600, color: "#0f172a" }}>{name}</span>
                     <span style={{ color: "#94a3b8" }}>{formatTime(item.created_at)}</span>
                   </div>
                   <div style={{ color: "#475569", fontSize: 11 }}>
                     {scopeLabel}
-                    {item.message_type === "direct" && item.recipient_id === userId ? " · To you" : ""}
+                    {!isAiRequest && item.message_type === "direct" && item.recipient_id === userId ? " To you" : ""}
                   </div>
                   <div style={{ color: "#475569" }}>
                     {item.body}
@@ -344,3 +410,4 @@ export default function NotificationBell({ onNavigate, style = {} }) {
 }
 
 NotificationBell.displayName = "NotificationBell";
+
