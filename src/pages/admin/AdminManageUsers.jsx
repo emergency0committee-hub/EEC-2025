@@ -216,6 +216,7 @@ export default function AdminManageUsers({ onNavigate }) {
     () => users.find((u) => u.id === selectedUserId) || null,
     [users, selectedUserId]
   );
+  const isSelectedStudent = (selectedUser?.role || "").toLowerCase() === "student";
 
   useEffect(() => {
     if (selectedUser) {
@@ -236,9 +237,10 @@ export default function AdminManageUsers({ onNavigate }) {
 
   useEffect(() => {
     let active = true;
-    if (!selectedUser?.id) {
+    if (!selectedUser?.id || !isSelectedStudent) {
       setSelectedQrUrl("");
       setSelectedQrError("");
+      setSelectedQrLoading(false);
       return undefined;
     }
     setSelectedQrLoading(true);
@@ -259,7 +261,7 @@ export default function AdminManageUsers({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [selectedUser?.id]);
+  }, [selectedUser?.id, isSelectedStudent]);
 
   const doSaveRole = async () => {
     if (!selectedUser) return;
@@ -574,45 +576,51 @@ export default function AdminManageUsers({ onNavigate }) {
               <div style={{ fontWeight: 600 }}>{selectedUser.name || selectedUser.username || selectedUser.email}</div>
               <div style={{ color: "#6b7280", fontSize: 14 }}>{formatUserLabel(selectedUser)}</div>
             </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-                border: "1px solid #e5e7eb",
-                borderRadius: 10,
-                padding: 12,
-                background: "#f9fafb",
-              }}
-            >
-              {selectedQrUrl ? (
-                <img src={selectedQrUrl} alt="Competition QR code" style={{ width: 120, height: 120 }} />
-              ) : (
-                <div
-                  style={{
-                    width: 120,
-                    height: 120,
-                    borderRadius: 10,
-                    border: "1px dashed #cbd5f5",
-                    display: "grid",
-                    placeItems: "center",
-                    color: "#64748b",
-                    background: "#ffffff",
-                    fontSize: 12,
-                  }}
-                >
-                  QR unavailable
+            {isSelectedStudent ? (
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  alignItems: "center",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 10,
+                  padding: 12,
+                  background: "#f9fafb",
+                }}
+              >
+                {selectedQrUrl ? (
+                  <img src={selectedQrUrl} alt="Competition QR code" style={{ width: 120, height: 120 }} />
+                ) : (
+                  <div
+                    style={{
+                      width: 120,
+                      height: 120,
+                      borderRadius: 10,
+                      border: "1px dashed #cbd5f5",
+                      display: "grid",
+                      placeItems: "center",
+                      color: "#64748b",
+                      background: "#ffffff",
+                      fontSize: 12,
+                    }}
+                  >
+                    QR unavailable
+                  </div>
+                )}
+                <div style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontWeight: 600, color: "#111827" }}>Competition QR</div>
+                  <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569" }}>
+                    {selectedUser.id}
+                  </div>
+                  {selectedQrLoading && <div style={{ color: "#6b7280", fontSize: 12 }}>Generating...</div>}
+                  {selectedQrError && <div style={{ color: "#dc2626", fontSize: 12 }}>{selectedQrError}</div>}
                 </div>
-              )}
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontWeight: 600, color: "#111827" }}>Competition QR</div>
-                <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569" }}>
-                  {selectedUser.id}
-                </div>
-                {selectedQrLoading && <div style={{ color: "#6b7280", fontSize: 12 }}>Generating...</div>}
-                {selectedQrError && <div style={{ color: "#dc2626", fontSize: 12 }}>{selectedQrError}</div>}
               </div>
-            </div>
+            ) : (
+              <div style={{ color: "#6b7280", fontSize: 13 }}>
+                Competition QR is available for students only.
+              </div>
+            )}
 
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Name</span>

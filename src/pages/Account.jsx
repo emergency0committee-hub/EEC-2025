@@ -46,6 +46,8 @@ export default function Account({ onNavigate }) {
   const [avatarError, setAvatarError] = useState("");
   const [avatarVersion, setAvatarVersion] = useState(0);
   const isAdmin = (() => { try { return localStorage.getItem("cg_admin_ok_v1") === "1"; } catch { return false; } })();
+  const profileRole = (profile?.role || user?.user_metadata?.role || "").toLowerCase();
+  const isStudent = profileRole === "student";
 
   // Access code generator (manual refresh)
   const [refreshingCodes, setRefreshingCodes] = useState(false);
@@ -176,9 +178,10 @@ export default function Account({ onNavigate }) {
 
   useEffect(() => {
     let active = true;
-    if (!user?.id) {
+    if (!user?.id || !isStudent) {
       setQrDataUrl("");
       setQrError("");
+      setQrLoading(false);
       return undefined;
     }
     setQrLoading(true);
@@ -199,7 +202,7 @@ export default function Account({ onNavigate }) {
     return () => {
       active = false;
     };
-  }, [user?.id]);
+  }, [user?.id, isStudent]);
 
   if (loading) {
     return (
@@ -454,38 +457,40 @@ export default function Account({ onNavigate }) {
         <Field label="Phone" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} />
         {errors.phone && <p style={{ color: "#dc2626", fontSize: 14 }}>{errors.phone}</p>}
       </Card>
-      <Card>
-        <h3 style={{ marginTop: 0 }}>Competition QR</h3>
-        <p style={{ color: "#6b7280", marginTop: 0 }}>
-          Show this QR code to staff during the SAT Reading Competition check-in.
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          {qrDataUrl ? (
-            <img src={qrDataUrl} alt="Competition QR code" style={{ width: 160, height: 160 }} />
-          ) : (
-            <div
-              style={{
-                width: 160,
-                height: 160,
-                borderRadius: 12,
-                border: "1px dashed #cbd5f5",
-                display: "grid",
-                placeItems: "center",
-                color: "#64748b",
-                background: "#f8fafc",
-              }}
-            >
-              QR unavailable
+      {isStudent && (
+        <Card>
+          <h3 style={{ marginTop: 0 }}>Competition QR</h3>
+          <p style={{ color: "#6b7280", marginTop: 0 }}>
+            Show this QR code to staff during the SAT Reading Competition check-in.
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="Competition QR code" style={{ width: 160, height: 160 }} />
+            ) : (
+              <div
+                style={{
+                  width: 160,
+                  height: 160,
+                  borderRadius: 12,
+                  border: "1px dashed #cbd5f5",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#64748b",
+                  background: "#f8fafc",
+                }}
+              >
+                QR unavailable
+              </div>
+            )}
+            <div>
+              <div style={{ fontWeight: 600, color: "#111827" }}>User ID</div>
+              <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569" }}>{user.id}</div>
+              {qrLoading && <div style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>Generating...</div>}
+              {qrError && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{qrError}</div>}
             </div>
-          )}
-          <div>
-            <div style={{ fontWeight: 600, color: "#111827" }}>User ID</div>
-            <div style={{ fontFamily: "monospace", fontSize: 12, color: "#475569" }}>{user.id}</div>
-            {qrLoading && <div style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>Generating...</div>}
-            {qrError && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{qrError}</div>}
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
       <Card>
         <h3 style={{ marginTop: 0 }}>Change Password (optional)</h3>
         <Field label="Current Password" value={form.password} onChange={(e) => handleChange("password", e.target.value)} />
