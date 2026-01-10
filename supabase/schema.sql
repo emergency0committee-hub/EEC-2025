@@ -1180,6 +1180,25 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
+  create policy "cg_ai_submissions_teacher_update"
+  on public.cg_ai_form_submissions for update
+  using (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.cg_ai_forms f
+      where f.id = form_id
+        and f.created_by = auth.uid()
+    )
+  );
+exception when duplicate_object then null; end $$;
+
+do $$ begin
   create policy "cg_ai_submissions_admin_all"
   on public.cg_ai_form_submissions for all
   using (

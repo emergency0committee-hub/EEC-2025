@@ -60,6 +60,7 @@ const buildGradebookDefaults = () => ({
   skills: [],
   assessments: [],
   scores: {},
+  answers: {},
   responseMeta: {},
 });
 
@@ -178,6 +179,7 @@ export function useGradebookState() {
           ? parsed.assessments.map(normalizeAssessment)
           : [],
         scores: parsed.scores && typeof parsed.scores === "object" ? parsed.scores : {},
+        answers: parsed.answers && typeof parsed.answers === "object" ? parsed.answers : {},
         responseMeta: parsed.responseMeta && typeof parsed.responseMeta === "object" ? parsed.responseMeta : {},
       };
     } catch {
@@ -232,6 +234,7 @@ export function useGradebookState() {
       const formIds = (forms || []).map((form) => form.id).filter(Boolean);
       let questionRows = [];
       let submissionsByForm = null;
+      let answersByForm = null;
       let responseMeta = null;
       if (formIds.length > 0) {
         const { data: questions, error: questionsError } = await supabase
@@ -249,7 +252,7 @@ export function useGradebookState() {
 
         const { data: submissions, error: submissionsError } = await supabase
           .from(SUBMISSIONS_TABLE)
-          .select("id,form_id,respondent_email,respondent_name,respondent_school,respondent_class,respondent_phone,scores,updated_at,created_at")
+          .select("id,form_id,respondent_email,respondent_name,respondent_school,respondent_class,respondent_phone,answers,scores,updated_at,created_at")
           .in("form_id", formIds)
           .order("updated_at", { ascending: false });
 
@@ -258,9 +261,11 @@ export function useGradebookState() {
           console.error("Failed to load AI educator submissions:", submissionsError);
         } else {
           submissionsByForm = {};
+          answersByForm = {};
           responseMeta = {};
           formIds.forEach((id) => {
             submissionsByForm[id] = {};
+            answersByForm[id] = {};
             responseMeta[id] = {};
           });
           (submissions || []).forEach((row) => {
@@ -272,6 +277,8 @@ export function useGradebookState() {
             if (!submissionsByForm[row.form_id][key]) {
               submissionsByForm[row.form_id][key] =
                 row.scores && typeof row.scores === "object" ? row.scores : {};
+              answersByForm[row.form_id][key] =
+                row.answers && typeof row.answers === "object" ? row.answers : {};
               responseMeta[row.form_id][key] = {
                 id: row.id,
                 email: row.respondent_email || "",
@@ -315,7 +322,9 @@ export function useGradebookState() {
         ...prev,
         assessments,
         skills: Array.from(new Set([...(prev.skills || []), ...derivedSkills])),
-        ...(submissionsByForm ? { scores: submissionsByForm, responseMeta } : {}),
+        ...(submissionsByForm
+          ? { scores: submissionsByForm, answers: answersByForm || {}, responseMeta }
+          : {}),
       }));
     };
 
@@ -610,6 +619,55 @@ export function useGradebookState() {
     return { ok: true, error: "" };
   };
 
+  const saveSubmissionScores = async (formId, responseKey, nextScores) => {
+    if (!formId || !responseKey) return { ok: false, error: "Missing submission key." };
+    const meta = gradebook.responseMeta?.[formId]?.[responseKey];
+    if (!meta?.id) return { ok: false, error: "Submission not found." };
+
+    const assessment = gradebook.assessments.find((item) => item.id === formId);
+    const questions = assessment?.questions || [];
+    let totalScore = 0;
+    let maxScore = 0;
+    questions.forEach((question) => {
+      const maxPoints = Math.max(1, Number(question.maxPoints) || 1);
+      const raw = nextScores?.[question.id];
+      const numeric = Number(raw);
+      if (Number.isFinite(numeric)) {
+        totalScore += numeric;
+        maxScore += maxPoints;
+      }
+    });
+
+    const { error } = await supabase
+      .from(SUBMISSIONS_TABLE)
+      .update({ scores: nextScores, total_score: totalScore, max_score: maxScore })
+      .eq("id", meta.id);
+    if (error) {
+      console.error("Failed to save submission scores:", error);
+      return { ok: false, error: error.message || "Failed to save grades." };
+    }
+
+    setGradebook((prev) => {
+      const nextScoresByForm = { ...(prev.scores || {}) };
+      const formScores = { ...(nextScoresByForm[formId] || {}) };
+      formScores[responseKey] = nextScores;
+      nextScoresByForm[formId] = formScores;
+      const nextMeta = { ...(prev.responseMeta || {}) };
+      if (nextMeta[formId] && nextMeta[formId][responseKey]) {
+        nextMeta[formId] = {
+          ...nextMeta[formId],
+          [responseKey]: {
+            ...nextMeta[formId][responseKey],
+            updated_at: new Date().toISOString(),
+          },
+        };
+      }
+      return { ...prev, scores: nextScoresByForm, responseMeta: nextMeta };
+    });
+
+    return { ok: true, error: "" };
+  };
+
   return {
     gradebook,
     addSkill,
@@ -621,5 +679,6 @@ export function useGradebookState() {
     addQuestion,
     removeQuestion,
     saveAssessment,
+    saveSubmissionScores,
   };
 }

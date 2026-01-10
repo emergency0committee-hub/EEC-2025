@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
 import { useTheme } from "../../components/AppProviders.jsx";
+import Btn from "../../components/Btn.jsx";
 import { normalizeGradebookLabel } from "./gradebookState.js";
+
+const AUTO_GRADED_TYPES = new Set(["multiple_choice", "checkboxes", "rating", "numeric"]);
 
 function BarList({ items, color, trackColor, labelColor, valueColor }) {
   BarList.propTypes = {
@@ -51,10 +54,11 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
   FeedbackAssessmentWorkspace.propTypes = {
     formState: PropTypes.shape({
       gradebook: PropTypes.object.isRequired,
+      saveSubmissionScores: PropTypes.func.isRequired,
     }).isRequired,
   };
 
-  const { gradebook } = formState;
+  const { gradebook, saveSubmissionScores } = formState;
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const [activeFormId, setActiveFormId] = useState(gradebook.assessments[0]?.id || "");
@@ -75,10 +79,42 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
   );
 
   const responses = gradebook.scores?.[activeFormId] || {};
+  const answersByForm = gradebook.answers?.[activeFormId] || {};
   const responseMeta = gradebook.responseMeta?.[activeFormId] || {};
+  const responseKeys = Object.keys(responseMeta || {}).length
+    ? Object.keys(responseMeta || {})
+    : Object.keys(responses || {});
   const responseIds = Object.keys(responses || {});
-  const responseCount = responseIds.length;
+  const responseCount = responseKeys.length;
   const questions = activeForm?.questions || [];
+  const manualQuestions = questions.filter((question) => !AUTO_GRADED_TYPES.has(question.type));
+
+  const [activeResponseKey, setActiveResponseKey] = useState(responseKeys[0] || "");
+  const [gradeDraft, setGradeDraft] = useState({});
+  const [gradeSaving, setGradeSaving] = useState(false);
+  const [gradeMessage, setGradeMessage] = useState("");
+  const [gradeError, setGradeError] = useState("");
+
+  useEffect(() => {
+    if (!responseKeys.length) {
+      if (activeResponseKey) setActiveResponseKey("");
+      return;
+    }
+    if (!activeResponseKey || !responseKeys.includes(activeResponseKey)) {
+      setActiveResponseKey(responseKeys[0]);
+    }
+  }, [responseKeys, activeResponseKey]);
+
+  useEffect(() => {
+    if (!activeResponseKey) {
+      setGradeDraft({});
+      return;
+    }
+    const base = responses?.[activeResponseKey] || {};
+    setGradeDraft(base);
+    setGradeMessage("");
+    setGradeError("");
+  }, [activeResponseKey, responses]);
 
   const questionSummaries = useMemo(() => {
     return questions.map((question) => {
@@ -222,6 +258,56 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
     return `${raw.slice(0, 10)}...`;
   };
 
+  const formatAnswerValue = (value) => {
+    if (value === null || value === undefined || value === "") return "--";
+    if (Array.isArray(value)) {
+      return value.length ? value.join(", ") : "--";
+    }
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  };
+
+  const parseScoreValue = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const handleGradeChange = (questionId, maxPoints, value) => {
+    const raw = value === "" ? "" : Number(value);
+    const numeric = value === "" || !Number.isFinite(raw) ? "" : raw;
+    const clamped = numeric === "" ? "" : Math.max(0, Math.min(numeric, maxPoints));
+    setGradeDraft((prev) => ({ ...prev, [questionId]: clamped }));
+  };
+
+  const handleSaveGrades = async () => {
+    if (!activeFormId || !activeResponseKey) return;
+    setGradeSaving(true);
+    setGradeMessage("");
+    setGradeError("");
+    const baseScores = responses?.[activeResponseKey] || {};
+    const nextScores = { ...baseScores };
+    manualQuestions.forEach((question) => {
+      const maxPoints = Math.max(1, Number(question.maxPoints) || 1);
+      const raw = gradeDraft?.[question.id];
+      if (raw === "" || raw === null || raw === undefined) {
+        nextScores[question.id] = null;
+        return;
+      }
+      const numeric = Number(raw);
+      nextScores[question.id] = Number.isFinite(numeric)
+        ? Math.max(0, Math.min(numeric, maxPoints))
+        : null;
+    });
+    const result = await saveSubmissionScores(activeFormId, activeResponseKey, nextScores);
+    if (!result.ok) {
+      setGradeError(result.error || "Failed to save grades.");
+    } else {
+      setGradeMessage("Grades saved.");
+    }
+    setGradeSaving(false);
+  };
+
   const studentSummaries = useMemo(() => {
     if (showDemo) {
       const total = Math.max(1, questions.length || 8);
@@ -273,6 +359,14 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
     });
   }, [responseIds, responses, questions, showDemo]);
 
+  const activeResponseScores = activeResponseKey ? responses?.[activeResponseKey] || {} : {};
+  const activeResponseAnswers = activeResponseKey ? answersByForm?.[activeResponseKey] || {} : {};
+  const activeResponseMeta = activeResponseKey ? responseMeta?.[activeResponseKey] || {} : {};
+  const manualPendingCount = manualQuestions.filter((question) => {
+    const numeric = parseScoreValue(activeResponseScores?.[question.id]);
+    return numeric === null;
+  }).length;
+
   const borderColor = isDark ? "rgba(148, 163, 184, 0.35)" : "rgba(255, 255, 255, 0.55)";
   const panelBg = isDark ? "rgba(15, 23, 42, 0.45)" : "rgba(255, 255, 255, 0.65)";
   const textPrimary = isDark ? "#e2e8f0" : "#111827";
@@ -290,6 +384,15 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
     background: panelBg,
     backdropFilter: "blur(6px) saturate(120%)",
     WebkitBackdropFilter: "blur(6px) saturate(120%)",
+  };
+  const gradeInputStyle = {
+    width: 120,
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: `1px solid ${borderColor}`,
+    background: panelBg,
+    color: textPrimary,
+    fontSize: 13,
   };
 
   return (
@@ -404,8 +507,8 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
                               key={`${skill}-${question.id}-${idx}`}
                               title={
                                 matchesSkill
-                                  ? `${summary.prompt} — ${Math.round(value)}%`
-                                  : `${skill} — no question`
+                                  ? `${summary.prompt}: ${Math.round(value)}%`
+                                  : `${skill}: no question`
                               }
                               style={{
                                 height: 44,
@@ -516,6 +619,115 @@ export default function FeedbackAssessmentWorkspace({ formState }) {
                   );
                 })}
               </div>
+              )}
+          </section>
+
+          <section style={{ ...panelStyle, display: "grid", gap: 12 }}>
+            <div style={{ fontWeight: 700, color: textPrimary }}>Submission Review & Manual Grading</div>
+            {showDemo ? (
+              <div style={{ color: textMuted }}>Manual grading will appear once student responses are submitted.</div>
+            ) : responseKeys.length === 0 ? (
+              <div style={{ color: textMuted }}>No student submissions yet.</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+                  <label style={{ display: "grid", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: textMuted }}>Student submission</span>
+                    <select
+                      value={activeResponseKey}
+                      onChange={(event) => setActiveResponseKey(event.target.value)}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: 10,
+                        border: `1px solid ${borderColor}`,
+                        minWidth: 240,
+                        background: panelBg,
+                        color: textPrimary,
+                      }}
+                    >
+                      {responseKeys.map((key, idx) => (
+                        <option key={key} value={key}>
+                          {formatStudentLabel(key, idx)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div style={{ display: "grid", gap: 4, fontSize: 12, color: textMuted }}>
+                    <div>{activeResponseMeta.email || "No email provided"}</div>
+                    <div>{activeResponseMeta.school || "No school info"}</div>
+                    <div>{activeResponseMeta.className || "No class info"}</div>
+                  </div>
+                  {manualQuestions.length > 0 ? (
+                    <div style={{ fontSize: 12, color: textMuted }}>
+                      Pending manual grades: {manualPendingCount}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div style={{ display: "grid", gap: 12 }}>
+                  {questions.map((question, idx) => {
+                    const maxPoints = Math.max(1, Number(question.maxPoints) || 1);
+                    const isAuto = AUTO_GRADED_TYPES.has(question.type);
+                    const scoreValue = gradeDraft?.[question.id];
+                    const numericScore = parseScoreValue(scoreValue);
+                    const displayScore = numericScore === null ? "--" : numericScore.toFixed(1);
+                    const answerValue = formatAnswerValue(activeResponseAnswers?.[question.id]);
+                    return (
+                      <div
+                        key={question.id}
+                        style={{
+                          border: `1px solid ${borderColor}`,
+                          borderRadius: 12,
+                          padding: 12,
+                          background: isDark ? "rgba(15, 23, 42, 0.35)" : "rgba(255, 255, 255, 0.5)",
+                          display: "grid",
+                          gap: 8,
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, color: textPrimary }}>{`Q${idx + 1}. ${question.prompt || question.label || "Question"}`}</div>
+                        <div style={{ fontSize: 12, color: textMuted }}>
+                          Answer: <span style={{ color: textPrimary }}>{answerValue}</span>
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                          <div style={{ fontSize: 12, color: textMuted }}>
+                            Max points: {maxPoints}
+                          </div>
+                          {isAuto ? (
+                            <div style={{ fontSize: 12, color: textMuted }}>
+                              Auto score: <span style={{ color: textPrimary }}>{displayScore}</span>
+                            </div>
+                          ) : (
+                            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 12, color: textMuted }}>Manual score</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max={maxPoints}
+                                step="0.5"
+                                value={scoreValue ?? ""}
+                                onChange={(event) => handleGradeChange(question.id, maxPoints, event.target.value)}
+                                style={gradeInputStyle}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                  {gradeError && <div style={{ color: "#fca5a5", fontSize: 12 }}>{gradeError}</div>}
+                  {gradeMessage && <div style={{ color: "#86efac", fontSize: 12 }}>{gradeMessage}</div>}
+                  <Btn
+                    variant="primary"
+                    onClick={handleSaveGrades}
+                    disabled={!manualQuestions.length || gradeSaving || !activeResponseKey}
+                  >
+                    {gradeSaving ? "Saving..." : "Save grades"}
+                  </Btn>
+                </div>
+              </>
             )}
           </section>
 
