@@ -321,7 +321,14 @@ export default function AIEducatorForm({ onNavigate }) {
 
   return (
     <PageWrap>
-      <HeaderBar title="Student Form" right={null} />
+      <HeaderBar
+        title="Student Form"
+        right={(
+          <Btn variant="secondary" to="home" onClick={(e) => onNavigate("home", null, e)}>
+            Back Home
+          </Btn>
+        )}
+      />
       <Card>
         <div style={{ display: "grid", gap: 16 }}>
           {loading ? (

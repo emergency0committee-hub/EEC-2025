@@ -8,32 +8,18 @@ import studentRoleSvg from "../assets/role-student.svg";
 import educatorRoleSvg from "../assets/role-educator.svg";
 import ModalPortal from "../components/ModalPortal.jsx";
 
-const ROLE_OPTIONS = {
-  EN: [
-    {
-      value: "student",
-      label: "Student",
-      description: "Access practice tests, class materials, and track your results.",
-    },
-    {
-      value: "educator",
-      label: "Educator",
-      description: "Create classes, assign quizzes, and review student performance.",
-    },
-  ],
-  FR: [
-    {
-      value: "student",
-      label: "\xc9tudiant",
-      description: "Acc\xe9dez aux tests d'entra\xeenement, aux supports de cours et suivez vos r\xe9sultats.",
-    },
-    {
-      value: "educator",
-      label: "Enseignant",
-      description: "Cr\xe9ez des classes, assignez des devoirs et analysez les performances des \xe9l\xe8ves.",
-    },
-  ],
-};
+const ROLE_OPTIONS = [
+  {
+    value: "student",
+    label: "Student",
+    description: "Access practice tests, class materials, and track your results.",
+  },
+  {
+    value: "educator",
+    label: "Educator",
+    description: "Create classes, assign quizzes, and review student performance.",
+  },
+];
 
 
 const SIGNUP_GRADE_OPTIONS = [
@@ -53,30 +39,6 @@ const AVATAR_EMPTY_OFFSET_RATIO = 0.5;
 const clampValue = (value, min, max) => Math.min(max, Math.max(min, value));
 const hasNonEnglishChars = (value) => /[^\x20-\x7E]/.test(value);
 const isEnglishInput = (value) => !hasNonEnglishChars(value);
-const formatYmd = (date) => {
-  if (!(date instanceof Date)) return "";
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-};
-const parseYmd = (value) => {
-  if (!value) return null;
-  const parts = value.split("-").map((part) => Number(part));
-  if (parts.length !== 3) return null;
-  const [year, month, day] = parts;
-  if (!year || !month || !day) return null;
-  const date = new Date(year, month - 1, day);
-  if (
-    Number.isNaN(date.getTime()) ||
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-  return date;
-};
 const getCoverMetrics = (sourceWidth, sourceHeight, targetSize) => {
   const scale = Math.max(targetSize / sourceWidth, targetSize / sourceHeight);
   const width = sourceWidth * scale;
@@ -87,7 +49,6 @@ const getCoverMetrics = (sourceWidth, sourceHeight, targetSize) => {
 };
 
 const LOGIN_COPY = {
-  EN: {
     isRTL: false,
     signInTitle: "Sign In",
     signUpTitle: "Create Account",
@@ -117,7 +78,7 @@ const LOGIN_COPY = {
     certificationLabel: "University Certification",
     certificationPlaceholder: "e.g., M.Ed., Teaching License #12345",
     usernameLabel: "Username",
-    usernamePlaceholder: "Choose a username",
+    usernamePlaceholder: "Auto-generated",
     phoneLabel: "Phone",
     phonePlaceholder: "e.g., 555 123 4567",
     dobLabel: "Date of Birth",
@@ -161,6 +122,7 @@ const LOGIN_COPY = {
     dontHaveAccount: "Don't have an account? Sign up",
     emailRequired: "Email is required",
     emailInvalid: "Please enter a valid email",
+    emailInUse: "Email is already in use",
     passwordRequired: "Password is required",
     passwordTooShort: "Password must be at least 6 characters",
     firstNameRequired: "First name is required",
@@ -173,182 +135,8 @@ const LOGIN_COPY = {
     showConfirmPassword: "Show confirmation password",
     hideConfirmPassword: "Hide confirmation password",
     confirmEmailNotice: "Check your email to confirm your account, then sign in.",
-  },
-  AR: {
-    isRTL: true,
-    signInTitle: "\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644",
-    signUpTitle: "\u0625\u0646\u0634\u0627\u0621 \u062d\u0633\u0627\u0628",
-    welcomeBack: "\u0645\u0631\u062d\u0628\u0627\u064b \u0628\u0639\u0648\u062f\u062a\u0643",
-    createAccount: "\u0625\u0646\u0634\u0627\u0621 \u062d\u0633\u0627\u0628 \u062c\u062f\u064a\u062f",
-    signInSubtitle: "\u0623\u062f\u062e\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0639\u062a\u0645\u0627\u062f\u0643 \u0644\u0644\u0645\u062a\u0627\u0628\u0639\u0629.",
-    signUpSubtitle: "\u0623\u0646\u0634\u0626 \u062d\u0633\u0627\u0628\u0627\u064b \u0644\u0644\u0648\u0635\u0648\u0644 \u0625\u0644\u0649 \u0627\u0644\u0646\u062a\u0627\u0626\u062c.",
-    stepLabel: "\u0627\u0644\u062e\u0637\u0648\u0629 {current} \u0645\u0646 {total}",
-    stepProfile: "\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062e\u0635\u064a",
-    stepSchool: "\u0627\u0644\u0645\u062f\u0631\u0633\u0629",
-    stepAccount: "\u0627\u0644\u062d\u0633\u0627\u0628",
-    nextStep: "\u0627\u0644\u062a\u0627\u0644\u064a",
-    backStep: "\u0627\u0644\u0633\u0627\u0628\u0642",
-    roleSelectHeading: "\u0627\u062e\u062a\u0631 \u0646\u0648\u0639 \u0627\u0644\u062d\u0633\u0627\u0628",
-    roleSelectBody: "\u062d\u062f\u062f \u0625\u0630\u0627 \u0643\u0646\u062a \u062a\u0633\u062c\u0651\u0644 \u0643\u0637\u0627\u0644\u0628 \u0623\u0648 \u0643\u0645\u0639\u0644\u0645.",
-    backToSignIn: "\u0627\u0644\u0639\u0648\u062f\u0629 \u0625\u0644\u0649 \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644",
-    signingUpAsLabel: "\u0627\u0644\u062a\u0633\u062c\u064a\u0644 \u0643\u0640",
-    changeRole: "\u062a\u063a\u064a\u064a\u0631 \u0627\u0644\u0646\u0648\u0639",
-    studentRole: "\u0637\u0627\u0644\u0628",
-    educatorRole: "\u0645\u0639\u0644\u0645",
-    emailOrUsername: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0623\u0648 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-    emailOrUsernamePlaceholder: "\u0623\u062f\u062e\u0644 \u0628\u0631\u064a\u062f\u0643 \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0623\u0648 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-    schoolLabel: "\u0627\u0644\u0645\u062f\u0631\u0633\u0629",
-    schoolPlaceholder: "\u0627\u0633\u0645 \u0645\u062f\u0631\u0633\u062a\u0643",
-    classLabel: "\u0627\u0644\u0635\u0641",
-    classPlaceholder: "\u0645\u062b\u0627\u0644: \u0627\u0644\u0635\u0641 \u0627\u0644\u062d\u0627\u062f\u064a \u0639\u0634\u0631",
-    certificationLabel: "\u0627\u0644\u0645\u0624\u0647\u0644 \u0627\u0644\u062c\u0627\u0645\u0639\u064a",
-    certificationPlaceholder: "\u0645\u062b\u0627\u0644: \u0645\u0627\u062c\u0633\u062a\u064a\u0631 \u062a\u0631\u0628\u064a\u0629\u060c \u0631\u0642\u0645 \u0631\u062e\u0635\u0629 \u0627\u0644\u062a\u062f\u0631\u064a\u0633",
-    usernameLabel: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645",
-    usernamePlaceholder: "\u0627\u062e\u062a\u0631 \u0627\u0633\u0645 \u0645\u0633\u062a\u062e\u062f\u0645",
-    phoneLabel: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641",
-    phonePlaceholder: "\u0645\u062b\u0627\u0644: 555 123 4567",
-    dobLabel: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f",
-    dobPlaceholder: "YYYY-MM-DD",
-    dobRequired: "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f \u0645\u0637\u0644\u0648\u0628",
-    dobInvalid: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u0643\u0648\u0646 \u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f \u0641\u064a \u0627\u0644\u0645\u0627\u0636\u064a",
-    profilePhotoLabel: "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629",
-    profilePhotoHelper: "\u0627\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0648\u0627\u0636\u062d\u0629. \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649 {max} \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a.",
-    profilePhotoRequired: "\u0627\u0644\u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u062e\u0635\u064a\u0629 \u0645\u0637\u0644\u0648\u0628\u0629",
-    profilePhotoInvalid: "\u064a\u0631\u062c\u0649 \u0627\u062e\u062a\u064a\u0627\u0631 \u0645\u0644\u0641 \u0635\u0648\u0631\u0629",
-    profilePhotoTooLarge: "\u064a\u062c\u0628 \u0623\u0644\u0627 \u064a\u062a\u062c\u0627\u0648\u0632 \u062d\u062c\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 {max} \u0645\u064a\u063a\u0627\u0628\u0627\u064a\u062a",
-    loginIdRequired: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0623\u0648 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0637\u0644\u0648\u0628",
-    loginIdInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0628\u0631\u064a\u062f \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0635\u0627\u0644\u062d \u0623\u0648 \u0627\u0633\u0645 \u0645\u0633\u062a\u062e\u062f\u0645 \u0635\u0627\u0644\u062d",
-    usernameRequired: "\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0637\u0644\u0648\u0628",
-    usernameInvalid: "\u064a\u062c\u0628 \u0623\u0646 \u064a\u062a\u0643\u0648\u0646 \u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u062a\u062e\u062f\u0645 \u0645\u0646 3 \u0625\u0644\u0649 30 \u062d\u0631\u0641\u0627\u064b \u0623\u0648 \u0623\u0631\u0642\u0627\u0645\u0627\u064b \u0623\u0648 \u0627\u0644\u0631\u0645\u0648\u0632 _ - .",
-    accountTypeRequired: "\u064a\u0631\u062c\u0649 \u0627\u062e\u062a\u064a\u0627\u0631 \u0637\u0627\u0644\u0628 \u0623\u0648 \u0645\u0639\u0644\u0645",
-    schoolRequired: "\u0627\u0633\u0645 \u0627\u0644\u0645\u062f\u0631\u0633\u0629 \u0645\u0637\u0644\u0648\u0628",
-    classRequired: "\u0627\u0633\u0645 \u0627\u0644\u0635\u0641 \u0645\u0637\u0644\u0648\u0628",
-    certificationRequired: "\u0627\u0644\u0645\u0624\u0647\u0644 \u0627\u0644\u062c\u0627\u0645\u0639\u064a \u0645\u0637\u0644\u0648\u0628",
-    phoneRequired: "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641 \u0645\u0637\u0644\u0648\u0628",
-    phoneInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0631\u0642\u0645 \u0647\u0627\u062a\u0641 \u0635\u0627\u0644\u062d",
-    englishOnly: "\u064a\u0631\u062c\u0649 \u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0623\u062d\u0631\u0641 \u0648\u0623\u0631\u0642\u0627\u0645 \u0625\u0646\u062c\u0644\u064a\u0632\u064a\u0629 \u0641\u0642\u0637",
-    firstName: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0623\u0648\u0644",
-    enterFirstName: "\u0645\u062b\u0627\u0644: \u0622\u0645\u0646\u0629",
-    lastName: "\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0626\u0644\u0629",
-    enterLastName: "\u0645\u062b\u0627\u0644: \u062e\u0644\u064a\u0644",
-    fullName: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644",
-    enterFullName: "\u0645\u062b\u0627\u0644: \u0622\u0645\u0646\u0629 \u062e\u0644\u064a\u0644",
-    email: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a",
-    enterEmail: "\u0645\u062b\u0627\u0644: name@example.com",
-    password: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    enterPassword: "\u0623\u062f\u062e\u0644 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    confirmPassword: "\u062a\u0623\u0643\u064a\u062f \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    confirmYourPassword: "\u0623\u0639\u062f \u0625\u062f\u062e\u0627\u0644 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    signIn: "\u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644",
-    signUp: "\u0625\u0646\u0634\u0627\u0621 \u062d\u0633\u0627\u0628",
-    signingIn: "\u062c\u0627\u0631\u064d \u062a\u0633\u062c\u064a\u0644 \u0627\u0644\u062f\u062e\u0648\u0644...",
-    signingUp: "\u062c\u0627\u0631\u064d \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062d\u0633\u0627\u0628...",
-    backToHome: "\u0627\u0644\u0639\u0648\u062f\u0629 \u0625\u0644\u0649 \u0627\u0644\u0635\u0641\u062d\u0629 \u0627\u0644\u0631\u0626\u064a\u0633\u064a\u0629",
-    alreadyHaveAccount: "\u0644\u062f\u064a\u0643 \u062d\u0633\u0627\u0628 \u0628\u0627\u0644\u0641\u0639\u0644\u061f \u0633\u062c\u0651\u0644 \u0627\u0644\u062f\u062e\u0648\u0644",
-    dontHaveAccount: "\u0644\u064a\u0633 \u0644\u062f\u064a\u0643 \u062d\u0633\u0627\u0628\u061f \u0623\u0646\u0634\u0626 \u062d\u0633\u0627\u0628\u0627\u064b",
-    emailRequired: "\u0627\u0644\u0628\u0631\u064a\u062f \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0645\u0637\u0644\u0648\u0628",
-    emailInvalid: "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0628\u0631\u064a\u062f \u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0635\u0627\u0644\u062d",
-    passwordRequired: "\u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0645\u0637\u0644\u0648\u0628\u0629",
-    passwordTooShort: "\u064a\u062c\u0628 \u0623\u0644\u0627 \u062a\u0642\u0644 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631 \u0639\u0646 6 \u0623\u062d\u0631\u0641",
-    firstNameRequired: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0623\u0648\u0644 \u0645\u0637\u0644\u0648\u0628",
-    lastNameRequired: "\u0627\u0633\u0645 \u0627\u0644\u0639\u0627\u0626\u0644\u0629 \u0645\u0637\u0644\u0648\u0628",
-    nameRequired: "\u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0643\u0627\u0645\u0644 \u0645\u0637\u0644\u0648\u0628",
-    confirmPasswordRequired: "\u064a\u0631\u062c\u0649 \u062a\u0623\u0643\u064a\u062f \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    passwordsDontMatch: "\u0643\u0644\u0645\u062a\u0627 \u0627\u0644\u0645\u0631\u0648\u0631 \u063a\u064a\u0631 \u0645\u062a\u0637\u0627\u0628\u0642\u062a\u064a\u0646",
-    showPassword: "\u0625\u0638\u0647\u0627\u0631 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    hidePassword: "\u0625\u062e\u0641\u0627\u0621 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    showConfirmPassword: "\u0625\u0638\u0647\u0627\u0631 \u062a\u0623\u0643\u064a\u062f \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    hideConfirmPassword: "\u0625\u062e\u0641\u0627\u0621 \u062a\u0623\u0643\u064a\u062f \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631",
-    confirmEmailNotice: "\u062a\u062d\u0642\u0642 \u0645\u0646 \u0628\u0631\u064a\u062f\u0643 \u0627\u0644\u0625\u0644\u0643\u062a\u0631\u0648\u0646\u064a \u0644\u062a\u0623\u0643\u064a\u062f \u0627\u0644\u062d\u0633\u0627\u0628 \u062b\u0645 \u0633\u062c\u0651\u0644 \u0627\u0644\u062f\u062e\u0648\u0644.",
-  },
-  FR: {
-    isRTL: false,
-    signInTitle: "Connexion",
-    signUpTitle: "Cr\xe9er un compte",
-    welcomeBack: "Heureux de vous revoir",
-    createAccount: "Cr\xe9er un compte",
-    signInSubtitle: "Entrez vos identifiants pour continuer.",
-    signUpSubtitle: "Cr\xe9ez un compte pour acc\xe9der aux r\xe9sultats.",
-    stepLabel: "\u00c9tape {current} sur {total}",
-    stepProfile: "Profil",
-    stepSchool: "\u00c9tablissement",
-    stepAccount: "Compte",
-    nextStep: "Suivant",
-    backStep: "Retour",
-    roleSelectHeading: "Choisissez un type de compte",
-    roleSelectBody: "Indiquez si vous vous inscrivez en tant qu'\xe9tudiant ou enseignant.",
-    backToSignIn: "Retour \xe0 la connexion",
-    signingUpAsLabel: "Inscription en tant que",
-    changeRole: "Changer de type",
-    studentRole: "\xc9tudiant",
-    educatorRole: "Enseignant",
-    emailOrUsername: "E-mail ou nom d'utilisateur",
-    emailOrUsernamePlaceholder: "Saisissez votre e-mail ou votre nom d'utilisateur",
-    schoolLabel: "\xc9tablissement",
-    schoolPlaceholder: "Votre \xe9tablissement",
-    classLabel: "Classe",
-    classPlaceholder: "ex. Terminale",
-    certificationLabel: "Certification universitaire",
-    certificationPlaceholder: "ex. M.Ed., Num\xe9ro de licence d'enseignement",
-    usernameLabel: "Nom d'utilisateur",
-    usernamePlaceholder: "Choisissez un nom d'utilisateur",
-    phoneLabel: "T\xe9l\xe9phone",
-    phonePlaceholder: "ex. 06 12 34 56 78",
-    dobLabel: "Date de naissance",
-    dobPlaceholder: "AAAA-MM-JJ",
-    dobRequired: "La date de naissance est obligatoire",
-    dobInvalid: "La date de naissance doit \u00eatre dans le pass\u00e9",
-    profilePhotoLabel: "Photo de profil",
-    profilePhotoHelper: "T\u00e9l\u00e9versez une photo claire. Max {max} Mo.",
-    profilePhotoRequired: "La photo de profil est obligatoire",
-    profilePhotoInvalid: "Veuillez choisir un fichier image",
-    profilePhotoTooLarge: "L'image doit faire {max} Mo ou moins",
-    loginIdRequired: "L'e-mail ou le nom d'utilisateur est obligatoire",
-    loginIdInvalid: "Veuillez saisir une adresse e-mail ou un nom d'utilisateur valide",
-    usernameRequired: "Le nom d'utilisateur est obligatoire",
-    usernameInvalid: "Le nom d'utilisateur doit comporter entre 3 et 30 caract\xe8res (lettres, chiffres, _ - .)",
-    accountTypeRequired: "Veuillez choisir \xc9tudiant ou Enseignant",
-    schoolRequired: "L'\xe9tablissement est obligatoire",
-    classRequired: "La classe est obligatoire",
-    certificationRequired: "La certification universitaire est obligatoire",
-    phoneRequired: "Le num\xe9ro de t\xe9l\xe9phone est obligatoire",
-    phoneInvalid: "Veuillez saisir un num\xe9ro de t\xe9l\xe9phone valide",
-    englishOnly: "Veuillez utiliser uniquement des caract\u00e8res anglais",
-    firstName: "Pr\xe9nom",
-    enterFirstName: "ex. Amina",
-    lastName: "Nom de famille",
-    enterLastName: "ex. Khalil",
-    fullName: "Nom complet",
-    enterFullName: "ex. Amina Khalil",
-    email: "E-mail",
-    enterEmail: "ex. nom@example.com",
-    password: "Mot de passe",
-    enterPassword: "Saisissez votre mot de passe",
-    confirmPassword: "Confirmez le mot de passe",
-    confirmYourPassword: "Saisissez de nouveau votre mot de passe",
-    signIn: "Connexion",
-    signUp: "Inscription",
-    signingIn: "Connexion...",
-    signingUp: "Cr\xe9ation du compte...",
-    backToHome: "Retour \xe0 l'accueil",
-    alreadyHaveAccount: "Vous avez d\xe9j\xe0 un compte ? Connectez-vous",
-    dontHaveAccount: "Vous n'avez pas de compte ? Inscrivez-vous",
-    emailRequired: "L'adresse e-mail est obligatoire",
-    emailInvalid: "Veuillez saisir une adresse e-mail valide",
-    passwordRequired: "Le mot de passe est obligatoire",
-    passwordTooShort: "Le mot de passe doit contenir au moins 6 caract\xe8res",
-    firstNameRequired: "Le pr\xe9nom est obligatoire",
-    lastNameRequired: "Le nom de famille est obligatoire",
-    nameRequired: "Le nom complet est obligatoire",
-    confirmPasswordRequired: "Veuillez confirmer votre mot de passe",
-    passwordsDontMatch: "Les mots de passe ne correspondent pas",
-    showPassword: "Afficher le mot de passe",
-    hidePassword: "Masquer le mot de passe",
-    showConfirmPassword: "Afficher la confirmation du mot de passe",
-    hideConfirmPassword: "Masquer la confirmation du mot de passe",
-    confirmEmailNotice: "V\xe9rifiez votre e-mail pour confirmer votre compte, puis connectez-vous.",
-  },
-};
+  };
+
 
 function EyeIcon({ size = 18, stroke = "#4b5563" }) {
   return (
@@ -371,11 +159,11 @@ function EyeOffIcon({ size = 18, stroke = "#4b5563" }) {
   );
 }
 
-function CalendarIcon({ size = 18, stroke = "#4b5563" }) {
+function CalendarIcon({ size = 18, stroke = "#64748b" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="4" width="18" height="18" rx="3" />
-      <path d="M8 2v4M16 2v4M3 10h18" />
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M16 3v4M8 3v4M3 11h18" />
     </svg>
   );
 }
@@ -384,8 +172,8 @@ export default function Login({ onNavigate }) {
   Login.propTypes = {
     onNavigate: PropTypes.func.isRequired,
   };
-  const copy = LOGIN_COPY.EN;
-  const roleOptions = ROLE_OPTIONS.EN;
+  const copy = LOGIN_COPY;
+  const roleOptions = ROLE_OPTIONS;
   const isRTL = copy.isRTL;
   const photoHelper = (copy.profilePhotoHelper || "").replace("{max}", MAX_AVATAR_MB);
   const avatarInputId = "signup-avatar-upload";
@@ -393,11 +181,6 @@ export default function Login({ onNavigate }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [signupStep, setSignupStep] = useState(0);
   const [pendingRole, setPendingRole] = useState("");
-  const [dobOpen, setDobOpen] = useState(false);
-  const [dobView, setDobView] = useState(() => {
-    const now = new Date();
-    return { month: now.getMonth(), year: now.getFullYear() };
-  });
   const [formData, setFormData] = useState({
     loginId: "",      // email or username (for sign-in)
     email: "",        // email (for sign-up)
@@ -413,6 +196,8 @@ export default function Login({ onNavigate }) {
     certification: "",
     accountType: "",
   });
+  const [dobOpen, setDobOpen] = useState(false);
+  const [dobDraft, setDobDraft] = useState({ year: "", month: "", day: "" });
   const [schoolNames, setSchoolNames] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -428,8 +213,6 @@ export default function Login({ onNavigate }) {
   const dragStartRef = useRef(null);
   const dragStartOffsetRef = useRef({ x: 0, y: 0 });
   const suppressClickRef = useRef(false);
-  const dobPopoverRef = useRef(null);
-  const dobAnchorRef = useRef(null);
   const avatarMetrics = useMemo(() => {
     if (!avatarNatural?.width || !avatarNatural?.height) return null;
     return getCoverMetrics(avatarNatural.width, avatarNatural.height, AVATAR_PREVIEW_SIZE);
@@ -438,6 +221,42 @@ export default function Login({ onNavigate }) {
     if (!avatarNatural?.width || !avatarNatural?.height) return null;
     return getCoverMetrics(avatarNatural.width, avatarNatural.height, AVATAR_EDITOR_SIZE);
   }, [avatarNatural]);
+
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const yearOptions = useMemo(() => {
+    const years = [];
+    for (let year = currentYear; year >= 1900; year -= 1) {
+      const value = String(year);
+      years.push({ value, label: value });
+    }
+    return years;
+  }, [currentYear]);
+  const monthOptions = useMemo(
+    () => ([
+      { value: "01", label: "January" },
+      { value: "02", label: "February" },
+      { value: "03", label: "March" },
+      { value: "04", label: "April" },
+      { value: "05", label: "May" },
+      { value: "06", label: "June" },
+      { value: "07", label: "July" },
+      { value: "08", label: "August" },
+      { value: "09", label: "September" },
+      { value: "10", label: "October" },
+      { value: "11", label: "November" },
+      { value: "12", label: "December" },
+    ]),
+    []
+  );
+  const dayOptions = useMemo(() => {
+    const year = Number(dobDraft.year);
+    const month = Number(dobDraft.month);
+    const maxDay = year && month ? new Date(year, month, 0).getDate() : 31;
+    return Array.from({ length: maxDay }, (_, idx) => {
+      const value = String(idx + 1).padStart(2, "0");
+      return { value, label: String(idx + 1) };
+    });
+  }, [dobDraft.year, dobDraft.month]);
 
   const activeRoleLabel =
     formData.accountType === "educator"
@@ -453,6 +272,41 @@ export default function Login({ onNavigate }) {
     border: "1px solid #d1d5db",
     fontSize: 14,
     background: "#ffffff",
+  };
+  const dateInputStyle = {
+    background: "rgba(255, 255, 255, 0.9)",
+    color: "#0f172a",
+    fontVariantNumeric: "tabular-nums",
+  };
+  const dobDropdownStyle = {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 14,
+    background: "rgba(255, 255, 255, 0.92)",
+    border: "1px solid rgba(148, 163, 184, 0.35)",
+    boxShadow: "0 18px 40px rgba(15, 23, 42, 0.18)",
+    backdropFilter: "blur(10px)",
+    zIndex: 30,
+  };
+  const dobGridStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 8,
+  };
+  const dobSelectStyle = {
+    width: "100%",
+    padding: "10px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(148, 163, 184, 0.45)",
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#0f172a",
+    background: "rgba(255, 255, 255, 0.9)",
+    boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.7)",
   };
   const errorStyle = {
     color: "#dc2626",
@@ -478,12 +332,6 @@ export default function Login({ onNavigate }) {
     .replace("{total}", String(totalSteps));
   const currentStepLabel = stepLabels[signupStep] || "";
   const isFinalStep = signupStep >= totalSteps - 1;
-  const maxDob = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const weekdayLabels = useMemo(() => {
-    const formatter = new Intl.DateTimeFormat("en-US", { weekday: "short" });
-    const base = new Date(2021, 7, 1); // Sunday
-    return Array.from({ length: 7 }, (_, idx) => formatter.format(new Date(base.getFullYear(), base.getMonth(), base.getDate() + idx)));
-  }, []);
   const schoolOptions = useMemo(() => {
     const placeholderLabel = copy.schoolPlaceholder || "Select School";
     const uniqueNames = new Map();
@@ -502,13 +350,14 @@ export default function Login({ onNavigate }) {
   const toggleAuthMode = () => {
     setSignupStep(0);
     setPendingRole("");
-    setDobOpen(false);
     setErrors({});
     setLoading(false);
     setShowPassword(false);
     setShowConfirmPassword(false);
     setAvatarError("");
     setAvatarFile(null);
+    setDobOpen(false);
+    setDobDraft({ year: "", month: "", day: "" });
     if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     setAvatarPreview("");
     setShowAvatarPreview(false);
@@ -550,7 +399,6 @@ export default function Login({ onNavigate }) {
   const handleAccountTypeReset = () => {
     setSignupStep(0);
     setPendingRole("");
-    setDobOpen(false);
     setFormData((prev) => ({ ...prev, accountType: "", className: "", certification: "" }));
     setErrors((prev) => ({ ...prev, accountType: "", className: "", certification: "" }));
     setShowPassword(false);
@@ -564,19 +412,6 @@ export default function Login({ onNavigate }) {
   }, [avatarPreview]);
 
   useEffect(() => {
-    if (!dobOpen) return undefined;
-    const selected = parseYmd(formData.dateOfBirth) || new Date();
-    setDobView({ month: selected.getMonth(), year: selected.getFullYear() });
-    const handleClick = (event) => {
-      if (!dobAnchorRef.current?.contains(event.target)) {
-        setDobOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [dobOpen, formData.dateOfBirth]);
-
-  useEffect(() => {
     if (!avatarPreview) {
       setAvatarNatural(null);
       setAvatarOffset({ x: 0, y: 0 });
@@ -586,6 +421,7 @@ export default function Login({ onNavigate }) {
     img.onload = () => setAvatarNatural({ width: img.width, height: img.height });
     img.src = avatarPreview;
   }, [avatarPreview]);
+
 
   useEffect(() => {
     let active = true;
@@ -669,6 +505,110 @@ export default function Login({ onNavigate }) {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
   };
+
+  const normalizeUsername = useCallback((value) => {
+    const normalized = (value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, ".")
+      .replace(/[._-]{2,}/g, ".")
+      .replace(/^[._-]+|[._-]+$/g, "");
+    if (!normalized) return "";
+    const padded = normalized.length < 3 ? normalized.padEnd(3, "0") : normalized;
+    return padded.slice(0, 30);
+  }, []);
+
+  const buildUsernameFromName = useCallback(
+    (firstName, lastName) => {
+      const raw = [firstName, lastName].filter(Boolean).join(".");
+      return normalizeUsername(raw);
+    },
+    [normalizeUsername]
+  );
+
+  const ensureUniqueUsername = useCallback(
+    async (base) => {
+      const normalized = normalizeUsername(base);
+      if (!normalized) return "";
+      let candidate = normalized;
+      for (let i = 0; i < 12; i += 1) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("username", candidate)
+          .limit(1);
+        if (error) throw error;
+        if (!Array.isArray(data) || data.length === 0) return candidate;
+        const suffix = `.${i + 1}`;
+        const trimmed = normalized.slice(0, 30 - suffix.length);
+        candidate = `${trimmed}${suffix}`;
+      }
+      const randomSuffix = `.${Math.floor(1000 + Math.random() * 9000)}`;
+      const trimmed = normalized.slice(0, 30 - randomSuffix.length);
+      return `${trimmed}${randomSuffix}`;
+    },
+    [normalizeUsername]
+  );
+
+  useEffect(() => {
+    if (!isSignUp) return;
+    const first = (formData.firstName || "").trim();
+    const last = (formData.lastName || "").trim();
+    if (!first && !last) return;
+    const candidate = buildUsernameFromName(first, last);
+    if (!candidate) return;
+    setFormData((prev) => (prev.username === candidate ? prev : { ...prev, username: candidate }));
+  }, [formData.firstName, formData.lastName, isSignUp, buildUsernameFromName]);
+
+  const dobRootRef = useRef(null);
+
+  const updateDobDraft = useCallback(
+    (patch) => {
+      setDobDraft((prev) => {
+        const next = { ...prev, ...patch };
+        let day = next.day;
+        if (next.year && next.month && day) {
+          const maxDay = new Date(Number(next.year), Number(next.month), 0).getDate();
+          if (Number(day) > maxDay) {
+            day = String(maxDay).padStart(2, "0");
+          }
+        }
+        const normalized = { ...next, day };
+        if (normalized.year && normalized.month && normalized.day) {
+          handleInputChange("dateOfBirth", `${normalized.year}-${normalized.month}-${normalized.day}`);
+        } else if (!normalized.year && !normalized.month && !normalized.day) {
+          handleInputChange("dateOfBirth", "");
+        }
+        return normalized;
+      });
+    },
+    [handleInputChange]
+  );
+
+  const openDobPanel = useCallback(() => {
+    const [year = "", month = "", day = ""] = (formData.dateOfBirth || "").split("-");
+    setDobDraft({ year, month, day });
+    setDobOpen(true);
+  }, [formData.dateOfBirth]);
+
+  useEffect(() => {
+    if (!dobOpen) return undefined;
+    const handlePointer = (event) => {
+      const root = dobRootRef.current;
+      if (root && !root.contains(event.target)) setDobOpen(false);
+    };
+    const handleKey = (event) => {
+      if (event.key === "Escape") setDobOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("touchstart", handlePointer);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("touchstart", handlePointer);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [dobOpen]);
+
 
   const handleAvatarClick = () => {
     if (suppressClickRef.current) {
@@ -799,7 +739,7 @@ export default function Login({ onNavigate }) {
     const lastName = (formData.lastName || "").trim();
     const phone = (formData.phone || "").trim();
     const dateOfBirth = (formData.dateOfBirth || "").trim();
-    const username = formData.username.trim();
+    let username = formData.username.trim();
     const school = formData.school.trim();
     const className = formData.className.trim();
     const certification = formData.certification.trim();
@@ -821,9 +761,13 @@ export default function Login({ onNavigate }) {
           newErrors.dateOfBirth = copy.dobInvalid;
         }
       }
-      if (!username) newErrors.username = copy.usernameRequired;
-      else if (!isEnglishInput(username)) newErrors.username = copy.englishOnly;
-      else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
+      const generatedUsername = buildUsernameFromName(firstName, lastName);
+      const effectiveUsername = username || generatedUsername;
+      if (!effectiveUsername) newErrors.username = copy.usernameRequired;
+      else if (!usernamePattern.test(effectiveUsername)) newErrors.username = copy.usernameInvalid;
+      if (!username && generatedUsername) {
+        setFormData((prev) => (prev.username === generatedUsername ? prev : { ...prev, username: generatedUsername }));
+      }
       if (!phone) newErrors.phone = copy.phoneRequired;
       else if (!isEnglishInput(phone)) newErrors.phone = copy.englishOnly;
       else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
@@ -887,9 +831,13 @@ export default function Login({ onNavigate }) {
       if (!email) newErrors.email = copy.emailRequired;
       else if (!isEnglishInput(email)) newErrors.email = copy.englishOnly;
       else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = copy.emailInvalid;
-      if (!username) newErrors.username = copy.usernameRequired;
-      else if (!isEnglishInput(username)) newErrors.username = copy.englishOnly;
-      else if (!usernamePattern.test(username)) newErrors.username = copy.usernameInvalid;
+      const generatedUsername = buildUsernameFromName(firstName, lastName);
+      const effectiveUsername = username || generatedUsername;
+      if (!effectiveUsername) newErrors.username = copy.usernameRequired;
+      else if (!usernamePattern.test(effectiveUsername)) newErrors.username = copy.usernameInvalid;
+      if (!username && generatedUsername) {
+        setFormData((prev) => (prev.username === generatedUsername ? prev : { ...prev, username: generatedUsername }));
+      }
       if (!phone) newErrors.phone = copy.phoneRequired;
       else if (!isEnglishInput(phone)) newErrors.phone = copy.englishOnly;
       else if (phoneDigits.length < 6) newErrors.phone = copy.phoneInvalid;
@@ -943,9 +891,10 @@ export default function Login({ onNavigate }) {
     if (!ok) return;
     setLoading(true);
     const loginId = formData.loginId.trim();
-    const email = formData.email.trim();
-    const username = formData.username.trim();
+    const email = formData.email.trim().toLowerCase();
+    let username = formData.username.trim();
     const phone = (formData.phone || "").trim();
+    const dateOfBirth = (formData.dateOfBirth || "").trim();
     const password = formData.password;
     const firstName = (formData.firstName || "").trim();
     const lastName = (formData.lastName || "").trim();
@@ -958,6 +907,43 @@ export default function Login({ onNavigate }) {
     try {
       let isAdminUser = false;
       if (isSignUp) {
+        try {
+          const { data: existingEmail, error: emailError } = await supabase
+            .from("profiles")
+            .select("id")
+            .ilike("email", email)
+            .limit(1);
+          if (emailError) {
+            console.warn("Email availability check failed", emailError);
+          } else if (Array.isArray(existingEmail) && existingEmail.length > 0) {
+            setErrors((prev) => ({ ...prev, email: copy.emailInUse }));
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn("Email availability check failed", err);
+        }
+        const generatedUsername = buildUsernameFromName(firstName, lastName);
+        const baseUsername = normalizeUsername(username || generatedUsername);
+        if (!baseUsername) {
+          setErrors((prev) => ({ ...prev, username: copy.usernameRequired }));
+          setLoading(false);
+          return;
+        }
+        try {
+          const uniqueUsername = await ensureUniqueUsername(baseUsername);
+          if (uniqueUsername && uniqueUsername !== username) {
+            username = uniqueUsername;
+            setFormData((prev) => (prev.username === uniqueUsername ? prev : { ...prev, username: uniqueUsername }));
+          } else {
+            username = uniqueUsername || baseUsername;
+          }
+        } catch (err) {
+          console.error("Username availability check failed", err);
+          setErrors((prev) => ({ ...prev, username: copy.usernameInvalid }));
+          setLoading(false);
+          return;
+        }
         // Supabase Auth: sign up with email/password
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -979,7 +965,14 @@ export default function Login({ onNavigate }) {
             },
           },
         });
-        if (error) throw error;
+        if (error) {
+          if (/already registered|already exists|email/i.test(error.message || "")) {
+            setErrors((prev) => ({ ...prev, email: copy.emailInUse }));
+            setLoading(false);
+            return;
+          }
+          throw error;
+        }
 
         const user = data.user;
         const session = data.session;
@@ -1021,6 +1014,7 @@ export default function Login({ onNavigate }) {
           school: school || null,
           class_name: normalizedAccountType === "student" ? (className || null) : null,
           phone: phone || null,
+          date_of_birth: dateOfBirth || null,
           ai_access: false,
         };
         await supabase.from("profiles").upsert(profileRow);
@@ -1034,6 +1028,7 @@ export default function Login({ onNavigate }) {
           school: profileRow.school || "",
           class_name: profileRow.class_name || "",
           phone: profileRow.phone || "",
+          date_of_birth: profileRow.date_of_birth || "",
           ai_access: false,
         };
         try { localStorage.setItem("cg_current_user_v1", JSON.stringify(current)); } catch {}
@@ -1515,24 +1510,36 @@ export default function Login({ onNavigate }) {
                     )}
                   </div>
                 </div>
-                <div ref={dobAnchorRef} style={{ position: "relative" }}>
+                <div ref={dobRootRef} style={{ position: "relative" }}>
                   <Field
                     label={copy.dobLabel}
+                    type="text"
                     value={formData.dateOfBirth}
                     onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
                     placeholder={copy.dobPlaceholder}
                     invalid={!!errors.dateOfBirth}
-                    type="text"
                     autoComplete="bday"
                     name="dateOfBirth"
                     readOnly
-                    style={fieldStyle}
+                    onClick={openDobPanel}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openDobPanel();
+                      }
+                    }}
+                    style={{
+                      ...(fieldStyle || {}),
+                      ...dateInputStyle,
+                      cursor: "pointer",
+                      borderColor: dobOpen ? "#2563eb" : undefined,
+                      boxShadow: dobOpen ? "0 0 0 3px rgba(37, 99, 235, 0.12)" : "none",
+                    }}
                     endAdornment={
                       <button
                         type="button"
-                        onClick={() => setDobOpen((open) => !open)}
-                        aria-label={copy.dobLabel}
-                        title={copy.dobLabel}
+                        onClick={() => (dobOpen ? setDobOpen(false) : openDobPanel())}
+                        aria-label="Toggle date picker"
                         style={{
                           border: "none",
                           background: "none",
@@ -1541,153 +1548,52 @@ export default function Login({ onNavigate }) {
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
-                          color: "#4b5563",
+                          color: "#64748b",
                         }}
                       >
                         <CalendarIcon />
                       </button>
                     }
-                    onFocus={() => setDobOpen(true)}
                   />
                   {dobOpen && (
-                    <div
-                      ref={dobPopoverRef}
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        marginTop: 8,
-                        zIndex: 50,
-                        background: "#ffffff",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 14,
-                        padding: 12,
-                        boxShadow: "0 16px 40px rgba(15, 23, 42, 0.12)",
-                        minWidth: 280,
-                        right: isRTL ? 0 : "auto",
-                        left: isRTL ? "auto" : 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          marginBottom: 10,
-                          gap: 8,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDobView((prev) => {
-                              const nextMonth = prev.month - 1;
-                              if (nextMonth < 0) return { month: 11, year: prev.year - 1 };
-                              return { month: nextMonth, year: prev.year };
-                            })
-                          }
-                          style={{
-                            border: "1px solid #e5e7eb",
-                            background: "#ffffff",
-                            borderRadius: 8,
-                            width: 32,
-                            height: 32,
-                            cursor: "pointer",
-                            fontSize: 18,
-                            lineHeight: "28px",
-                          }}
+                    <div style={dobDropdownStyle}>
+                      <div style={dobGridStyle}>
+                        <select
+                          value={dobDraft.month}
+                          onChange={(e) => updateDobDraft({ month: e.target.value })}
+                          style={dobSelectStyle}
                         >
-                          {isRTL ? "›" : "‹"}
-                        </button>
-                        <div style={{ fontWeight: 600, color: "#111827" }}>
-                          {new Date(dobView.year, dobView.month, 1).toLocaleString(
-                            "en-US",
-                            { month: "long", year: "numeric" }
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDobView((prev) => {
-                              const nextMonth = prev.month + 1;
-                              if (nextMonth > 11) return { month: 0, year: prev.year + 1 };
-                              return { month: nextMonth, year: prev.year };
-                            })
-                          }
-                          style={{
-                            border: "1px solid #e5e7eb",
-                            background: "#ffffff",
-                            borderRadius: 8,
-                            width: 32,
-                            height: 32,
-                            cursor: "pointer",
-                            fontSize: 18,
-                            lineHeight: "28px",
-                          }}
+                          <option value="">Month</option>
+                          {monthOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={dobDraft.day}
+                          onChange={(e) => updateDobDraft({ day: e.target.value })}
+                          style={dobSelectStyle}
                         >
-                          {isRTL ? "‹" : "›"}
-                        </button>
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(7, 1fr)",
-                          gap: 6,
-                          marginBottom: 8,
-                          fontSize: 11,
-                          color: "#6b7280",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {weekdayLabels.map((label) => (
-                          <div key={label} style={{ textAlign: "center" }}>
-                            {label}
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
-                        {(() => {
-                          const cells = [];
-                          const first = new Date(dobView.year, dobView.month, 1);
-                          const startDay = first.getDay();
-                          const totalCells = 42;
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const selectedDate = parseYmd(formData.dateOfBirth);
-                          const selectedKey = selectedDate ? formatYmd(selectedDate) : "";
-                          for (let i = 0; i < totalCells; i += 1) {
-                            const dayOffset = i - startDay + 1;
-                            const cellDate = new Date(dobView.year, dobView.month, dayOffset);
-                            const isCurrentMonth = cellDate.getMonth() === dobView.month;
-                            const isFuture = cellDate > today;
-                            const key = formatYmd(cellDate);
-                            const isSelected = key && key === selectedKey;
-                            cells.push(
-                              <button
-                                key={`${dobView.year}-${dobView.month}-${i}`}
-                                type="button"
-                                disabled={isFuture}
-                                onClick={() => {
-                                  if (isFuture) return;
-                                  handleInputChange("dateOfBirth", key);
-                                  setDobOpen(false);
-                                }}
-                                style={{
-                                  border: isSelected ? "2px solid #2563eb" : "1px solid #e5e7eb",
-                                  background: isSelected ? "#dbeafe" : "#ffffff",
-                                  color: isCurrentMonth ? "#111827" : "#9ca3af",
-                                  borderRadius: 10,
-                                  padding: "8px 0",
-                                  fontSize: 12,
-                                  cursor: isFuture ? "not-allowed" : "pointer",
-                                  opacity: isFuture ? 0.4 : 1,
-                                }}
-                              >
-                                {cellDate.getDate()}
-                              </button>
-                            );
-                          }
-                          return cells;
-                        })()}
+                          <option value="">Day</option>
+                          {dayOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={dobDraft.year}
+                          onChange={(e) => updateDobDraft({ year: e.target.value })}
+                          style={dobSelectStyle}
+                        >
+                          <option value="">Year</option>
+                          {yearOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   )}
@@ -1698,12 +1604,13 @@ export default function Login({ onNavigate }) {
                 <Field
                   label={copy.usernameLabel}
                   value={formData.username}
-                  onChange={(e) => handleInputChange("username", e.target.value)}
+                  onChange={() => {}}
                   placeholder={copy.usernamePlaceholder}
                   invalid={!!errors.username}
                   autoComplete="username"
                   name="username"
-                  style={fieldStyle}
+                  readOnly
+                  style={{ ...(fieldStyle || {}), background: "rgba(241, 245, 249, 0.7)" }}
                 />
                 {errors.username && (
                   <p style={errorStyle}>{errors.username}</p>

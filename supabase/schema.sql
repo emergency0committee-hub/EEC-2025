@@ -28,6 +28,7 @@ create table if not exists public.profiles (
   username text unique,
   name text,
   avatar_url text null,
+  date_of_birth date null,
   role text not null default 'user',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -51,6 +52,8 @@ alter table public.profiles enable row level security;
 
 alter table public.profiles
   add column if not exists avatar_url text;
+alter table public.profiles
+  add column if not exists date_of_birth date;
 
 do $$ begin
   create policy "profiles_select_own"
@@ -110,6 +113,8 @@ declare
   resolved_username text;
   resolved_name text;
   composed_name text;
+  raw_dob text;
+  resolved_dob date;
 begin
   meta := coalesce(new.raw_user_meta_data, '{}'::jsonb);
 
@@ -135,13 +140,20 @@ begin
     resolved_name := nullif(composed_name, '');
   end if;
 
-  insert into public.profiles (id, email, username, name, role)
+  raw_dob := nullif(btrim(meta->>'date_of_birth'), '');
+  resolved_dob := case
+    when raw_dob ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then to_date(raw_dob, 'YYYY-MM-DD')
+    else null
+  end;
+
+  insert into public.profiles (id, email, username, name, role, date_of_birth)
   values (
     new.id,
     new.email,
     resolved_username,
     coalesce(resolved_name, resolved_username, new.email),
-    resolved_role
+    resolved_role,
+    resolved_dob
   )
   on conflict (id) do nothing;
 
